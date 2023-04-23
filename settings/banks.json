@@ -1,0 +1,33 @@
+{
+  "KB": {
+    "encoding": "CP1250",
+    "delimiter": ";",
+    "header": 15,
+    "date": "Datum splatnosti",
+    "value": "\u010c\u00e1stka",
+    "transaction_id": "Identifikace transakce",
+    "counterparty_acc_id": "Proti\u00fa\u010det a\u00a0k\u00f3d banky",
+    "counterparty_acc_name": "N\u00e1zev proti\u00fa\u010dtu",
+    "sys_note": "Syst\u00e9mov\u00fd popis",
+    "acc_note": "Popis p\u0159\u00edkazce",
+    "notes": [
+      "AV pole 1",
+      "AV pole 2"
+    ]
+  },
+  "Airbank": {
+    "encoding": "CP1250",
+    "delimiter": ";",
+    "header": 0,
+    "date": "Datum proveden\u00ed",
+    "value": "\u010c\u00e1stka v m\u011bn\u011b \u00fa\u010dtu",
+    "transaction_id": "Referen\u010dn\u00ed \u010d\u00edslo",
+    "counterparty_acc_id": "\u010c\u00edslo \u00fa\u010dtu protistrany",
+    "counterparty_acc_name": "N\u00e1zev \u00fa\u010dtu protistrany",
+    "sys_note": "Typ \u00fahrady",
+    "acc_note": "Pozn\u00e1mka pro mne",
+    "notes": [
+      "Pozn\u00e1mka k \u00fahrad\u011b"
+    ]
+  }
+}

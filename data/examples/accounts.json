@@ -1,0 +1,29 @@
+{
+    "Example main account": {
+        "main": true,
+        "color": "#921B1B",
+        "bank_type": "KB",
+        "note": "My personal bank account",
+        "owners": 1,
+        "account_number": "123-456789/1234",
+        "df": ""
+    },
+    "Example shared account": {
+        "main": false,
+        "color": "#0F5800",
+        "bank_type": "Airbank",
+        "note": "This account is shared with two people",
+        "owners": 2,
+        "account_number": "999-999999/999",
+        "df": ""
+    },
+    "Example cash account": {
+        "main": false,
+        "color": "#FFB900",
+        "bank_type": "cash",
+        "note": "This account represents physical cash",
+        "owners": 1,
+        "account_number": "",
+        "df": ""
+    }
+}

@@ -1,0 +1,137 @@
+{
+  "food": {
+    "groceries": [
+      {
+        "lidl": "needs"
+      },
+      {
+        "albert": "needs"
+      },
+      {
+        "rohlik": "needs"
+      },
+      {
+        "tesco": "needs"
+      },
+      {
+        "hruska": "needs"
+      },
+      {
+        "billa": "needs"
+      },
+      {
+        "jednota": "needs"
+      },
+      {
+        "drogerie": "needs"
+      },
+      {
+        "potraviny": "needs"
+      },
+      {
+        "svet plodu": "needs"
+      },
+      {
+        "penny": "needs"
+      },
+      {
+        "kaufland": "needs"
+      },
+      {
+        "koop.cz": "needs"
+      }
+    ],
+    "restaurants": [
+      {
+        "pizza": "wants"
+      },
+      {
+        "burger": "wants"
+      },
+      {
+        "restaurant": "wants"
+      },
+      {
+        "mcdonalds": "wants"
+      },
+      {
+        "kfc": "wants"
+      }
+    ],
+    "food_other": []
+  },
+  "transport": {
+    "gas": [
+      {
+        "petrol": "needs"
+      }
+    ],
+    "public_transport": [
+      {
+        "citybus": "needs"
+      }
+    ],
+    "transport_other": []
+  },
+  "subscriptions": {
+    "clouds": [
+      {
+        "apple.com/bill": "wants"
+      }
+    ],
+    "streaming": [
+      {
+        "spotify": "wants"
+      },
+      {
+        "netflix": "wants"
+      }
+    ],
+    "rent": [
+      {
+        "rent payment - joe doe": "needs"
+      }
+    ],
+    "internet_provider": [
+      {
+        "internet payment": "needs"
+      }
+    ],
+    "subscriptions_other": []
+  },
+  "jobs": {
+    "my main job": [
+      {
+        "fake company inc. payroll": "income"
+      }
+    ],
+    "jobs_other": []
+  },
+  "investments": {
+    "crypto": [
+      {
+        "binance": "investments"
+      }
+    ],
+    "stocks": [
+      {
+        "trading 212": "investments"
+      }
+    ],
+    "investments_other": []
+  },
+  "other": {
+    "games": [
+      {
+        "steam": "wants"
+      },
+      {
+        "playstationnetwork": "wants"
+      }
+    ],
+    "other_other": []
+  },
+  "UNASSIGNED": {
+    "UNASSIGNED": []
+  }
+}
