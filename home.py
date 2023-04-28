@@ -83,6 +83,7 @@ first_date = cashflow_df.index[-1].to_pydatetime()
 # Account filter
 selected_account, account_list = my_sidebar.account_filter(acc_dict)
 acc_nums = []
+account_transfers_checkbox = False
 for acc in acc_dict:
     acc_nums.append(acc_dict[acc]["account_number"])
 if selected_account == ALL_ACCOUNTS_FILTER:
@@ -90,6 +91,7 @@ if selected_account == ALL_ACCOUNTS_FILTER:
 else:
     account_list = selected_account
     omitted_account_transfers = []
+    account_transfers_checkbox = my_sidebar.account_transfers_filter()
 
 owners_checkbox = my_sidebar.recalculate_by_owners()
 if owners_checkbox:
@@ -113,7 +115,7 @@ check_income, check_expense = my_sidebar.income_filter()
 st.sidebar.divider()
 
 # Category filters
-main_category, subcategory, wni = my_sidebar.category_filters()
+main_category, subcategory, wni = my_sidebar.category_filters(include_account_transfer=account_transfers_checkbox)
 
 # ---QUERY AND STUFF---
 # Omit unimportant columns

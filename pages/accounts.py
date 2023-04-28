@@ -27,7 +27,7 @@ with tab_1:
                                 "the value on the main page will show 500.")
     account_number_val = st.text_input("Account number:",
                                        help="The account number of the bank account. "
-                                            "Needed for filtering andidentifing transactions "
+                                            "Needed for filtering and identifying transactions "
                                             "between provided accounts. "
                                             "Transactions between accounts with the same account number "
                                             "will be omitted on the main page.")

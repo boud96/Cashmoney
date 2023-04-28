@@ -2,6 +2,7 @@ import streamlit as st
 import datetime
 
 from my_scripts.Categories import Categories
+from my_scripts.Account import AccountManager
 from settings.constants import ALL_ACCOUNTS_FILTER
 
 
@@ -28,11 +29,19 @@ def income_filter():
     return check_income, check_expense
 
 
-def category_filters():
+def category_filters(include_account_transfer=False):
     c = Categories()
-    main_category_list = c.get_categories()
+    main_category_list = c.get_main_categories()
     subcategory_list = c.get_subcategories()
     wni_list = c.get_categories_wni()
+
+    wni_list.remove("account_transfer")
+    if include_account_transfer:
+        wni_list.append("account_transfer")
+        main_category_list.append("account_transfer")
+        accounts = AccountManager().get_accounts()
+        for acc in accounts:
+            subcategory_list.append(acc)
 
     st.sidebar.header("Main category:")
     main_category = st.sidebar.multiselect(
@@ -69,3 +78,13 @@ def recalculate_by_owners():
         "Recalculated for personal spending",
     )
     return owners_num_recalc
+
+
+def account_transfers_filter():
+    account_transfers_checkbox = st.sidebar.checkbox(
+        "Include account transfers",
+        value=False,
+        key="account_transfers",
+        help="Include transfers between accounts",
+    )
+    return account_transfers_checkbox
