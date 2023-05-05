@@ -4,7 +4,10 @@ import json
 
 from my_scripts.Account import AccountManager
 from my_scripts.Bank import BankManager
+from my_scripts.Cashflow import Cashflow
 
+cashflow = Cashflow()
+account_dict = cashflow.get_acc_dict()
 acc_manager = AccountManager()
 bm = BankManager()
 bank_types = list(bm.json_data)
@@ -78,11 +81,26 @@ with tab_1:
     for account in acc_manager.json_data:
         account_name_formatted = f":red[{account}]"
         st.subheader(account_name_formatted)
+        st.write(f"{acc_manager.json_data[account][acc_manager.note]}")
         if acc_manager.json_data[account][acc_manager.main]:
             st.write("**MAIN ACCOUNT**")
-        st.write(f"**Note:** {acc_manager.json_data[account][acc_manager.note]}")
+        st.write(f"**Owners:** {acc_manager.json_data[account][acc_manager.bank_type]}")
         st.write(f"**Owners:** {acc_manager.json_data[account][acc_manager.owners]}")
-        st.caption(f"**Note:** {acc_manager.json_data[account][acc_manager.note]}")
+        st.write(f"**Account number:** {acc_manager.json_data[account][acc_manager.account_number]}")
+        st.write(f"**Color:** {acc_manager.json_data[account][acc_manager.color]}")
+
+        df_sum = (account_dict[account][acc_manager.df][cashflow.value].sum())
+        actual_sum = int(df_sum) + acc_manager.json_data[account][acc_manager.delta]
+        current_balance = st.number_input("Current balance:",
+                                          value=actual_sum,
+                                          step=100,
+                                          key=account + " current_balance",
+                                          help="When the Net worth value is off due to accumulated errors, you can "
+                                               "adjust it here.")
+        current_balance_save_butt = st.button("Save", key=account + " current_balance_save_butt")
+        if current_balance_save_butt:
+            delta = int(current_balance - df_sum)
+            acc_manager.adjust_account_delta(account, delta)
 
 with tab_2:
     NOT_AVAILABLE = "-- NOT AVAILABLE --"

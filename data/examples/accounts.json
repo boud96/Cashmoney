@@ -6,7 +6,8 @@
         "note": "My personal bank account",
         "owners": 1,
         "account_number": "123-456789/1234",
-        "df": ""
+        "df": "",
+        "delta": 0
     },
     "Example shared account": {
         "main": false,
@@ -15,7 +16,8 @@
         "note": "This account is shared with two people",
         "owners": 2,
         "account_number": "999-999999/999",
-        "df": ""
+        "df": "",
+        "delta": 0
     },
     "Example cash account": {
         "main": false,
@@ -24,6 +26,7 @@
         "note": "This account represents physical cash",
         "owners": 1,
         "account_number": "",
-        "df": ""
+        "df": "",
+        "delta": 0
     }
 }

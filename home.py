@@ -160,6 +160,16 @@ stats = cashflow.basic_stats(cashflow_df)
 stats_sums = stats.get("stats")
 stats_monthly = stats.get("monthly")
 
+# Available balance
+if selected_account == ALL_ACCOUNTS_FILTER:
+    available_balance = cashflow_df[cashflow.value].sum()
+    for acc in acc_dict:
+        available_balance -= acc_dict[acc][account_manager.delta]
+    available_balance = int(available_balance)
+else:
+    available_balance = acc_dict[selected_account][account_manager.df][cashflow.value].sum() - \
+                        acc_dict[selected_account][account_manager.delta]
+
 # Sums
 expenses_sum = stats_sums.get("expenses")
 incomes_sum = stats_sums.get("incomes")
@@ -178,6 +188,9 @@ else:
 monthly_avg_net = monthly_avg_incomes + monthly_avg_expenses
 
 # Visualize
+st.subheader("Available balance")
+st.subheader(":black_heart:" + f"{available_balance:,}".replace(",", " "))
+
 col_1, col_2, col_3 = st.columns(3)
 with col_1:
     st.subheader("Sum of expenses:")
