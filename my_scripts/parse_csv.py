@@ -237,7 +237,7 @@ def parse_csv(data, account_id):
 
     # Remove duplicates for base file
     df = df_merger(
-        base_df=df_base, insert_df=df, date_col=cashflow_date, id_col=cashflow_id
+        base_df=df_base, insert_df=df, id_col=cashflow_id
     )
     # Save as a bank file
     df.to_csv(base_path)
