@@ -24,10 +24,10 @@ def category_filter(df, note_columns_list, counterparty_account_id):
     c = Categories()
     data = c.get_categories()
 
-    main_category = "main_category"         # Column name to assign category
-    subcategory = "subcategory"             # Column name to assign subcategory
-    account_transfer = "account_transfer"   # Main category name identifying acc transfers
-    wni = "wni"                             # Column name to assign wni
+    main_category = "main_category"  # Column name to assign category
+    subcategory = "subcategory"  # Column name to assign subcategory
+    account_transfer = "account_transfer"  # Main category name identifying acc transfers
+    wni = "wni"  # Column name to assign wni
     # counterparty_account_id               # Column name to identify transactions between accounts
     # note_column_list                      # List of columns the algorithm looks for string values
     # sub_key                               # Category to assign. E.g. - streaming
@@ -73,12 +73,11 @@ def category_filter(df, note_columns_list, counterparty_account_id):
     return df
 
 
-def df_merger(base_df, insert_df, date_col, id_col):
+def df_merger(base_df, insert_df, id_col):
     """
     Merge two dfs and remove duplicates
     :param base_df:             Df to merge with
     :param insert_df:           Df to merge
-    :param date_col:            Date column to use as datetime and sort by.
     :param id_col:              ID column to identify duplicates in.
     :return:                    Merged df.
     """
@@ -103,7 +102,7 @@ def df_merger(base_df, insert_df, date_col, id_col):
     df_removed_duplicates = df_duplicates.loc[df_duplicates["bool_duplicates"] == False]
     df_removed_duplicates = df_removed_duplicates.loc[
         df_removed_duplicates["origin"] == insert_df_id
-    ]
+        ]
     # Concatenate with df and remove duplicates altogether
     df = (
         pd.concat([base_df, df_removed_duplicates])
@@ -140,7 +139,7 @@ def parse_csv(data, account_id):
     header = bank["header"]
     # Columns
     date = bank["date"]
-    value = bank["value"]  # TODO: Make it possible to select multiple columns. Necessary when there's different currencies, accound fees etc.
+    value = bank["value"]  # TODO: Make it possible to select multiple columns. Necessary when there's different currencies, account fees etc.
     transaction_id = bank["transaction_id"]
     counterparty_acc_id = bank["counterparty_acc_id"]
     counterparty_acc_name = bank["counterparty_acc_name"]
@@ -162,13 +161,13 @@ def parse_csv(data, account_id):
     # If there's no transaction id, create one from notes
     if transaction_id is None:
         df[cashflow.id] = (
-            df[date].astype("str")
-            + " "
-            + df[counterparty_acc_id].astype("str")
-            + " "
-            + df[counterparty_acc_name].astype("str")
-            + " "
-            + df[value].astype("str")
+                df[date].astype("str")
+                + " "
+                + df[counterparty_acc_id].astype("str")
+                + " "
+                + df[counterparty_acc_name].astype("str")
+                + " "
+                + df[value].astype("str")
         )
         for note in notes:
             df[cashflow.id] = df[cashflow.id] + " " + df[note].astype("str")
