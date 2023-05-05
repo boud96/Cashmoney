@@ -77,6 +77,8 @@ cashflow = Cashflow()
 acc_dict = cashflow.get_acc_dict()
 cashflow_df = cashflow.get_df()
 
+account_manager = AccountManager()
+
 first_date = cashflow_df.index[-1].to_pydatetime()
 
 # ---SIDEBAR---
