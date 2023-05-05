@@ -171,6 +171,7 @@ if selected_account == ALL_ACCOUNTS_FILTER:
 else:
     available_balance = acc_dict[selected_account][account_manager.df][cashflow.value].sum() - \
                         acc_dict[selected_account][account_manager.delta]
+available_balance = int(available_balance)
 
 # Sums
 expenses_sum = stats_sums.get("expenses")
