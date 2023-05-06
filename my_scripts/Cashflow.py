@@ -48,6 +48,9 @@ class Cashflow:
             df_acc[self.date] = pd.to_datetime(df_acc[self.date], dayfirst=True)
             # Add to dict
             self.accounts_dict[account][acc_manager.df] = df_acc
+            # Calculate balance
+            sum_without_account_transfer = df_acc.loc[df_acc[self.main_category] != "account_transfer", "value"].sum()
+            acc_manager.update_balance(account, sum_without_account_transfer)
             # Concat
             df = pd.concat([df, df_acc])
 

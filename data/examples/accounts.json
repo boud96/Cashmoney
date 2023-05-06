@@ -7,6 +7,7 @@
         "owners": 1,
         "account_number": "123-456789/1234",
         "df": "",
+        "balance": 0,
         "delta": 0
     },
     "Example shared account": {
@@ -17,6 +18,7 @@
         "owners": 2,
         "account_number": "999-999999/999",
         "df": "",
+        "balance": 0,
         "delta": 0
     },
     "Example cash account": {
@@ -27,6 +29,7 @@
         "owners": 1,
         "account_number": "",
         "df": "",
+        "balance": 0,
         "delta": 0
     }
 }

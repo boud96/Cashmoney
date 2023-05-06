@@ -162,15 +162,20 @@ stats = cashflow.basic_stats(cashflow_df)
 stats_sums = stats.get("stats")
 stats_monthly = stats.get("monthly")
 
+available_balance = 0
 # Available balance
 if selected_account == ALL_ACCOUNTS_FILTER:
-    available_balance = cashflow_df[cashflow.value].sum()
     for acc in acc_dict:
-        available_balance -= acc_dict[acc][account_manager.delta]
-    available_balance = int(available_balance)
+        acc_balance = acc_dict[acc][account_manager.balance]
+        acc_balance += acc_dict[acc][account_manager.delta]
+        if owners_checkbox:
+            acc_balance = acc_balance / acc_dict[acc][account_manager.owners]
+        available_balance += acc_balance
 else:
-    available_balance = acc_dict[selected_account][account_manager.df][cashflow.value].sum() - \
+    available_balance = acc_dict[selected_account][account_manager.df][cashflow.value].sum() + \
                         acc_dict[selected_account][account_manager.delta]
+    if owners_checkbox:
+        available_balance = available_balance / acc_dict[selected_account][account_manager.owners]
 available_balance = int(available_balance)
 
 # Sums

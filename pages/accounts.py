@@ -89,18 +89,19 @@ with tab_1:
         st.write(f"**Account number:** {acc_manager.json_data[account][acc_manager.account_number]}")
         st.write(f"**Color:** {acc_manager.json_data[account][acc_manager.color]}")
 
-        df_sum = (account_dict[account][acc_manager.df][cashflow.value].sum())
-        actual_sum = int(df_sum) + acc_manager.json_data[account][acc_manager.delta]
+        acc_balance = acc_manager.json_data[account][acc_manager.balance]
+        acc_delta = acc_manager.json_data[account][acc_manager.delta]
+        acc_actual_balance = acc_balance + acc_delta
         current_balance = st.number_input("Current balance:",
-                                          value=actual_sum,
+                                          value=acc_actual_balance,
                                           step=100,
                                           key=account + " current_balance",
                                           help="When the Net worth value is off due to accumulated errors, you can "
                                                "adjust it here.")
         current_balance_save_butt = st.button("Save", key=account + " current_balance_save_butt")
         if current_balance_save_butt:
-            delta = int(current_balance - df_sum)
-            acc_manager.adjust_account_delta(account, delta)
+            new_delta = int(current_balance - acc_balance)
+            acc_manager.adjust_account_delta(account, new_delta)
 
 with tab_2:
     NOT_AVAILABLE = "-- NOT AVAILABLE --"

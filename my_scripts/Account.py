@@ -11,6 +11,7 @@ class AccountManager:
         self.owners = "owners"
         self.account_number = "account_number"
         self.df = "df"
+        self.balance = "balance"
         self.delta = "delta"
 
         self.json_path = "settings/accounts.json"
@@ -35,5 +36,11 @@ class AccountManager:
 
     def adjust_account_delta(self, account, delta):
         self.json_data[account][self.delta] = delta
+        with open(self.json_path, "w") as json_file:
+            json.dump(self.json_data, json_file, indent=2)
+
+    def update_balance(self, account, new_balance):
+        self.json_data[account][self.balance] = int(new_balance)
+        self.json_data[account][self.df] = ""
         with open(self.json_path, "w") as json_file:
             json.dump(self.json_data, json_file, indent=2)
