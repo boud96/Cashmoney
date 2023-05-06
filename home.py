@@ -172,7 +172,7 @@ if selected_account == ALL_ACCOUNTS_FILTER:
             acc_balance = acc_balance / acc_dict[acc][account_manager.owners]
         available_balance += acc_balance
 else:
-    available_balance = acc_dict[selected_account][account_manager.df][cashflow.value].sum() + \
+    available_balance = acc_dict[selected_account][account_manager.balance] + \
                         acc_dict[selected_account][account_manager.delta]
     if owners_checkbox:
         available_balance = available_balance / acc_dict[selected_account][account_manager.owners]
