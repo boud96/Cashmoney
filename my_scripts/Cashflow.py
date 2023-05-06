@@ -37,6 +37,8 @@ class Cashflow:
         self.df_inc_exp_net = None
         # Other stuff
         self.stats = None
+        # TODO Add default cell values as constants (all caps). E.g. - "account_transfer", "UNASSIGNED",...
+        #  Don't forget to change them in the csvs as well.
 
         # Dependencies - AccountManager and Categories
         acc_manager = AccountManager()

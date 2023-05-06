@@ -96,12 +96,13 @@ with tab_1:
                                           value=acc_actual_balance,
                                           step=100,
                                           key=account + " current_balance",
-                                          help="When the Net worth value is off due to accumulated errors, you can "
-                                               "adjust it here.")
+                                          help="When the available balance value is off due to accumulated errors, "
+                                               "you can adjust it here.")
         current_balance_save_butt = st.button("Save", key=account + " current_balance_save_butt")
         if current_balance_save_butt:
             new_delta = int(current_balance - acc_balance)
             acc_manager.adjust_account_delta(account, new_delta)
+            st.success(f"Available balance for {account} was adjusted.")
 
 with tab_2:
     NOT_AVAILABLE = "-- NOT AVAILABLE --"
