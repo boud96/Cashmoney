@@ -2,6 +2,9 @@
 # TODO: Finally start working on input error handling ffs.
 # TODO: Fix the session state issue with the date_from.
 # TODO: Make an export settings button that exports the accounts, banks, categories. Also import settings.
+# TODO: Make reset to factory settings button in the settings.
+# TODO: Settings for default currency and for each account. Figure out how to load the conversion rates
+#  (for historical transactions they might differ greatly).
 
 from my_scripts.Cashflow import Cashflow
 from my_scripts.Account import AccountManager

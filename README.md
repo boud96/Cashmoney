@@ -59,14 +59,20 @@ If you have installed Python, you should be able to run the app with the `run.ba
 To use the app, you need to set up at least one account and upload a csv file with transactions. The app will automatically assign categories to transactions based on the text values you provide.
 1. Create new bank type under on the accounts page under the Add bank tab (If your bank is not available).
    - The bank type is used to properly parse the bank statement file. You will need to fill in the following form.
-   - The app will search for the text values you provide in categories page in some of the columns you specify.
-2. Create an account in the Add account tab.
+2. Create an account in the Add account tab. 
+   - You can have multiple accounts of the same bank type. 
+   - You can have a shared account, and it's transactions will be recalculated, so you can see how much of your personal money is being spent.
 3. Create custom categories in the categories page.
-   - Define main categories subcategories, text values to look for in the bank statements and whether the text value is always a need / want / investment / income / account_transfer / UNASSIGNED. You should only assign the text values that you want to always assign to these categories. Those that change, should be assigned manually in edit page.
-4. Upload a csv file on the edit page Add data from csv tab.
-5. You should now see the home page with stats, charts and a table.
+   - Define main categories subcategories, text values to look for in the bank statements. 
+   - Also, whether the text value is always a need / want / investment / income / account_transfer (between your defined accounts) / UNASSIGNED. You should only assign the text values that you want to always assign to these categories. Those that are not always the same category, should be assigned manually in edit page.
+   - E.g.: A string value "netflix" will probably always be of category "subscriptions", subcategory "entertainment", and is a "want". So you can define it as such.
+   - A string value "airport" will probably always be of category "transport", subcategory "flight" for example, but it might sometimes be a "want" when it's for a vacation and a "need" when it's business related. That's up to you.
+4. Upload a csv file on the edit page Add data from csv tab, choose an account and click Parse. The data will get categorized.
+5. View the data on the home page and evaluate your cash flow. 
+6. Optionally reassign the categories for transactions on the edit/edit data manually page.
 
-On first startup you'll see this screen where you can set up the app with examples so you can get a feel for it first. # TODO (Not done yet) You can always reset the app to this state in the settings page.
+
+On first startup you'll see this screen where you can set up the app with examples, so you can get a feel for it first. # TODO (Not done yet) You can always reset the app to this state in the settings page.
 ![Homepage-startup][home-startup-screenshot]
 
 

@@ -1,12 +1,8 @@
 import uuid
 
 import pandas as pd
-import plotly
 import plotly.express as px
-import plotly.io as pio
-import datetime
 import numpy as np
-import streamlit as st
 
 from my_scripts.Account import AccountManager
 from my_scripts.Categories import Categories

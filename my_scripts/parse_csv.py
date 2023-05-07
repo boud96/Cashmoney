@@ -1,7 +1,5 @@
 import pandas as pd
 import numpy as np
-import datetime
-import json
 
 from my_scripts.Account import AccountManager
 from my_scripts.Cashflow import Cashflow

@@ -1,6 +1,5 @@
 # TODO Functionality to remove a row
 # TODO Functionality to Edit data for manual assigning to categories
-import pandas as pd
 import streamlit as st
 from st_aggrid import AgGrid, JsCode, GridOptionsBuilder, ColumnsAutoSizeMode
 
