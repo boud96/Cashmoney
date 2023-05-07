@@ -1,0 +1,9 @@
+date,account,value,ID,counterparty_account_id,sys_note,acc_note,note_1,note_2,main_category,subcategory,wni,account_id,income
+17/03/2023,nan,5000,75040801342,,,,,,UNASSIGNED,UNASSIGNED,UNASSIGNED,Example shared account,TRUE
+14/03/2023,nan,-1039.3,75022325142,,,,,,food,groceries,needs,Example shared account,FALSE
+13/03/2023,nan,-213.4,74954084812,,,,,,food,groceries,needs,Example shared account,FALSE
+10/03/2023,nan,-138.61,74817152602,,,,,,transport,gas,needs,Example shared account,FALSE
+06/03/2023,nan,-149.7,74606595122,,,,,,food,groceries,needs,Example shared account,FALSE
+06/03/2023,nan,5000,74434722752,123-456789/1234,,,,,account_transfer,Example main account,account_transfer,Example shared account,TRUE
+24/02/2023,nan,-1000,74434722752,123-45653489/1234,,,,,food,restaurants,wants,Example shared account,FALSE
+18/02/2023,nan,-255,74434722752,123-4534789/1234,,,,,food,groceries,needs,Example shared account,FALSE
