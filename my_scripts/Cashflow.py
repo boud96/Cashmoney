@@ -150,7 +150,14 @@ class Cashflow:
         if df is None:
             df = self.df
 
+        df_first_date = df.index[-1].to_pydatetime().replace(day=1)
+        df_last_date = df.index[0].to_pydatetime().replace(day=1)
+        date_range = pd.date_range(start=df_first_date, end=df_last_date, freq='MS')
+        df_range = pd.DataFrame({'date': date_range}).set_index("date")
+
         incomes, expenses = self.filter_incomes(df)
+        incomes = pd.concat([df_range, incomes])
+        expenses = pd.concat([df_range, expenses])
 
         incomes_sum = int(incomes[self.value].sum())
         expenses_sum = int(-expenses[self.value].sum())
@@ -159,12 +166,15 @@ class Cashflow:
 
         resample_freq = "MS"
         incomes_resampled = incomes.resample(resample_freq).sum()
+        incomes_resampled[self.income] = 1
         expenses_resampled = expenses.resample(resample_freq).sum()
+        expenses_resampled[self.income] = 0
         net_resampled = incomes_resampled + expenses_resampled
+        net_resampled.fillna(0, inplace=True)
         net_resampled[self.income] = "net"
 
         self.df_inc_exp_net = pd.concat([incomes_resampled, expenses_resampled])
-        self.df_inc_exp_net[self.income] = self.df_inc_exp_net[self.value] > 0
+        self.df_inc_exp_net[self.income] = self.df_inc_exp_net[self.income] > 0
         self.df_inc_exp_net = pd.concat([self.df_inc_exp_net, net_resampled])
         self.df_inc_exp_net = self.df_inc_exp_net.sort_values(by=[self.date])
 

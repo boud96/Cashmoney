@@ -21,7 +21,7 @@ bank_types.append("cash")
 
 st.title("Settings")
 
-tab_1, tab_2, tab_3 = st.tabs(("Categories", "Banks", "Accounts"))
+tab_1, tab_2, tab_3, tab_4 = st.tabs(("Categories", "Banks", "Accounts", "Import / Export"))
 # New category
 with tab_1:
     add_category_expander = st.expander("Add")
@@ -285,3 +285,7 @@ with tab_3:
                 new_delta = int(current_balance - acc_balance)
                 acc_manager.adjust_account_delta(account, new_delta)
                 st.success(f"Available balance for {account} was adjusted.")
+
+    with tab_4:
+
+        st.info("Work in progress. Here you will be able to import and export the settings.")
