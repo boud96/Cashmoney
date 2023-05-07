@@ -315,8 +315,10 @@ class Cashflow:
             df = self.df
 
         if expenses is True:
-            df = df[df[self.wni] != self.income]
-            df[self.value] = df[self.value] * -1
+            df_copy = df.copy()
+            df_copy = df_copy[df_copy[self.wni] != self.income]
+            df_copy.loc[:, self.value] = df_copy[self.value] * -1
+            df = df_copy
         else:
             df = df[df[self.wni] == self.income]
 

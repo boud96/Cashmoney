@@ -1,3 +1,8 @@
+# TODO: Make sidebar items collapsible. Maybe even home page items.
+# TODO: Finally start working on input error handling ffs.
+# TODO: Fix the session state issue with the date_from.
+# TODO: Make an export settings button that exports the accounts, banks, categories. Also import settings.
+
 from my_scripts.Cashflow import Cashflow
 from my_scripts.Account import AccountManager
 from my_scripts.Categories import Categories

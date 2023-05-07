@@ -14,8 +14,9 @@ st.divider()
 st.write("If you find this app useful, consider buying me a coffee :coffee:")
 col_1, col_2, col_3 = st.columns(3)
 with col_1:
-    st.write("[PayPal](https://www.paypal.com/donate/?hosted_button_id=ATF8UJZTHMWUY)")
+    st.write("PayPal")
     st.image("img/qr_paypal.png", width=200)
+    st.write("[PayPal](paypal.me/boud96)")
 with col_2:
     st.write("BTC")
     st.image("img/qr_btc.png", width=200)

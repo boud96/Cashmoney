@@ -1,5 +1,6 @@
 import json
 import shutil
+import os
 
 
 class AccountManager:
@@ -30,6 +31,8 @@ class AccountManager:
         del self.json_data[del_select]
         with open(self.json_path, "w") as json_file:
             json.dump(self.json_data, json_file, indent=2)
+            acc_path = r"data/" + del_select + ".csv"
+            os.remove(acc_path)
 
     def get_accounts(self):
         return self.json_data
