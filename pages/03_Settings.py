@@ -287,5 +287,4 @@ with tab_3:
                 st.success(f"Available balance for {account} was adjusted.")
 
     with tab_4:
-
         st.info("Work in progress. Here you will be able to import and export the settings.")
