@@ -8,7 +8,13 @@ from my_scripts.parse_csv import parse_csv
 from my_scripts.Categories import Categories
 from my_scripts.Account import AccountManager
 from my_scripts import aggrid_stuff
+from utils.checks import general_checks
 
+
+ctgs_check, accs_check, banks_check = general_checks()
+if not accs_check:
+    st.warning("You need to add at least one account in settings first.")
+    st.stop()
 
 cashflow = Cashflow()
 cashflow_df = cashflow.get_df()
@@ -42,12 +48,12 @@ with tab_1:
 
 
 with tab_2:
-    st.warning("This is a work in progress and will be replaced. "
-               "You should mainly use this for manual category assignment by providing a category name in the "
-               "'main_category', 'subcategory' or 'wni' column."
-               "You can also add a note in the 'note_1' or note_2 column. "
-               "You can also edit the csv files directly in the 'data' folder."
-               "Incorrect use might break the app. ")
+    st.info("This is a work in progress and will be replaced. "
+            "You should mainly use this for manual category assignment by providing a category name in the "
+            "'main_category', 'subcategory' or 'wni' column."
+            "You can also add a note in the 'note_1' or note_2 column. "
+            "You can also edit the csv files directly in the 'data' folder."
+            "Incorrect use might break the app. ")
     cashflow_df = cashflow_df.reset_index()
     editor = st.experimental_data_editor(cashflow_df, key="editor", num_rows="dynamic")
 

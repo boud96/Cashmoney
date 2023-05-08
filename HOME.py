@@ -8,9 +8,8 @@
 
 from my_scripts.Cashflow import Cashflow
 from my_scripts.Account import AccountManager
-from my_scripts.Categories import Categories
-from my_scripts.Bank import BankManager
 from my_scripts import aggrid_stuff
+from utils.checks import general_checks
 from utils.example_setup import example_setup
 from settings.constants import ALL_ACCOUNTS_FILTER
 
@@ -36,18 +35,6 @@ def change_date_sidebar_this_year():
     st.session_state.date_to = datetime.date.today()
 
 
-def checks():
-    ctgs = Categories().get_categories()
-    accs = AccountManager().get_accounts()
-    banks = BankManager().get_banks()
-
-    ctgs_exist = len(ctgs) > 0
-    accs_exist = len(accs) > 0
-    banks_exist = len(banks) > 0
-
-    return ctgs_exist, accs_exist, banks_exist
-
-
 # ---PAGE CONFIG---
 st.set_page_config(
     page_title="Cashmoney", page_icon=":heavy_dollar_sign:", layout="wide"
@@ -58,7 +45,7 @@ st.title("Cashmoney")
 st.markdown("######")
 
 # ---CHECK FOR CORRECT SETUP---
-ctgs_check, accs_check, banks_check = checks()
+ctgs_check, accs_check, banks_check = general_checks()
 if not ctgs_check or not accs_check or not banks_check:
     st.text("Welcome to Cashmoney!")
     st.text("To get started you should set up at least one account, define some categories and at provide a csv bank "

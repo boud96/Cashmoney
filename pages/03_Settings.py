@@ -9,14 +9,17 @@ from settings.constants import NOT_AVAILABLE
 
 # Init categories
 c = Categories()
-categories = c.categories
-categories_wni = c.categories_wni
+category_exists, subcategory_exists, text_value_exists = c.checks()
+categories = []
+if category_exists:
+    categories = c.get_categories()
+categories_wni = c.get_categories_wni()
 # Init banks and accounts
 cashflow = Cashflow()
 account_dict = cashflow.get_acc_dict()
 acc_manager = AccountManager()
 bm = BankManager()
-bank_types = list(bm.json_data)
+bank_types = list(bm.get_banks())
 bank_types.append("cash")
 
 st.title("Settings")
@@ -27,6 +30,7 @@ with tab_1:
     add_category_expander = st.expander("Add")
     delete_category_expander = st.expander("Delete")
     defined_categories_expander = st.expander("Overview")
+
     with add_category_expander:
         st.subheader("Add a new category")
         new_cat = st.text_input("New category:")
@@ -36,7 +40,8 @@ with tab_1:
         new_cat_add_butt = st.button("ADD", key="cat_add")
         if new_cat_add_butt:
             c.add_category(categories, new_cat_dict)
-        st.markdown("---")
+
+        st.divider()
 
         # New subcategory
         st.subheader("Add a new subcategory")
@@ -45,34 +50,57 @@ with tab_1:
 
         new_sub_add_butt = st.button("ADD", key="sub_add")
         if new_sub_add_butt:
-            c.add_subcategory(categories, cat_select, new_sub)
-        st.markdown("---")
+            if new_sub != "" or cat_select != "":
+                st.warning("Please fill in all fields")
+            else:
+                c.add_subcategory(categories, cat_select, new_sub)
+
+        st.divider()
 
         # Assign string values
         st.subheader("Define text values to categorize with")
         new_str = st.text_input("New string")
         cat_select_str = st.selectbox("To which category?", options=categories, key="cat_select_string")
-        sub_select_str = st.selectbox("To which subcategory?", options=categories[cat_select_str])
-        wni_select_str = st.selectbox("Is this always a Want / Need / Investment / Icnome / UNNASSIGNED", options=categories_wni)
+
+        sub_cat_options = []
+        if category_exists:
+            sub_cat_options = categories[cat_select_str]
+        sub_select_str = st.selectbox("To which subcategory?", options=sub_cat_options)
+
+        wni_select_str = st.selectbox("Is this always a Want / Need / Investment / Icnome / UNNASSIGNED",
+                                      options=categories_wni)
 
         new_str_add_butt = st.button("ADD", key="str_add")
         if new_str_add_butt:
-            c.add_str(categories, cat_select_str, sub_select_str, new_str, wni_select_str)
+            if new_str != "" or cat_select_str != "" or sub_select_str != "":
+                st.warning("Please fill in all fields")
+            else:
+                c.add_str(categories, cat_select_str, sub_select_str, new_str, wni_select_str)
 
     with delete_category_expander:
         st.subheader("Delete a category")
 
         delete_action = st.selectbox("What do you want to remove?", options=("Category", "Subcategory", "Text value"))
-        placeholder = st.empty()
         if delete_action == "Category":
             cat_select_del = st.selectbox("Which category?", options=categories)
+
         elif delete_action == "Subcategory":
             cat_select_del = st.selectbox("From which category?", options=categories)
-            sub_select_del = st.selectbox("Which subcategory?", options=categories[cat_select_del])
+            sub_cat_options = []
+            if category_exists:
+                sub_cat_options = categories[cat_select_del]
+            sub_select_del = st.selectbox("Which subcategory?", options=sub_cat_options)
+
         if delete_action == "Text value":
             cat_select_del = st.selectbox("From which category?", options=categories)
-            sub_select_del = st.selectbox("Which subcategory?", options=categories[cat_select_del])
-            str_select_del = st.selectbox("Which subcategory?", options=categories[cat_select_del][sub_select_del])
+            sub_cat_options = []
+            if category_exists:
+                sub_cat_options = categories[cat_select_del]
+            sub_select_del = st.selectbox("Which subcategory?", options=sub_cat_options)
+            text_val_options = []
+            if subcategory_exists:
+                text_val_options = categories[cat_select_del][sub_select_del]
+            str_select_del = st.selectbox("Which text value?", options=text_val_options)
 
         del_butt = st.button("DELETE")
         if del_butt and (delete_action == "Category"):

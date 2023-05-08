@@ -18,13 +18,33 @@ class Categories:
             if len(self.main_categories_list) == 0:
                 self.subcategories_list = []
             subcategories_list = []
+            text_values_list = []
             for i in list(self.categories.values()):
                 subcategories_list.append(i.keys())
                 self.subcategories_list = [item for sublist in subcategories_list for item in sublist]
 
+                text_values_list.append(i.values())
+            text_values_list = [item for sublist in text_values_list for item in sublist]
+            self.text_values_list = [key for sublist in text_values_list for dic in sublist for key in dic.keys()]
+
         with open(self.json_path_wni, "r", encoding="utf-8") as data_wni:
             self.categories_wni = json.load(data_wni)
             self.categories_wni_list = list(self.categories_wni.keys())
+
+    def checks(self):
+        category_exists = False
+        if len(self.get_categories()) > 0:
+            category_exists = True
+
+        subcategory_exists = False
+        if len(self.get_subcategories()) > 0:
+            subcategory_exists = True
+
+        text_value_exists = False
+        if len(self.text_values_list) > 0:
+            text_value_exists = True
+
+        return category_exists, subcategory_exists, text_value_exists
 
     def add_category(self, json_data, new_cat_name):
         json_data.update(new_cat_name)
@@ -46,20 +66,26 @@ class Categories:
             json.dump(json_data, json_file, indent=4)
 
     def delete_category(self, json_data, cat_to_delete):
-        if cat_to_delete == "UNASSIGNED":
+        if cat_to_delete is None:
+            return st.warning("Please select a category to delete.")
+        elif cat_to_delete == "UNASSIGNED":
             return st.warning("The UNASSIGNED category cannot be deleted.")
         json_data.pop(cat_to_delete)
         with open(self.json_path, "w", encoding="utf-8") as json_file:
             json.dump(json_data, json_file, indent=4)
 
     def delete_subcategory(self, json_data, category_from, sub_to_delete):
-        if sub_to_delete == "UNASSIGNED":
+        if sub_to_delete is None:
+            return st.warning("Please select a subcategory to delete.")
+        elif sub_to_delete == "UNASSIGNED":
             return st.warning("The UNASSIGNED subcategory cannot be deleted.")
         json_data[category_from].pop(sub_to_delete)
         with open(self.json_path, "w", encoding="utf-8") as json_file:
             json.dump(json_data, json_file, indent=4)
 
     def delete_text_value(self, json_data, category_from, subcategory_from, text_to_delete):
+        if text_to_delete is None:
+            return st.warning("Please select a text value to delete.")
         str_list = json_data[category_from][subcategory_from].copy()
         str_list.remove(text_to_delete)
         json_data[category_from][subcategory_from] = str_list
@@ -74,6 +100,9 @@ class Categories:
 
     def get_subcategories(self):
         return self.subcategories_list
+
+    def get_text_values(self):
+        return self.text_values_list
 
     def get_categories_wni(self):
         return self.categories_wni_list
