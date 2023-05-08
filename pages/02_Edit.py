@@ -8,6 +8,7 @@ from my_scripts.parse_csv import parse_csv
 from my_scripts.Categories import Categories
 from my_scripts.Account import AccountManager
 from my_scripts import aggrid_stuff
+from settings.constants import CASH
 from utils.checks import general_checks
 
 
@@ -30,7 +31,7 @@ subcat_selections = categories.subcategories_list  # TODO This variable should c
 wni_cat_selections = categories.categories_wni_list
 acc_selections_add = []
 for acc in accs:
-    if accs[acc]["bank_type"] != "cash":  # TODO: This shouldn't be here at all.
+    if accs[acc][acc_manager.bank_type] != CASH:
         acc_selections_add.append(acc)
 acc_selections_edit = list(accs.keys())
 
@@ -39,7 +40,7 @@ with tab_1:
     file = st.file_uploader("Choose a csv file to parse", type="csv")
 
     acc_names = list(acc_manager.json_data)
-    account_select = st.selectbox("Select an account:", acc_selections_add)  # TODO: Filter out other bank type
+    account_select = st.selectbox("Select an account:", acc_selections_add)
 
     parse_butt = st.button("Parse!")
     if parse_butt:

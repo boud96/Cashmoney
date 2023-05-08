@@ -1,5 +1,4 @@
 # TODO: Make sidebar items collapsible. Maybe even home page items.
-# TODO: Finally start working on input error handling ffs.
 # TODO: Fix the session state issue with the date_from.
 # TODO: Make an export settings button that exports the accounts, banks, categories. Also import settings.
 # TODO: Make reset to factory settings button in the settings.

@@ -303,6 +303,8 @@ with tab_accs:
 
     with defined_accounts_expander:
         # Show the accounts
+        if len(accs) == 0:
+            st.warning("No accounts defined!")
         for account in accs:
             account_name_formatted = f":red[{account}]"
             st.subheader(account_name_formatted)
