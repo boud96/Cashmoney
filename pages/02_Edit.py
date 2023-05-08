@@ -10,7 +10,10 @@ from my_scripts.Account import AccountManager
 from my_scripts import aggrid_stuff
 from settings.constants import CASH
 from utils.checks import general_checks
+from utils.page_config import default_page_config
 
+# ---PAGE CONFIG---
+st.set_page_config(**default_page_config)
 
 ctgs_check, accs_check, banks_check = general_checks()
 if not accs_check:

@@ -6,6 +6,10 @@ from my_scripts.Account import AccountManager
 from my_scripts.Bank import BankManager
 from my_scripts.Cashflow import Cashflow
 from settings.constants import NOT_AVAILABLE, CASH
+from utils.page_config import default_page_config
+
+# ---PAGE CONFIG---
+st.set_page_config(**default_page_config)
 
 # Init categories
 c = Categories()

@@ -1,5 +1,10 @@
 import streamlit as st
 
+from utils.page_config import default_page_config
+
+# ---PAGE CONFIG---
+st.set_page_config(**default_page_config)
+
 st.header("About")
 st.subheader(
     ":heavy_dollar_sign::heavy_dollar_sign::heavy_dollar_sign: "
@@ -16,7 +21,7 @@ col_1, col_2, col_3 = st.columns(3)
 with col_1:
     st.write("PayPal")
     st.image("img/qr_paypal.png", width=200)
-    st.write("[PayPal](paypal.me/boud96)")
+    st.write("[paypal.me/boud96](https:paypal.me/boud96)")
 with col_2:
     st.write("BTC")
     st.image("img/qr_btc.png", width=200)

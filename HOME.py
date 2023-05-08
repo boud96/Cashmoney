@@ -18,6 +18,8 @@ import streamlit as st
 import datetime
 from st_aggrid import AgGrid, JsCode, GridOptionsBuilder, ColumnsAutoSizeMode
 
+from utils.page_config import default_page_config
+
 
 def change_date_sidebar_beginning():
     st.session_state.date_from = first_date
@@ -35,9 +37,7 @@ def change_date_sidebar_this_year():
 
 
 # ---PAGE CONFIG---
-st.set_page_config(
-    page_title="Cashmoney", page_icon=":heavy_dollar_sign:", layout="wide"
-)
+st.set_page_config(**default_page_config)
 
 # ---PAGE BODY---
 st.title("Cashmoney")
