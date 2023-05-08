@@ -19,6 +19,19 @@ class AccountManager:
         with open(self.json_path, "r") as json_file:
             self.json_data = json.load(json_file)
 
+    def checks(self):
+        is_main = []
+        account_number_list = []
+        for acc in self.get_accounts().values():
+            is_main.append(acc.get("main"))
+            account_number_list.append(acc.get("account_number"))
+
+        main_exists = False
+        if True in is_main:
+            main_exists = True
+
+        return main_exists, account_number_list
+
     def add_account(self, new_data):
         self.json_data.update(new_data)
         with open(self.json_path, "w") as json_file:

@@ -18,16 +18,21 @@ categories_wni = c.get_categories_wni()
 # Init banks and accounts
 cashflow = Cashflow()
 account_dict = cashflow.get_acc_dict()
+
 acc_manager = AccountManager()
+accs = acc_manager.get_accounts()
+accs_list = list(accs)
+main_acc_exists, acc_num_list = acc_manager.checks()
+
 bm = BankManager()
 bank_types = bm.get_banks()
 bank_types_list = list(bank_types)
 
 st.title("Settings")
 
-tab_1, tab_2, tab_3, tab_4 = st.tabs(("Categories", "Banks", "Accounts", "Import / Export"))
+tab_cats, tab_bank, tab_accs, tab_imp_exp = st.tabs(("Categories", "Banks", "Accounts", "Import / Export"))
 # New category
-with tab_1:
+with tab_cats:
     add_category_expander = st.expander("Add")
     delete_category_expander = st.expander("Delete")
     defined_categories_expander = st.expander("Overview")
@@ -114,7 +119,7 @@ with tab_1:
     with defined_categories_expander:
         st.write(categories)
 
-with tab_2:
+with tab_bank:
     add_bank_expander = st.expander("Add")
     delete_bank_expander = st.expander("Delete")
     defined_banks_expander = st.expander("Overview")
@@ -224,7 +229,7 @@ with tab_2:
                 st.caption(f"Other notes: {bank_types[bank][bm.notes]}")
             st.divider()
 
-with tab_3:
+with tab_accs:
     add_account_expander = st.expander("Add")
     delete_account_expander = st.expander("Delete")
     defined_accounts_expander = st.expander("Overview")
@@ -265,16 +270,23 @@ with tab_3:
 
         add_butt = st.button("Add", key="add_butt_accounts")
         if add_butt:
-            if name_val in acc_manager.json_data:
-                st.error(
+            if name_val in accs:
+                st.warning(
                     f"""
                 Account name: '{name_val}' already exists!  
                 Delete it first or choose a different name.
                 """
                 )
+            elif account_number_val in acc_num_list:
+                st.warning(
+                    f"""
+                    Account number: '{account_number_val}' already exists!  
+                    Delete it first or choose a different account number.
+                    """
+                )
             elif len(name_val) < 1:
                 st.warning(f"The 'Name' must be filled out")
-            elif len(acc_manager.json_data) > 0 and main_val is True:
+            elif len(accs) > 0 and main_acc_exists is True:
                 st.warning(f"There already is a Main account!")
             else:
                 acc_manager.add_account(new_data)
@@ -283,7 +295,7 @@ with tab_3:
 
     with delete_account_expander:
         # Delete an account
-        del_select = st.selectbox("Account to delete:", acc_manager.json_data)
+        del_select = st.selectbox("Account to delete:", accs)
         del_button = st.button("Delete")
 
         if del_button:
@@ -291,19 +303,19 @@ with tab_3:
 
     with defined_accounts_expander:
         # Show the accounts
-        for account in acc_manager.json_data:
+        for account in accs:
             account_name_formatted = f":red[{account}]"
             st.subheader(account_name_formatted)
-            st.write(f"{acc_manager.json_data[account][acc_manager.note]}")
-            if acc_manager.json_data[account][acc_manager.main]:
+            st.write(f"{accs[account][acc_manager.note]}")
+            if accs[account][acc_manager.main]:
                 st.write("**MAIN ACCOUNT**")
-            st.write(f"**Owners:** {acc_manager.json_data[account][acc_manager.bank_type]}")
-            st.write(f"**Owners:** {acc_manager.json_data[account][acc_manager.owners]}")
-            st.write(f"**Account number:** {acc_manager.json_data[account][acc_manager.account_number]}")
-            st.write(f"**Color:** {acc_manager.json_data[account][acc_manager.color]}")
+            st.write(f"**Owners:** {accs[account][acc_manager.bank_type]}")
+            st.write(f"**Owners:** {accs[account][acc_manager.owners]}")
+            st.write(f"**Account number:** {accs[account][acc_manager.account_number]}")
+            st.write(f"**Color:** {accs[account][acc_manager.color]}")
 
-            acc_balance = acc_manager.json_data[account][acc_manager.balance]
-            acc_delta = acc_manager.json_data[account][acc_manager.delta]
+            acc_balance = accs[account][acc_manager.balance]
+            acc_delta = accs[account][acc_manager.delta]
             acc_actual_balance = acc_balance + acc_delta
             current_balance = st.number_input("Current balance:",
                                               value=acc_actual_balance,
@@ -319,5 +331,5 @@ with tab_3:
 
             st.divider()
 
-    with tab_4:
+    with tab_imp_exp:
         st.info("Work in progress. Here you will be able to import and export the settings.")
