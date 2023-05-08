@@ -56,6 +56,11 @@ with tab_2:
             "You can also edit the csv files directly in the 'data' folder."
             "Incorrect use might break the app. ")
     cashflow_df = cashflow_df.reset_index()
+
+    cashflow_df["main_category"] = cashflow_df["main_category"].astype("category")
+    cashflow_df["subcategory"] = cashflow_df["subcategory"].astype("category")
+    cashflow_df["wni"] = cashflow_df["wni"].astype("category")
+
     editor = st.experimental_data_editor(cashflow_df, key="editor", num_rows="dynamic")
 
     save_butt = st.button("Save")
@@ -67,4 +72,3 @@ with tab_2:
             st.dataframe(df_filtered)
 
             df_filtered.to_csv(f"data/{acc}.csv", index=False)
-
