@@ -5,7 +5,7 @@ from my_scripts.Categories import Categories
 from my_scripts.Account import AccountManager
 from my_scripts.Bank import BankManager
 from my_scripts.Cashflow import Cashflow
-from settings.constants import NOT_AVAILABLE
+from settings.constants import NOT_AVAILABLE, CASH
 
 # Init categories
 c = Categories()
@@ -14,13 +14,14 @@ categories = []
 if category_exists:
     categories = c.get_categories()
 categories_wni = c.get_categories_wni()
+
 # Init banks and accounts
 cashflow = Cashflow()
 account_dict = cashflow.get_acc_dict()
 acc_manager = AccountManager()
 bm = BankManager()
-bank_types = list(bm.get_banks())
-bank_types.append("cash")
+bank_types = bm.get_banks()
+bank_types_list = list(bank_types)
 
 st.title("Settings")
 
@@ -175,49 +176,53 @@ with tab_2:
 
         b_add_butt = st.button("Add", key="add_butt_banks")
         if b_add_butt:
-            if b_name in bm.json_data:
-                st.error(
+            if b_name in bank_types:
+                st.warning(
                     f"""
                     Bank name: '{b_name}' already exists!  
                     Delete it first or choose a different name.
                     """
                 )
             elif len(b_name) < 1:
-                st.error(f"The 'Name' must be filled out")
+                st.warning(f"The 'Name' must be filled out") # TODO Add more checks
             else:
                 bm.add_bank(b_new_data)
                 st.success(f"Bank {b_name} was added!")
 
-        st.markdown("---")
-
     with delete_bank_expander:
         # Delete a bank
-        b_del_select = st.selectbox("Bank to delete:", bank_types)
+        del_bank_types_list = bank_types_list.copy()
+        del_bank_types_list.remove(CASH)
+
+        b_del_select = st.selectbox("Bank to delete:", del_bank_types_list)
         b_del_button = st.button("Delete", key="del_butt_banks")
 
         if b_del_button:
             bm.del_bank(b_del_select)
 
-        st.markdown("---")
-
     with defined_banks_expander:
         # Show the banks
-        for bank in bm.json_data:
-            b_name_formatted = f":red[{bank}]"
-            st.subheader(b_name_formatted)
-            st.write(f"**Encoding:** {bm.json_data[bank][bm.encoding]}")
-            st.write(f"**Delimiter:** {bm.json_data[bank][bm.delimiter]}")
-            st.write(f"**Header:** {bm.json_data[bank][bm.header]}")
-            st.write(f"**Columns:**")
-            st.caption(f"Date: {bm.json_data[bank][bm.date]}")
-            st.caption(f"Value:: {bm.json_data[bank][bm.value]}")
-            st.caption(f"Transaction ID: {bm.json_data[bank][bm.transaction_id]}")
-            st.caption(f"Counterparty account ID: {bm.json_data[bank][bm.counterparty_acc_id]}")
-            st.caption(f"Counterparty account name: {bm.json_data[bank][bm.counterparty_acc_name]}")
-            st.caption(f"System note: {bm.json_data[bank][bm.sys_note]}")
-            st.caption(f"Account note: {bm.json_data[bank][bm.acc_note]}")
-            st.caption(f"Other notes: {bm.json_data[bank][bm.notes]}")
-
+        for bank in bank_types:
+            if bank == CASH:
+                b_name_formatted = f":red[{bank}]"
+                st.subheader(b_name_formatted)
+                st.caption("Default type for cash transactions.")
+            else:
+                b_name_formatted = f":red[{bank}]"
+                st.subheader(b_name_formatted)
+                st.write(f"**Encoding:** {bank_types[bank][bm.encoding]}")
+                st.write(f"**Delimiter:** {bank_types[bank][bm.delimiter]}")
+                st.write(f"**Header:** {bank_types[bank][bm.header]}")
+                st.write(f"**Columns:**")
+                st.caption(f"Date: {bank_types[bank][bm.date]}")
+                st.caption(f"Value:: {bank_types[bank][bm.value]}")
+                st.caption(f"Transaction ID: {bank_types[bank][bm.transaction_id]}")
+                st.caption(f"Counterparty account ID: {bank_types[bank][bm.counterparty_acc_id]}")
+                st.caption(f"Counterparty account name: {bank_types[bank][bm.counterparty_acc_name]}")
+                st.caption(f"System note: {bank_types[bank][bm.sys_note]}")
+                st.caption(f"Account note: {bank_types[bank][bm.acc_note]}")
+                st.caption(f"Other notes: {bank_types[bank][bm.notes]}")
+            st.divider()
 
 with tab_3:
     add_account_expander = st.expander("Add")
@@ -228,7 +233,9 @@ with tab_3:
         name_val = st.text_input("Name:")
         color_val = st.color_picker("Color:", "#FFF")
         main_val = st.checkbox("Main account")
-        bank_type_val = st.selectbox("Select a bank type:", bank_types)
+        acc_bank_types_list = bank_types_list.copy()
+        acc_bank_types_list.remove(CASH)
+        bank_type_val = st.selectbox("Select a bank type:", acc_bank_types_list)
         note_val = st.text_input("Note:", help="A custom note")
         owners_val = st.slider("How many people share this account?", 1, 10, 1,
                                help="The values get recalculated for your spending on the main page. "
@@ -266,15 +273,13 @@ with tab_3:
                 """
                 )
             elif len(name_val) < 1:
-                st.error(f"The 'Name' must be filled out")
+                st.warning(f"The 'Name' must be filled out")
             elif len(acc_manager.json_data) > 0 and main_val is True:
-                st.error(f"There already is a Main account!")
+                st.warning(f"There already is a Main account!")
             else:
                 acc_manager.add_account(new_data)
                 st.success(f"An account {name_val} was added! You may adjust current balance in the "
                            f"Defined accounts expander if the current balance from the home page is off.")
-
-        st.markdown("---")
 
     with delete_account_expander:
         # Delete an account
@@ -283,8 +288,6 @@ with tab_3:
 
         if del_button:
             acc_manager.del_account(del_select)
-
-        st.markdown("---")
 
     with defined_accounts_expander:
         # Show the accounts
@@ -313,6 +316,8 @@ with tab_3:
                 new_delta = int(current_balance - acc_balance)
                 acc_manager.adjust_account_delta(account, new_delta)
                 st.success(f"Available balance for {account} was adjusted.")
+
+            st.divider()
 
     with tab_4:
         st.info("Work in progress. Here you will be able to import and export the settings.")
