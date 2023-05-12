@@ -290,7 +290,7 @@ with tab_accs:
                 )
             elif len(name_val) < 1:
                 st.warning(f"The 'Name' must be filled out")
-            elif len(accs) > 0 and main_acc_exists is True:
+            elif len(accs) > 0 and main_acc_exists is True and main_val is True:
                 st.warning(f"There already is a Main account!")
             else:
                 acc_manager.add_account(new_data)

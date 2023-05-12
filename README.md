@@ -76,6 +76,12 @@ On first startup you'll see this screen where you can set up the app with exampl
 ![Homepage-startup][home-startup-screenshot]
 
 
+<!-- PLANNED -->
+## Planned features
+- Allow accounts with different currencies and convert them to main account's currency.
+- Import / Export settings button.
+- Make Revolut bank type work. (Revolut's bank statement doesn't have a date a counterparty account number. It might be impossible to implement.)
+- Finish editable table on the Edit data manually tab.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
