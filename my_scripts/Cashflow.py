@@ -42,7 +42,7 @@ class Cashflow:
         df = pd.DataFrame()
         for account in self.accounts_dict:
             # Read
-            df_acc = pd.read_csv(rf"{self.path}\{account}.csv")
+            df_acc = pd.read_csv(rf"{self.path}/{account}.csv")
             df_acc[self.date] = pd.to_datetime(df_acc[self.date], dayfirst=True)
             # Add to dict
             self.accounts_dict[account][acc_manager.df] = df_acc
