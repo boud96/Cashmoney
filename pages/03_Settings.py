@@ -10,6 +10,7 @@ from utils.page_config import default_page_config
 
 # ---PAGE CONFIG---
 st.set_page_config(**default_page_config)
+st.info("This is a DEMO. Uploading and manipulation of the data is not possible. Get the full version at https://github.com/boud96/Cashmoney")
 
 # Init categories
 c = Categories()
@@ -47,7 +48,7 @@ with tab_cats:
 
         new_cat_dict = {new_cat: {}}
 
-        new_cat_add_butt = st.button("ADD", key="cat_add")
+        new_cat_add_butt = st.button("ADD", key="cat_add", disabled=True)
         if new_cat_add_butt:
             c.add_category(categories, new_cat_dict)
 
@@ -58,7 +59,7 @@ with tab_cats:
         new_sub = st.text_input("New subcategory")
         cat_select = st.selectbox("To which category?", options=categories)
 
-        new_sub_add_butt = st.button("ADD", key="sub_add")
+        new_sub_add_butt = st.button("ADD", key="sub_add", disabled=True)
         if new_sub_add_butt:
             if new_sub != "" or cat_select != "":
                 st.warning("Please fill in all fields")
@@ -80,7 +81,7 @@ with tab_cats:
         wni_select_str = st.selectbox("Is this always a Want / Need / Investment / Icnome / UNNASSIGNED",
                                       options=categories_wni)
 
-        new_str_add_butt = st.button("ADD", key="str_add")
+        new_str_add_butt = st.button("ADD", key="str_add", disabled=True)
         if new_str_add_butt:
             if new_str != "" or cat_select_str != "" or sub_select_str != "":
                 st.warning("Please fill in all fields")
@@ -112,7 +113,7 @@ with tab_cats:
                 text_val_options = categories[cat_select_del][sub_select_del]
             str_select_del = st.selectbox("Which text value?", options=text_val_options)
 
-        del_butt = st.button("DELETE")
+        del_butt = st.button("DELETE", disabled=True)
         if del_butt and (delete_action == "Category"):
             c.delete_category(categories, cat_select_del)
         elif del_butt and (delete_action == "Subcategory"):
@@ -135,7 +136,7 @@ with tab_bank:
                                    help="Sometimes the csv contains few rows that need to be skipped."
                                         "Open the csv file and count rows before column names.")
 
-        b_file = st.file_uploader("Upload csv to load column names:", type="csv")
+        b_file = st.file_uploader("Upload csv to load column names:", type="csv", disabled=True)
 
         b_columns = []
         b_columns_optional = []
@@ -183,7 +184,7 @@ with tab_bank:
             }
         }
 
-        b_add_butt = st.button("Add", key="add_butt_banks")
+        b_add_butt = st.button("Add", key="add_butt_banks", disabled=True)
         if b_add_butt:
             if b_name in bank_types:
                 st.warning(
@@ -204,7 +205,7 @@ with tab_bank:
         del_bank_types_list.remove(CASH)
 
         b_del_select = st.selectbox("Bank to delete:", del_bank_types_list)
-        b_del_button = st.button("Delete", key="del_butt_banks")
+        b_del_button = st.button("Delete", key="del_butt_banks", disabled=True)
 
         if b_del_button:
             bm.del_bank(b_del_select)
@@ -272,7 +273,7 @@ with tab_accs:
             }
         }
 
-        add_butt = st.button("Add", key="add_butt_accounts")
+        add_butt = st.button("Add", key="add_butt_accounts", disabled=True)
         if add_butt:
             if name_val in accs:
                 st.warning(
@@ -300,7 +301,7 @@ with tab_accs:
     with delete_account_expander:
         # Delete an account
         del_select = st.selectbox("Account to delete:", accs)
-        del_button = st.button("Delete")
+        del_button = st.button("Delete", disabled=True)
 
         if del_button:
             acc_manager.del_account(del_select)
@@ -329,7 +330,7 @@ with tab_accs:
                                               key=account + " current_balance",
                                               help="When the available balance value is off due to accumulated errors, "
                                                    "you can adjust it here.")
-            current_balance_save_butt = st.button("Save", key=account + " current_balance_save_butt")
+            current_balance_save_butt = st.button("Save", key=account + " current_balance_save_butt", disabled=True)
             if current_balance_save_butt:
                 new_delta = int(current_balance - acc_balance)
                 acc_manager.adjust_account_delta(account, new_delta)

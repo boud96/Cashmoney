@@ -4,6 +4,7 @@ from utils.page_config import default_page_config
 
 # ---PAGE CONFIG---
 st.set_page_config(**default_page_config)
+st.info("This is a DEMO. Uploading and manipulation of the data is not possible. Get the full version at https://github.com/boud96/Cashmoney")
 
 st.header("About")
 st.subheader(

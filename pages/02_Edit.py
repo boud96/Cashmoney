@@ -15,6 +15,8 @@ from utils.page_config import default_page_config
 # ---PAGE CONFIG---
 st.set_page_config(**default_page_config)
 
+st.info("This is a DEMO. Uploading and manipulation of the data is not possible. Get the full version at https://github.com/boud96/Cashmoney")
+
 ctgs_check, accs_check, banks_check = general_checks()
 if not accs_check:
     st.warning("You need to add at least one account in settings first.")
@@ -40,12 +42,12 @@ acc_selections_edit = list(accs.keys())
 
 tab_1, tab_2 = st.tabs(("Add data from csv", "Edit data manually"))
 with tab_1:
-    file = st.file_uploader("Choose a csv file to parse", type="csv")
+    file = st.file_uploader("Choose a csv file to parse", type="csv", disabled=True)
 
     acc_names = list(acc_manager.json_data)
     account_select = st.selectbox("Select an account:", acc_selections_add)
 
-    parse_butt = st.button("Parse!")
+    parse_butt = st.button("Parse!", disabled=True)
     if parse_butt:
         added_data = parse_csv(file, account_select)
         st.success(f"{account_select} was updated!")
@@ -66,7 +68,7 @@ with tab_2:
 
     editor = st.experimental_data_editor(cashflow_df, key="editor", num_rows="dynamic")
 
-    save_butt = st.button("Save")
+    save_butt = st.button("Save", disabled=True)
     if save_butt:
         for acc in list(acc_dict):
             st.write(acc)

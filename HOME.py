@@ -40,6 +40,7 @@ def change_date_sidebar_this_year():
 st.set_page_config(**default_page_config)
 
 # ---PAGE BODY---
+st.info("This is a DEMO. Uploading and manipulation of the data is not possible. Get the full version at https://github.com/boud96/Cashmoney")
 st.title("Cashmoney")
 st.markdown("######")
 
