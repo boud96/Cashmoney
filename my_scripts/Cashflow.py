@@ -322,11 +322,11 @@ class Cashflow:
 
         if expenses is True:
             df_copy = df.copy()
-            df_copy = df_copy[df_copy[self.wni] != self.income]
+            df_copy = df_copy[df_copy[self.income] != True]
             df_copy.loc[:, self.value] = df_copy[self.value] * -1
             df = df_copy
         else:
-            df = df[df[self.wni] == self.income]
+            df = df[df[self.income] == True]
 
         fig = px.sunburst(
             df, path=df.loc[:, ("main_category", "subcategory")], values=self.value
