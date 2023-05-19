@@ -3,7 +3,7 @@
   <p align="center">
     A personal finance app
     <br />
-    <a href="#">View Demo (Not yet available)</a>
+    <a href="https://boud96-cashmoney-home-live-demo-d4hd1j.streamlit.app/">View Demo</a>
   </p>
 
 
