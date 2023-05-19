@@ -178,7 +178,7 @@ incomes_sum = stats_sums.get("incomes")
 net_sum = stats_sums.get("net")
 
 # Monthly averages
-cashflow_expenses, cashflow_incomes = cashflow.filter_incomes(cashflow_df)
+cashflow_incomes, cashflow_expenses = cashflow.filter_incomes(cashflow_df)
 if len(cashflow_expenses) > 0:
     monthly_avg_expenses = int(cashflow_expenses.resample("MS").sum().mean()[cashflow.value])
 else:
