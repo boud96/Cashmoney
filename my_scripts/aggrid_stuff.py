@@ -101,3 +101,60 @@ function(params) {
 """)
 
 grey_out = JsCode("function a() {return {'color': 'grey'}}")
+
+cell_button_delete = JsCode('''
+    class BtnCellRenderer {
+        init(params) {
+            console.log(params.api.getSelectedRows());
+            this.params = params;
+            this.eGui = document.createElement('div');
+            this.eGui.innerHTML = `
+             <span>
+                <style>
+                .btn {
+                  background-color: #F94721;
+                  border: none;
+                  color: white;
+                  font-size: 10px;
+                  font-weight: bold;
+                  height: 2.5em;
+                  width: 8em;
+                  cursor: pointer;
+                }
+
+                .btn:hover {
+                  background-color: #FB6747;
+                }
+                </style>
+                <button id='click-button'
+                    class="btn"
+                    >-</button>
+             </span>
+          `;
+        }
+
+        getGui() {
+            return this.eGui;
+        }
+
+    };
+    ''')
+
+string_to_delete = JsCode(
+    """
+    function(e) {
+        let api = e.api;
+        let sel = api.getSelectedRows();
+        debugger;
+        console.log(sel);
+        sel.forEach(obj => {
+            obj.acc_note = "ahoj";
+        });
+        console.log("sel");
+        console.log(sel);
+        console.log("api.getSelectedRows()");
+        console.log(api.getSelectedRows());
+        return api.getSelectedRows();
+    }
+    """
+)

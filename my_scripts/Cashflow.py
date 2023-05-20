@@ -119,8 +119,13 @@ class Cashflow:
                 df_acc = df_acc.sort_values(by=[self.date], ascending=[False])
                 df_acc.to_csv(f"data/{acc_name}.csv")
 
-    def delete_data(self, df):
-        pass
+    def delete_data(self, id_list):
+        df = self.get_df().copy()
+        df = df[~df[self.id].isin(id_list)]
+
+        acc_dfs_dict = dict(list(df.groupby("account_id")))
+        for acc_name in acc_dfs_dict:
+            acc_dfs_dict[acc_name].to_csv(f"data/{acc_name}.csv")
 
     def create_cumsum(self, resample_freq="MS"):
         """

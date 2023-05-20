@@ -1,9 +1,1026 @@
 date,account,value,ID,counterparty_account_id,sys_note,acc_note,note_1,note_2,main_category,subcategory,wni,account_id,income
-17/03/2023,nan,5000,75040801342,,,,,,UNASSIGNED,UNASSIGNED,UNASSIGNED,Example shared account,TRUE
-14/03/2023,nan,-1039.3,75022325142,,,,,,food,groceries,needs,Example shared account,FALSE
-13/03/2023,nan,-213.4,74954084812,,,,,,food,groceries,needs,Example shared account,FALSE
-10/03/2023,nan,-138.61,74817152602,,,,,,transport,gas,needs,Example shared account,FALSE
-06/03/2023,nan,-149.7,74606595122,,,,,,food,groceries,needs,Example shared account,FALSE
-06/03/2023,nan,5000,74434722752,123-456789/1234,,,,,account_transfer,Example main account,account_transfer,Example shared account,TRUE
-24/02/2023,nan,-1000,74434722752,123-45653489/1234,,,,,food,restaurants,wants,Example shared account,FALSE
-18/02/2023,nan,-255,74434722752,123-4534789/1234,,,,,food,groceries,needs,Example shared account,FALSE
+2020-01-01 00:00:00.000000000,,-746,1f27af25-bf88-4ced-b2e5-6bdcfdf4769b,,,,,,other,other_other,wants,Example shared account,False
+2020-01-02 05:11:21.081081081,,-976,8c611550-202a-43b8-a494-2cf9c1f2c387,,,,,,other,games,wants,Example shared account,False
+2020-01-03 10:22:42.162162162,,-634,92250471-9a53-4eba-9014-79dadc483a82,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-01-04 15:34:03.243243243,,-484,5a57d67b-3e04-44cd-9fad-d6fe9692fef2,,,,,,other,games,wants,Example shared account,False
+2020-01-05 20:45:24.324324324,,-815,1d0e5371-3737-4d22-9eb9-642f4b3833c7,,,,,,investments,stocks,investments,Example shared account,False
+2020-01-07 01:56:45.405405405,,-715,3e233fb6-adb7-4199-bc03-c12ca5842289,,,,,,investments,investments_other,investments,Example shared account,False
+2020-01-08 07:08:06.486486486,,4090,5d60ca87-2136-4592-a371-f11ca3f5eb8d,,,,,,jobs,my main job,income,Example shared account,True
+2020-01-09 12:19:27.567567567,,-234,9c459ee2-aa89-415f-9fd8-48c00e7a4d4d,,,,,,transport,gas,needs,Example shared account,False
+2020-01-10 17:30:48.648648648,,2270,6adef13c-b758-4b9b-81e2-f565be590ede,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-01-11 22:42:09.729729729,,-819,97328bd0-bdaf-41c8-a8ba-1d67300179f2,,,,,,transport,public_transport,needs,Example shared account,False
+2020-01-13 03:53:30.810810810,,-571,b1e9ec2f-6acf-4b5a-9dbf-e95b3a55f115,,,,,,transport,transport_other,wants,Example shared account,False
+2020-01-14 09:04:51.891891891,,-590,0fb68910-931f-41ab-aec5-c6d1a4d8bca8,,,,,,food,restaurants,wants,Example shared account,False
+2020-01-15 14:16:12.972972973,,-336,4c85ca68-6810-4729-ba98-8cb116234348,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-01-16 19:27:34.054054054,,-244,13b8d02e-4d37-4728-9cf4-343b945deb28,,,,,,transport,transport_other,wants,Example shared account,False
+2020-01-18 00:38:55.135135135,,-555,35ecb476-a991-46f4-852d-26eebbde8c54,,,,,,other,games,wants,Example shared account,False
+2020-01-19 05:50:16.216216216,,-943,cc4f5f63-abe8-4d27-8959-b8e613f9c7c1,,,,,,food,groceries,needs,Example shared account,False
+2020-01-20 11:01:37.297297297,,-447,997801d5-e610-4bc1-89e9-ca6c78b3bf2b,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2020-01-21 16:12:58.378378378,,-355,3e0d6a41-97d2-4826-8c02-4b37e108be5d,,,,,,transport,public_transport,needs,Example shared account,False
+2020-01-22 21:24:19.459459459,,-605,a47a7c8b-0bbb-4b0c-99a6-ec4b2b0282a1,,,,,,food,groceries,needs,Example shared account,False
+2020-01-24 02:35:40.540540540,,-867,5fd20107-64d3-4cd6-9c9e-96618419e8cb,,,,,,other,games,wants,Example shared account,False
+2020-01-25 07:47:01.621621621,,-882,7adab933-d56e-4c11-b73b-901d033f391e,,,,,,subscriptions,streaming,wants,Example shared account,False
+2020-01-26 12:58:22.702702702,,2005,0db583c1-d33f-45c1-b480-71abeb4444de,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-01-27 18:09:43.783783783,,-620,f39d6ac4-9f1e-4c32-a84b-6d09559b1a88,,,,,,food,food_other,wants,Example shared account,False
+2020-01-28 23:21:04.864864865,,-120,c8e7d058-1a16-4f32-89e5-e53e723924bd,,,,,,food,groceries,needs,Example shared account,False
+2020-01-30 04:32:25.945945946,,-795,a5fd577c-d7ab-4445-b1c6-3c8187f8bd5b,,,,,,transport,gas,needs,Example shared account,False
+2020-01-31 09:43:47.027027027,,-225,06a5fa99-ab83-4984-a865-1e39577f6c0b,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-02-01 14:55:08.108108108,,-463,6e8d9b17-38ec-4746-8019-f8934e7ca7a5,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-02-02 20:06:29.189189189,,-312,2c028e6b-b4e8-4331-a545-f1f8324d3b61,,,,,,transport,transport_other,wants,Example shared account,False
+2020-02-04 01:17:50.270270270,,-849,d8691f74-6d24-4fb2-bc8e-248e18077506,,,,,,investments,investments_other,investments,Example shared account,False
+2020-02-05 06:29:11.351351351,,-235,0a0473c6-50da-4d2c-ae0d-343f64effb28,,,,,,food,food_other,wants,Example shared account,False
+2020-02-06 11:40:32.432432432,,-888,99f07047-576a-4a69-8e8c-f4f3b6a138cf,,,,,,investments,investments_other,investments,Example shared account,False
+2020-02-07 16:51:53.513513513,,3285,6b5ed274-437d-442c-b314-88cf26b0a0a5,,,,,,jobs,my main job,income,Example shared account,True
+2020-02-08 22:03:14.594594594,,-808,5e36ea5f-04ac-451d-8a70-f979d5f1d299,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-02-10 03:14:35.675675675,,-783,ce01217f-16e5-46d7-b02e-d12108f74c51,,,,,,other,other_other,wants,Example shared account,False
+2020-02-11 08:25:56.756756756,,-845,5196d7a4-627e-4806-8d14-2cd14db291bf,,,,,,other,games,wants,Example shared account,False
+2020-02-12 13:37:17.837837837,,-85,b12d5e75-d559-42f5-8270-3c724b686e48,,,,,,subscriptions,streaming,wants,Example shared account,False
+2020-02-13 18:48:38.918918919,,-388,177309b6-777d-4139-ba59-2d42427dcd5c,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2020-02-15 00:00:00.000000000,,-52,b34e27ee-0274-4286-85f9-61276a45402a,,,,,,other,other_other,wants,Example shared account,False
+2020-02-16 05:11:21.081081081,,-624,ede2e621-55ae-4b76-a684-323b326113ef,,,,,,other,other_other,wants,Example shared account,False
+2020-02-17 10:22:42.162162162,,4655,7225ea85-7296-4f93-966c-36d3879c95e8,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-02-18 15:34:03.243243243,,-499,c431bab0-1eed-4cec-a3f2-28601afe6d0e,,,,,,transport,transport_other,wants,Example shared account,False
+2020-02-19 20:45:24.324324324,,-264,c088862a-355d-4d7e-855b-89c7e4879bc3,,,,,,subscriptions,streaming,wants,Example shared account,False
+2020-02-21 01:56:45.405405405,,-211,1a604cba-6f96-4d0f-b504-411639d64c87,,,,,,food,restaurants,wants,Example shared account,False
+2020-02-22 07:08:06.486486486,,-195,2e358f9d-7264-4625-9a55-0b38a5763176,,,,,,investments,stocks,investments,Example shared account,False
+2020-02-23 12:19:27.567567567,,-659,93aa2559-e9f9-4f58-b1ce-b1073cf0752e,,,,,,subscriptions,streaming,wants,Example shared account,False
+2020-02-24 17:30:48.648648649,,-594,933aee62-6c70-4369-b88d-8d8ec14a6d0f,,,,,,other,games,wants,Example shared account,False
+2020-02-25 22:42:09.729729730,,-643,b03d2088-b6ee-4972-a9b1-7fc8220ee53c,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2020-02-27 03:53:30.810810811,,3770,88622aa4-560c-415a-98c5-6ae8b9322f7d,,,,,,jobs,my main job,income,Example shared account,True
+2020-02-28 09:04:51.891891892,,-278,15a05331-ec7e-4629-a5d6-23298a9a9736,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-02-29 14:16:12.972972973,,-729,e18759ee-c87c-49c2-858e-9341eb55fb63,,,,,,transport,transport_other,wants,Example shared account,False
+2020-03-01 19:27:34.054054054,,-341,9728945c-8b06-460a-b2a5-d68238aa632a,,,,,,other,other_other,wants,Example shared account,False
+2020-03-03 00:38:55.135135135,,-841,39efbcb1-e061-4774-89e1-3f57087fac4c,,,,,,food,restaurants,wants,Example shared account,False
+2020-03-04 05:50:16.216216216,,-11,b88dbbcd-0b39-463a-8b50-0e0893d42fe5,,,,,,subscriptions,rent,needs,Example shared account,False
+2020-03-05 11:01:37.297297297,,-79,e5f86fb3-5ecf-442c-84a2-87d6932ffd2b,,,,,,investments,stocks,investments,Example shared account,False
+2020-03-06 16:12:58.378378378,,-417,36ee6085-6fea-44f7-a22f-e11048436549,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-03-07 21:24:19.459459459,,-164,6ec1c63c-4fc1-41cc-ac72-2e029a423dcb,,,,,,other,games,wants,Example shared account,False
+2020-03-09 02:35:40.540540540,,-246,e5dd39a1-24fb-4053-a65b-aa1c2cbf61de,,,,,,food,restaurants,wants,Example shared account,False
+2020-03-10 07:47:01.621621621,,1420,dab1e113-d1cd-4419-a237-59fff26e70b4,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-03-11 12:58:22.702702703,,-859,55c981b7-8c0c-4d6b-afae-fc6aff4a8487,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-03-12 18:09:43.783783784,,-48,778ed9ae-b901-4a92-ac27-3d17f33a1fac,,,,,,investments,investments_other,investments,Example shared account,False
+2020-03-13 23:21:04.864864865,,-636,77840838-a0af-427b-9800-2846b05e1a31,,,,,,food,restaurants,wants,Example shared account,False
+2020-03-15 04:32:25.945945946,,-126,7b83b238-71e5-4811-9513-f6e0979f2a6f,,,,,,other,games,wants,Example shared account,False
+2020-03-16 09:43:47.027027027,,-200,f031e489-dd40-4ec5-a7f9-93987602bb4c,,,,,,transport,public_transport,needs,Example shared account,False
+2020-03-17 14:55:08.108108108,,-207,9410e1ba-c409-425f-b7c2-ee64cd76b628,,,,,,food,groceries,needs,Example shared account,False
+2020-03-18 20:06:29.189189189,,-847,c6695598-2939-47b2-b6c4-78659b0e24f3,,,,,,transport,public_transport,needs,Example shared account,False
+2020-03-20 01:17:50.270270270,,15,13c14f33-ef63-4e83-b22d-202ae4702ec4,,,,,,jobs,my main job,income,Example shared account,True
+2020-03-21 06:29:11.351351351,,-573,c119e01e-1b9f-427c-be40-108fd693722d,,,,,,investments,investments_other,investments,Example shared account,False
+2020-03-22 11:40:32.432432432,,-429,2fa1c43a-017c-40fc-9272-d8d569b11509,,,,,,food,groceries,needs,Example shared account,False
+2020-03-23 16:51:53.513513513,,-880,4f962feb-6fea-4cf2-a86d-257d5789977e,,,,,,investments,investments_other,investments,Example shared account,False
+2020-03-24 22:03:14.594594594,,-232,eda6c0ce-a44c-406d-a52e-c74cc74a38c6,,,,,,transport,public_transport,needs,Example shared account,False
+2020-03-26 03:14:35.675675675,,465,d474eadd-ca8e-457a-bb45-7b1aa209061f,,,,,,jobs,my main job,income,Example shared account,True
+2020-03-27 08:25:56.756756757,,-235,ab525aa7-1186-470a-bcc2-f436614ebf9f,,,,,,other,other_other,wants,Example shared account,False
+2020-03-28 13:37:17.837837838,,-410,ce95861d-f4cc-4d66-94a7-d9796b4f65d8,,,,,,food,groceries,needs,Example shared account,False
+2020-03-29 18:48:38.918918919,,-853,42a0a4e4-95d0-4951-9eba-516a03375689,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-03-31 00:00:00.000000000,,-959,dbcdff20-613c-4225-9eaf-e407989804dd,,,,,,subscriptions,rent,needs,Example shared account,False
+2020-04-01 05:11:21.081081081,,-289,443b4d93-4b6e-4d5a-9367-3d039890e29e,,,,,,investments,crypto,investments,Example shared account,False
+2020-04-02 10:22:42.162162162,,-59,6dfd9124-a27a-481b-bacf-257a5a4899c6,,,,,,transport,gas,needs,Example shared account,False
+2020-04-03 15:34:03.243243243,,-440,c9c1d052-ee71-47f4-90a9-0213b5a6c779,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2020-04-04 20:45:24.324324324,,-181,cce46dca-4b80-4556-82c6-3577ee2f6001,,,,,,investments,investments_other,investments,Example shared account,False
+2020-04-06 01:56:45.405405405,,-276,dfbcd507-1356-4dc5-82c4-5249ca91bd26,,,,,,investments,investments_other,investments,Example shared account,False
+2020-04-07 07:08:06.486486486,,-782,0b172e7c-8016-43ba-b7de-245465004a9d,,,,,,investments,stocks,investments,Example shared account,False
+2020-04-08 12:19:27.567567567,,-81,fb689c19-8084-49da-80df-26558ddc1620,,,,,,subscriptions,rent,needs,Example shared account,False
+2020-04-09 17:30:48.648648648,,-5,0f48f8dc-35b0-405d-a868-df00a1a2132b,,,,,,investments,crypto,investments,Example shared account,False
+2020-04-10 22:42:09.729729729,,4670,bd0e9cd4-531c-46fa-99be-65b86b53422a,,,,,,jobs,my main job,income,Example shared account,True
+2020-04-12 03:53:30.810810811,,-187,43221d56-d3e9-43fd-b967-36d40a556983,,,,,,food,restaurants,wants,Example shared account,False
+2020-04-13 09:04:51.891891892,,-418,db2ba81b-2a77-44de-a37e-acb31a937638,,,,,,other,games,wants,Example shared account,False
+2020-04-14 14:16:12.972972972,,-562,0090475d-db2c-44f6-9a39-4a8c289b4692,,,,,,other,games,wants,Example shared account,False
+2020-04-15 19:27:34.054054054,,1120,ee0c96d6-64f2-41e0-809a-734b65b2380a,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-04-17 00:38:55.135135134,,-511,d45fdd82-f3db-4aeb-8eb6-3fde069feba1,,,,,,other,other_other,wants,Example shared account,False
+2020-04-18 05:50:16.216216216,,535,43bff833-dc14-4dcf-a66e-cba1b8a5e95a,,,,,,jobs,my main job,income,Example shared account,True
+2020-04-19 11:01:37.297297298,,-331,7df4e9df-4e85-415c-96a1-de6901b346f4,,,,,,transport,public_transport,needs,Example shared account,False
+2020-04-20 16:12:58.378378378,,-202,3804fdd4-21fc-4e4e-bdfb-2088403fb26e,,,,,,other,games,wants,Example shared account,False
+2020-04-21 21:24:19.459459460,,-455,4b26df36-d816-461e-b6fe-190926b1bbca,,,,,,other,other_other,wants,Example shared account,False
+2020-04-23 02:35:40.540540540,,-306,a037e530-a1a4-4908-9542-8c992ec36a24,,,,,,investments,investments_other,investments,Example shared account,False
+2020-04-24 07:47:01.621621622,,-521,2c429b01-f854-46dc-8f47-d0cdb9aa1e1c,,,,,,transport,public_transport,needs,Example shared account,False
+2020-04-25 12:58:22.702702702,,-802,56f31ada-dec3-4035-95d3-05732094ded2,,,,,,other,other_other,wants,Example shared account,False
+2020-04-26 18:09:43.783783784,,-571,32df36a0-701b-42c9-96c5-e6216459c54d,,,,,,transport,public_transport,needs,Example shared account,False
+2020-04-27 23:21:04.864864864,,-489,59ea786c-67ed-4ec8-a7bd-4bad74a9a3fc,,,,,,food,groceries,needs,Example shared account,False
+2020-04-29 04:32:25.945945946,,-381,a64edf16-3bef-42ce-b87f-0dcfe7081016,,,,,,transport,public_transport,needs,Example shared account,False
+2020-04-30 09:43:47.027027026,,-660,37d9d9ea-00c4-4c9b-a112-fdacfff9c043,,,,,,food,restaurants,wants,Example shared account,False
+2020-05-01 14:55:08.108108108,,1685,e61d6308-2e48-4cb5-9453-11057896cb96,,,,,,jobs,my main job,income,Example shared account,True
+2020-05-02 20:06:29.189189188,,-104,580545ab-df30-4b4d-8b14-bf5d28e7bf47,,,,,,transport,public_transport,needs,Example shared account,False
+2020-05-04 01:17:50.270270270,,-342,d6714d50-4464-42df-b6f7-f59f6609a69f,,,,,,investments,stocks,investments,Example shared account,False
+2020-05-05 06:29:11.351351352,,-98,8acd1d71-62a1-42a2-8a80-50fc1cc9d4e9,,,,,,food,food_other,wants,Example shared account,False
+2020-05-06 11:40:32.432432432,,-529,c40e1a76-9591-4ae9-a67b-ca5393a3b804,,,,,,transport,gas,needs,Example shared account,False
+2020-05-07 16:51:53.513513514,,-668,2091a29b-348a-403e-8504-6ff8d58e7a26,,,,,,food,groceries,needs,Example shared account,False
+2020-05-08 22:03:14.594594594,,3475,f77085f0-0828-4a56-812d-4e2f7885394a,,,,,,jobs,my main job,income,Example shared account,True
+2020-05-10 03:14:35.675675676,,-13,f941096f-30f4-4733-885a-ab525836580f,,,,,,investments,investments_other,investments,Example shared account,False
+2020-05-11 08:25:56.756756756,,-231,f8cfe4a7-9054-4fd1-90db-b704b655b9b8,,,,,,investments,stocks,investments,Example shared account,False
+2020-05-12 13:37:17.837837838,,-459,b39bb7be-fc1b-40d5-846d-a7ca77278cdb,,,,,,subscriptions,rent,needs,Example shared account,False
+2020-05-13 18:48:38.918918918,,1650,b24ad3e0-7f2d-44ee-ada8-93de77ace819,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-05-15 00:00:00.000000000,,3180,4ff4bb74-42ec-481b-ac46-4993ffaf8cac,,,,,,jobs,my main job,income,Example shared account,True
+2020-05-16 05:11:21.081081080,,-476,17928995-cbb5-40c6-89fa-018a5e2cf827,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-05-17 10:22:42.162162162,,-545,75defe21-fb59-4070-8a5d-43ba7aff7140,,,,,,transport,gas,needs,Example shared account,False
+2020-05-18 15:34:03.243243242,,-535,382b06e1-de46-418e-9fd5-4e0054eee7e1,,,,,,transport,gas,needs,Example shared account,False
+2020-05-19 20:45:24.324324324,,-22,7ad1cfa7-3dfc-4cd6-a468-049be3510d93,,,,,,subscriptions,streaming,wants,Example shared account,False
+2020-05-21 01:56:45.405405406,,-903,b4940aeb-7f69-4748-ae39-ea5fe57f882f,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-05-22 07:08:06.486486486,,-669,7f1b75ae-2b81-4be8-83a8-ae5ffa954cda,,,,,,food,food_other,wants,Example shared account,False
+2020-05-23 12:19:27.567567568,,-810,54d2b340-1909-4f26-ba8f-6dae072fbbe3,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-05-24 17:30:48.648648648,,-437,d47f8606-e3e1-4937-87de-1820e8bc868e,,,,,,food,restaurants,wants,Example shared account,False
+2020-05-25 22:42:09.729729730,,-80,009f7663-1fab-427c-b21b-911eb13fe2d6,,,,,,transport,gas,needs,Example shared account,False
+2020-05-27 03:53:30.810810810,,-624,dc4d769f-008a-4aea-a407-fc1c1cb4f4dc,,,,,,food,restaurants,wants,Example shared account,False
+2020-05-28 09:04:51.891891892,,-748,2e3bc66a-285c-4dd4-b5a8-05bebb42d269,,,,,,investments,stocks,investments,Example shared account,False
+2020-05-29 14:16:12.972972972,,-449,a545691e-47f9-4e8c-a0c7-719dc95caafd,,,,,,transport,public_transport,needs,Example shared account,False
+2020-05-30 19:27:34.054054054,,-922,595b932d-b02d-405c-b970-3aca5fb3a146,,,,,,investments,investments_other,investments,Example shared account,False
+2020-06-01 00:38:55.135135134,,-484,0c6e5242-0e56-40dd-912b-1b3f7b5559cf,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2020-06-02 05:50:16.216216216,,-586,9db8ce42-28ed-4e0c-b5e8-0abf7e79d3e9,,,,,,other,other_other,wants,Example shared account,False
+2020-06-03 11:01:37.297297296,,-897,c7db4b8d-57ed-440a-ac7f-75e5ca5b5914,,,,,,transport,gas,needs,Example shared account,False
+2020-06-04 16:12:58.378378378,,-109,175d3173-3974-41ae-8092-dc0e5c983bb7,,,,,,investments,stocks,investments,Example shared account,False
+2020-06-05 21:24:19.459459460,,-831,28f7b0f5-44bb-4970-8026-cd53e37311b8,,,,,,transport,transport_other,wants,Example shared account,False
+2020-06-07 02:35:40.540540540,,-649,4063b5df-3949-4b9f-98dd-ea124edac2c6,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2020-06-08 07:47:01.621621622,,-78,a99e8f4c-da47-44fb-aec5-a009e4b36699,,,,,,subscriptions,streaming,wants,Example shared account,False
+2020-06-09 12:58:22.702702702,,-719,56f0ef3a-0670-43f4-86f4-a9fe86b1dbfd,,,,,,other,games,wants,Example shared account,False
+2020-06-10 18:09:43.783783784,,-855,400373cc-b6c8-4abc-ba51-09f32bff4b8a,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-06-11 23:21:04.864864864,,3480,52cafd39-ed6a-4402-b5b1-cb612722dbcd,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-06-13 04:32:25.945945946,,-982,55be4371-65c6-48a2-8720-b1687c08b373,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2020-06-14 09:43:47.027027026,,2385,405ddec7-86a7-4b1a-b9c4-0ce18ba00149,,,,,,jobs,my main job,income,Example shared account,True
+2020-06-15 14:55:08.108108108,,-119,2cffbe6b-481a-4dc1-94fd-67a0c3a7409a,,,,,,other,other_other,wants,Example shared account,False
+2020-06-16 20:06:29.189189188,,-504,71c56bc3-fade-4a17-bcc4-df02d7aa16f1,,,,,,investments,stocks,investments,Example shared account,False
+2020-06-18 01:17:50.270270270,,-741,42928e00-da95-4f50-8708-1c084791f5ee,,,,,,transport,public_transport,needs,Example shared account,False
+2020-06-19 06:29:11.351351350,,-246,dff7206a-5f91-4f05-8b85-8336fb3c6b36,,,,,,other,games,wants,Example shared account,False
+2020-06-20 11:40:32.432432432,,-664,94e455ff-1d1f-4244-b0e7-8d7fc2de4cf3,,,,,,other,games,wants,Example shared account,False
+2020-06-21 16:51:53.513513514,,445,e23a4340-fbd5-490e-800a-bcc34ee11210,,,,,,jobs,my main job,income,Example shared account,True
+2020-06-22 22:03:14.594594594,,-44,5bd6a264-0d15-43e0-9590-f88c43e0ff76,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-06-24 03:14:35.675675676,,-303,0c7935ad-6e99-4c95-9c3a-a258d173ad5b,,,,,,food,groceries,needs,Example shared account,False
+2020-06-25 08:25:56.756756756,,-689,1e3bad63-616a-46cf-bb36-054053a18a95,,,,,,food,groceries,needs,Example shared account,False
+2020-06-26 13:37:17.837837838,,-597,3f92ed38-908a-429c-8359-148a3926a6b0,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-06-27 18:48:38.918918918,,-639,0fced5e6-fe95-41ad-ab51-92c3505f731d,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-06-29 00:00:00.000000000,,-55,b944b715-ec9a-4af8-8146-32754b61f212,,,,,,food,food_other,wants,Example shared account,False
+2020-06-30 05:11:21.081081080,,-833,896be064-2791-402b-9e38-be774d66a901,,,,,,food,restaurants,wants,Example shared account,False
+2020-07-01 10:22:42.162162162,,-652,cc17f747-dc22-4741-bb93-37df669f848a,,,,,,other,games,wants,Example shared account,False
+2020-07-02 15:34:03.243243242,,-749,415b4e89-779c-43ea-b215-6b64f5dbae03,,,,,,food,groceries,needs,Example shared account,False
+2020-07-03 20:45:24.324324324,,-791,9b3f2c02-fc1b-45c8-87f7-3f5b064a30bb,,,,,,other,other_other,wants,Example shared account,False
+2020-07-05 01:56:45.405405404,,4775,0d41691e-f663-4d83-b9b2-90b693c11b5e,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-07-06 07:08:06.486486486,,4120,dcab7f12-0000-4d2e-8abd-32546954db3b,,,,,,jobs,my main job,income,Example shared account,True
+2020-07-07 12:19:27.567567568,,-971,7b809678-87f9-454b-adb4-68e4aeda76e8,,,,,,investments,crypto,investments,Example shared account,False
+2020-07-08 17:30:48.648648648,,-838,f67b29f2-c7f7-44fd-a387-810dae221bde,,,,,,investments,stocks,investments,Example shared account,False
+2020-07-09 22:42:09.729729730,,-793,4a9de2ff-1322-46fa-ad3e-d2657f9d14a1,,,,,,food,food_other,wants,Example shared account,False
+2020-07-11 03:53:30.810810810,,-867,b4a1d10a-3e53-49aa-affc-0be6be9f3ee4,,,,,,other,games,wants,Example shared account,False
+2020-07-12 09:04:51.891891892,,-695,0f7b76ce-b49f-488b-854a-c639182a4823,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2020-07-13 14:16:12.972972972,,-457,317a3c82-d676-40e9-97ad-59824a850637,,,,,,other,other_other,wants,Example shared account,False
+2020-07-14 19:27:34.054054054,,-258,333a3232-c513-4d52-b78e-4d6cb98bc361,,,,,,transport,public_transport,needs,Example shared account,False
+2020-07-16 00:38:55.135135134,,-875,f267bc44-4a70-402b-86d5-6cacc8b27634,,,,,,other,games,wants,Example shared account,False
+2020-07-17 05:50:16.216216216,,-786,8a356ad9-a41b-4b8a-9649-77ca61f30f5d,,,,,,investments,crypto,investments,Example shared account,False
+2020-07-18 11:01:37.297297296,,4285,3ec52226-53b4-47fc-a485-dbd906d11356,,,,,,jobs,my main job,income,Example shared account,True
+2020-07-19 16:12:58.378378378,,-561,5d5b5410-9b91-4a95-927e-4c4204ac3f5e,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-07-20 21:24:19.459459458,,-592,bbd2ba92-9913-4a72-a7b0-3db8276f7393,,,,,,food,groceries,needs,Example shared account,False
+2020-07-22 02:35:40.540540540,,-354,cbad3819-d793-410d-a0fd-e4ceb12f8389,,,,,,food,groceries,needs,Example shared account,False
+2020-07-23 07:47:01.621621622,,-573,06a9b758-dc31-42fc-b3b4-4f43820bc063,,,,,,food,food_other,wants,Example shared account,False
+2020-07-24 12:58:22.702702702,,-609,44e87279-c5b4-4bc1-b1f8-bb29fdc53764,,,,,,subscriptions,rent,needs,Example shared account,False
+2020-07-25 18:09:43.783783784,,2330,464a04a7-1c72-4737-be7f-7e367420d94f,,,,,,jobs,my main job,income,Example shared account,True
+2020-07-26 23:21:04.864864864,,-68,96b5d314-4358-42b4-b112-423b790a5069,,,,,,other,other_other,wants,Example shared account,False
+2020-07-28 04:32:25.945945944,,-315,a6dd3b89-e00c-49b8-965f-7165f34490a9,,,,,,other,other_other,wants,Example shared account,False
+2020-07-29 09:43:47.027027028,,-18,5ce11609-2905-4f72-86a7-d26daa7520b3,,,,,,food,food_other,wants,Example shared account,False
+2020-07-30 14:55:08.108108108,,1605,30fa42b4-27e3-409a-842b-b2e3e077a738,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-07-31 20:06:29.189189188,,-129,5a6b91f0-40a0-4d15-b197-65e92536d79a,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-08-02 01:17:50.270270268,,-172,96a11e66-d418-47be-a893-acf61609fe7c,,,,,,food,groceries,needs,Example shared account,False
+2020-08-03 06:29:11.351351352,,-693,fe9a18fd-5897-4d33-989f-6b5bf0951be5,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-08-04 11:40:32.432432432,,-633,2c6499fd-82dd-4af6-b2a8-9e70b70ab27c,,,,,,food,restaurants,wants,Example shared account,False
+2020-08-05 16:51:53.513513512,,-14,84b98d2d-947e-4acb-826a-ff8e91f07ee8,,,,,,transport,public_transport,needs,Example shared account,False
+2020-08-06 22:03:14.594594596,,-758,7934e672-3d9e-4533-92bb-ecf3e40e5e7d,,,,,,investments,investments_other,investments,Example shared account,False
+2020-08-08 03:14:35.675675676,,-650,7b4c4782-4463-4c93-b827-da2552088ea9,,,,,,investments,investments_other,investments,Example shared account,False
+2020-08-09 08:25:56.756756756,,-312,c8206148-4506-4c3c-8125-1f9772fb16d5,,,,,,food,restaurants,wants,Example shared account,False
+2020-08-10 13:37:17.837837836,,-19,3fd3739a-4e6e-4466-a086-632519915de0,,,,,,food,groceries,needs,Example shared account,False
+2020-08-11 18:48:38.918918920,,-234,b64cdc3c-952c-43bb-91ff-ecd418aff2a9,,,,,,food,groceries,needs,Example shared account,False
+2020-08-13 00:00:00.000000000,,2225,7dc3834d-d0ac-44c8-a2aa-81c6a722e3f8,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-08-14 05:11:21.081081080,,-389,5fa15177-db72-41c2-b7cc-0299b21c1033,,,,,,food,groceries,needs,Example shared account,False
+2020-08-15 10:22:42.162162160,,-877,558bcf10-12b7-4be0-afd9-502eb6f3727d,,,,,,food,food_other,wants,Example shared account,False
+2020-08-16 15:34:03.243243244,,-266,b45468f8-1e3e-4a65-b8f7-4d668b5d3c81,,,,,,other,other_other,wants,Example shared account,False
+2020-08-17 20:45:24.324324324,,-267,82857e89-3ab3-43d7-a40b-99c862357d13,,,,,,subscriptions,streaming,wants,Example shared account,False
+2020-08-19 01:56:45.405405404,,-134,0be6b988-68b9-4f7f-b921-16e6dbac037e,,,,,,other,other_other,wants,Example shared account,False
+2020-08-20 07:08:06.486486484,,3495,12325961-5bc3-47dc-85ec-cf55493b8ed1,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-08-21 12:19:27.567567568,,-254,a34299e1-d5ca-41b9-ac79-64eb158498c8,,,,,,food,groceries,needs,Example shared account,False
+2020-08-22 17:30:48.648648648,,3670,5b109734-d2fe-48e5-854f-6481c05677a0,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-08-23 22:42:09.729729728,,-349,6c5924e7-32fb-439c-aa8d-5b3ff3c86c27,,,,,,investments,stocks,investments,Example shared account,False
+2020-08-25 03:53:30.810810812,,3830,107e99b5-6459-408a-aeae-b5ca96c33834,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-08-26 09:04:51.891891892,,2445,acd34a32-bb36-4762-abc9-0e7fde60f9e1,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-08-27 14:16:12.972972972,,-548,dfa97250-286c-48e7-a9c2-2d09a2d13f36,,,,,,investments,crypto,investments,Example shared account,False
+2020-08-28 19:27:34.054054052,,-486,f1999dff-0b23-4179-909b-998632ed611c,,,,,,other,other_other,wants,Example shared account,False
+2020-08-30 00:38:55.135135136,,-142,f3cb318c-8591-4635-84d8-07ad3d208f8b,,,,,,food,groceries,needs,Example shared account,False
+2020-08-31 05:50:16.216216216,,2905,be2a298e-9382-45de-ba4c-110723e61e34,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-09-01 11:01:37.297297296,,365,923c7738-e5eb-4b43-817c-77fa03850cb2,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-09-02 16:12:58.378378376,,-354,9ef538bf-2452-4af2-ada0-0549eca7e62e,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-09-03 21:24:19.459459460,,-693,2b68e428-fa17-4936-90f1-cab56e940fa1,,,,,,other,games,wants,Example shared account,False
+2020-09-05 02:35:40.540540540,,-526,9203bb47-d730-48a9-829a-fe3df67174a0,,,,,,transport,transport_other,wants,Example shared account,False
+2020-09-06 07:47:01.621621620,,3640,59caf328-0bd2-4259-bf67-747d99c18614,,,,,,jobs,my main job,income,Example shared account,True
+2020-09-07 12:58:22.702702704,,-710,31f0ebef-0490-48b8-a815-b23cecf5dc54,,,,,,transport,public_transport,needs,Example shared account,False
+2020-09-08 18:09:43.783783784,,-522,c8229aa6-3278-4bff-a1e7-ddcdf304f626,,,,,,investments,crypto,investments,Example shared account,False
+2020-09-09 23:21:04.864864864,,-443,07a3bdad-f0f5-4060-b26f-b86fa22c82be,,,,,,transport,transport_other,wants,Example shared account,False
+2020-09-11 04:32:25.945945944,,-964,df744fcc-ab18-4606-a61b-fb518b3da4f5,,,,,,other,other_other,wants,Example shared account,False
+2020-09-12 09:43:47.027027028,,-75,e49a441b-c4a7-4b87-96bd-c8247b61cea0,,,,,,food,restaurants,wants,Example shared account,False
+2020-09-13 14:55:08.108108108,,1105,70fe7079-ed51-4fbe-b22e-44e675a2e434,,,,,,jobs,my main job,income,Example shared account,True
+2020-09-14 20:06:29.189189188,,-526,ae25627d-48fc-4266-bd62-0824fcc317dd,,,,,,food,restaurants,wants,Example shared account,False
+2020-09-16 01:17:50.270270268,,-150,bc2a90cb-c72e-483f-91f2-f0e864f6b8eb,,,,,,investments,stocks,investments,Example shared account,False
+2020-09-17 06:29:11.351351352,,-569,c52e670b-a2e2-4e3d-b1f8-4e6c4eb79d88,,,,,,other,games,wants,Example shared account,False
+2020-09-18 11:40:32.432432432,,1420,24600dc6-e587-46e1-8d04-a54bb812b2ca,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-09-19 16:51:53.513513512,,-110,c6d9fabf-ae87-4b56-b25b-80bdd9d35bcb,,,,,,transport,public_transport,needs,Example shared account,False
+2020-09-20 22:03:14.594594592,,-518,ec01a3f5-27e8-4997-8927-88f0fdbf604d,,,,,,transport,public_transport,needs,Example shared account,False
+2020-09-22 03:14:35.675675676,,-123,2e05b4ed-080e-42d9-8155-7ebf5b3acca1,,,,,,transport,gas,needs,Example shared account,False
+2020-09-23 08:25:56.756756756,,-222,90aa9e29-0abe-4db5-8fa0-2355cc020324,,,,,,investments,stocks,investments,Example shared account,False
+2020-09-24 13:37:17.837837836,,-607,d5e6972e-77f7-4ea8-9f13-d127a211f82b,,,,,,other,other_other,wants,Example shared account,False
+2020-09-25 18:48:38.918918920,,2875,ef735434-27f7-46a2-9b42-a9176d41065f,,,,,,jobs,my main job,income,Example shared account,True
+2020-09-27 00:00:00.000000000,,3995,c5a81e46-ee8f-4b83-8a65-f43b3d7e3e95,,,,,,jobs,my main job,income,Example shared account,True
+2020-09-28 05:11:21.081081080,,-832,4ca21a00-ce05-405e-b720-6780b38b3672,,,,,,investments,stocks,investments,Example shared account,False
+2020-09-29 10:22:42.162162160,,-196,5ccbea63-c5ca-439b-b39e-17e76c8d3a28,,,,,,other,games,wants,Example shared account,False
+2020-09-30 15:34:03.243243244,,-437,ed58f0f1-2e96-49d4-8295-b76425d808a0,,,,,,food,groceries,needs,Example shared account,False
+2020-10-01 20:45:24.324324324,,-365,f7e1f384-b4c3-46be-8339-f542b6e7cc71,,,,,,transport,public_transport,needs,Example shared account,False
+2020-10-03 01:56:45.405405404,,665,0f536277-865c-4661-8c55-68488a465094,,,,,,jobs,my main job,income,Example shared account,True
+2020-10-04 07:08:06.486486484,,-590,03b37ca9-d024-4824-b5c1-2830b3f3b3d6,,,,,,other,games,wants,Example shared account,False
+2020-10-05 12:19:27.567567568,,-278,68da202b-aaaf-44cc-957c-44918a4c099f,,,,,,transport,transport_other,wants,Example shared account,False
+2020-10-06 17:30:48.648648648,,2120,368556cb-8108-464c-b141-8e7724a20588,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-10-07 22:42:09.729729728,,-374,3fc0b335-6d88-4d93-99bb-885a678301b3,,,,,,other,games,wants,Example shared account,False
+2020-10-09 03:53:30.810810812,,-129,6c4198fa-7bd0-4e6c-a7f7-2e9f1e3c92ff,,,,,,transport,gas,needs,Example shared account,False
+2020-10-10 09:04:51.891891892,,-636,20fc46d2-7d92-46f2-86d8-45afb68c397c,,,,,,transport,gas,needs,Example shared account,False
+2020-10-11 14:16:12.972972972,,-3,b26dcc2c-bfce-4960-ab72-0cc8182c0f3f,,,,,,transport,transport_other,wants,Example shared account,False
+2020-10-12 19:27:34.054054052,,-623,f82e98f6-3b04-40cc-8548-19c7ffffb403,,,,,,investments,crypto,investments,Example shared account,False
+2020-10-14 00:38:55.135135136,,-998,9049e468-5dee-498b-838e-d933e6d1ae80,,,,,,investments,stocks,investments,Example shared account,False
+2020-10-15 05:50:16.216216216,,-330,16745dde-633a-417d-9ba1-6577bfd20bd4,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-10-16 11:01:37.297297296,,-319,b2de49d3-03b2-4194-a50d-0a2f6f19766e,,,,,,transport,transport_other,wants,Example shared account,False
+2020-10-17 16:12:58.378378376,,-13,42d8758a-8035-45b7-a387-21fb8f34c68c,,,,,,other,games,wants,Example shared account,False
+2020-10-18 21:24:19.459459460,,-502,ffe714ce-afb7-4be9-91c5-8eb5b1ef5551,,,,,,other,other_other,wants,Example shared account,False
+2020-10-20 02:35:40.540540540,,-837,bb457f99-9a8b-400a-a421-9a1407a0f621,,,,,,food,restaurants,wants,Example shared account,False
+2020-10-21 07:47:01.621621620,,-597,253adb7f-33ab-45ec-ae7e-bfb404735f01,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2020-10-22 12:58:22.702702700,,-328,7433730e-db3e-4cdc-ac5a-2add334e5f6d,,,,,,food,restaurants,wants,Example shared account,False
+2020-10-23 18:09:43.783783784,,-684,c38c5413-bfcd-46ed-8303-78d7854eb62a,,,,,,investments,investments_other,investments,Example shared account,False
+2020-10-24 23:21:04.864864864,,-428,e318d1f4-8775-4f94-addb-03528984c686,,,,,,transport,public_transport,needs,Example shared account,False
+2020-10-26 04:32:25.945945944,,-26,adb6edaf-5e72-45a8-a8aa-d36318b42864,,,,,,investments,crypto,investments,Example shared account,False
+2020-10-27 09:43:47.027027028,,1270,b9e6d1d0-e3e6-453c-b509-ae1bfdd6b576,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-10-28 14:55:08.108108108,,-375,47142b11-0d8c-4c49-8e3d-b109e351c256,,,,,,other,other_other,wants,Example shared account,False
+2020-10-29 20:06:29.189189188,,-619,c8136671-616e-427d-b340-c20a0cd63049,,,,,,investments,crypto,investments,Example shared account,False
+2020-10-31 01:17:50.270270268,,-339,bc930bfe-b4cc-4296-a393-de40ffabe8b7,,,,,,food,restaurants,wants,Example shared account,False
+2020-11-01 06:29:11.351351352,,-164,58936da7-eaa7-4fd9-b0ef-804a9a08d8fc,,,,,,subscriptions,rent,needs,Example shared account,False
+2020-11-02 11:40:32.432432432,,-687,507ccc44-3818-486d-a93f-cdd94f56781b,,,,,,investments,stocks,investments,Example shared account,False
+2020-11-03 16:51:53.513513512,,-355,76ee8f96-460f-462b-994e-9ceddc75ca7b,,,,,,other,games,wants,Example shared account,False
+2020-11-04 22:03:14.594594592,,3465,2e71f2ff-2297-4371-ad7b-f6a46efc6057,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-11-06 03:14:35.675675676,,-586,bd3054a2-b6f2-41cd-8b48-16db8e842b65,,,,,,food,restaurants,wants,Example shared account,False
+2020-11-07 08:25:56.756756756,,-9,bfd89f08-324a-4060-a31e-8384888fbf92,,,,,,food,groceries,needs,Example shared account,False
+2020-11-08 13:37:17.837837836,,-106,07927204-6bab-49d1-a395-04a8744b7823,,,,,,investments,crypto,investments,Example shared account,False
+2020-11-09 18:48:38.918918920,,-541,012298dc-e5c8-444c-9ff6-c8fd1cb74fc4,,,,,,investments,crypto,investments,Example shared account,False
+2020-11-11 00:00:00.000000000,,-925,d5a6a694-728f-45da-ab01-d3c27cd2c98d,,,,,,transport,gas,needs,Example shared account,False
+2020-11-12 05:11:21.081081080,,-87,2f3d05c1-cde2-4697-8a6f-c419c6aea9c0,,,,,,other,games,wants,Example shared account,False
+2020-11-13 10:22:42.162162160,,-178,092ccee3-28b5-4a9d-8822-7d8d8903766e,,,,,,food,restaurants,wants,Example shared account,False
+2020-11-14 15:34:03.243243244,,-149,679ac764-adc5-436b-bd7a-96481690b574,,,,,,investments,stocks,investments,Example shared account,False
+2020-11-15 20:45:24.324324324,,-447,72976e88-f6df-4cb4-8e0c-b986dfca546c,,,,,,food,groceries,needs,Example shared account,False
+2020-11-17 01:56:45.405405404,,-676,dd71c931-17db-4228-8222-fbad083b1416,,,,,,investments,crypto,investments,Example shared account,False
+2020-11-18 07:08:06.486486484,,-333,13a51ec2-4954-4667-89d4-0927c15d6c9e,,,,,,investments,stocks,investments,Example shared account,False
+2020-11-19 12:19:27.567567568,,-918,f3eabc69-0e2b-4c71-9d23-632ef5c95fe6,,,,,,subscriptions,clouds,wants,Example shared account,False
+2020-11-20 17:30:48.648648648,,-582,023605f1-4d4a-4f73-81e7-308eb0221c5d,,,,,,transport,transport_other,wants,Example shared account,False
+2020-11-21 22:42:09.729729728,,-527,a4d8f614-0f15-4ca4-9a7c-8bbf7d508d50,,,,,,other,games,wants,Example shared account,False
+2020-11-23 03:53:30.810810812,,-995,4cef8221-b3c7-4601-882e-4bf1362b6b0e,,,,,,food,groceries,needs,Example shared account,False
+2020-11-24 09:04:51.891891892,,-547,ef92faac-0873-4e7e-9a51-b258dc246c5c,,,,,,other,other_other,wants,Example shared account,False
+2020-11-25 14:16:12.972972972,,4710,e732f2b4-7794-4dd2-af52-fc40b8369a01,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-11-26 19:27:34.054054052,,-214,8e9bc3c2-bf69-4b60-a4c0-bae8d1e067ba,,,,,,investments,investments_other,investments,Example shared account,False
+2020-11-28 00:38:55.135135136,,-865,6d53bd2a-9838-466d-9d6f-7946688c2fd0,,,,,,transport,public_transport,needs,Example shared account,False
+2020-11-29 05:50:16.216216216,,-545,7930b927-b814-4674-af7b-08d6c0b5d890,,,,,,other,other_other,wants,Example shared account,False
+2020-11-30 11:01:37.297297296,,-636,9e38e88e-073d-4b48-a828-5b0e9cbd73e5,,,,,,transport,public_transport,needs,Example shared account,False
+2020-12-01 16:12:58.378378376,,-662,1da86568-98ac-4189-9689-cfdae5d81e5b,,,,,,investments,crypto,investments,Example shared account,False
+2020-12-02 21:24:19.459459460,,-434,be2af465-3c33-492c-a09a-9523a20bfd62,,,,,,other,other_other,wants,Example shared account,False
+2020-12-04 02:35:40.540540540,,-585,e5a57527-2058-4701-90d9-02ffd88fd950,,,,,,investments,investments_other,investments,Example shared account,False
+2020-12-05 07:47:01.621621620,,-757,c26b8013-4568-4de4-8e85-da201c5d77ff,,,,,,other,games,wants,Example shared account,False
+2020-12-06 12:58:22.702702700,,-543,4626d2c1-cffc-417f-bf9b-3d99496202a3,,,,,,food,restaurants,wants,Example shared account,False
+2020-12-07 18:09:43.783783784,,-704,3c4c5432-6e6f-45f4-9f00-27f732820245,,,,,,other,games,wants,Example shared account,False
+2020-12-08 23:21:04.864864864,,-20,f5e8bba3-1500-47f4-b349-88943ee2b838,,,,,,transport,gas,needs,Example shared account,False
+2020-12-10 04:32:25.945945944,,-679,0a9161f6-747c-492e-9d6c-301871e0c087,,,,,,transport,public_transport,needs,Example shared account,False
+2020-12-11 09:43:47.027027028,,-425,18c39a56-2367-4dc6-95e4-1362ce822102,,,,,,subscriptions,rent,needs,Example shared account,False
+2020-12-12 14:55:08.108108108,,-135,1fae9bd5-62a1-4f8c-ae02-f12c5774b70c,,,,,,investments,stocks,investments,Example shared account,False
+2020-12-13 20:06:29.189189188,,3915,cb71329c-f8dd-47ba-9de2-c360d905df51,,,,,,jobs,my main job,income,Example shared account,True
+2020-12-15 01:17:50.270270268,,-324,b5704c81-1b08-4ec2-b420-4efbe5b7fb20,,,,,,investments,stocks,investments,Example shared account,False
+2020-12-16 06:29:11.351351352,,-229,86e8ee51-6aa4-469e-88a9-75d3250544a9,,,,,,food,groceries,needs,Example shared account,False
+2020-12-17 11:40:32.432432432,,2450,9ea53b72-5f95-411d-8555-11056a8cb89d,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-12-18 16:51:53.513513512,,-489,ce245934-3e18-415c-b308-3c1a61da9ef8,,,,,,investments,investments_other,investments,Example shared account,False
+2020-12-19 22:03:14.594594592,,870,f03713d9-f33e-44d5-b856-5471c64b10a6,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-12-21 03:14:35.675675676,,-398,9ac9066d-1583-4492-a20c-a9f8a9dbb69a,,,,,,investments,investments_other,investments,Example shared account,False
+2020-12-22 08:25:56.756756756,,-650,423db06e-da6c-46d6-a256-c93d671e26b4,,,,,,other,other_other,wants,Example shared account,False
+2020-12-23 13:37:17.837837836,,-215,204b8ea2-0ed2-40dd-9b3a-ef0ff39db7f1,,,,,,transport,transport_other,wants,Example shared account,False
+2020-12-24 18:48:38.918918920,,-620,95f23aa1-c7e2-4aa1-b75b-20afc803aa4d,,,,,,transport,public_transport,needs,Example shared account,False
+2020-12-26 00:00:00.000000000,,-700,6aad4abf-1d77-432f-91a1-a4974c8c61bf,,,,,,subscriptions,streaming,wants,Example shared account,False
+2020-12-27 05:11:21.081081080,,2135,8ce2a453-6cc9-4719-8dde-94ca2d8b2db0,,,,,,jobs,jobs_other,income,Example shared account,True
+2020-12-28 10:22:42.162162160,,-3,e8cf4b79-dcbe-40b1-9eb6-3da82fea834e,,,,,,other,other_other,wants,Example shared account,False
+2020-12-29 15:34:03.243243244,,-650,355b5e48-5643-482b-b251-bdde4083f3d0,,,,,,food,restaurants,wants,Example shared account,False
+2020-12-30 20:45:24.324324324,,-77,990bff72-4ffb-4acf-8196-b24293616ffe,,,,,,subscriptions,clouds,wants,Example shared account,False
+2021-01-01 01:56:45.405405404,,-131,957ffd27-5777-43ee-be62-fe325cf2dbb7,,,,,,investments,investments_other,investments,Example shared account,False
+2021-01-02 07:08:06.486486484,,-719,53ea02f2-5c63-4c78-9e0b-b4bb4e56bcea,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-01-03 12:19:27.567567568,,-65,b80c3fa0-c97f-420e-9cce-b525576e81e0,,,,,,transport,transport_other,wants,Example shared account,False
+2021-01-04 17:30:48.648648648,,-424,e0cab291-5093-4484-8696-3a59ae9cfc2c,,,,,,transport,gas,needs,Example shared account,False
+2021-01-05 22:42:09.729729728,,775,7cc0e33a-67cd-49a8-977b-b7be5c5fbe6e,,,,,,jobs,my main job,income,Example shared account,True
+2021-01-07 03:53:30.810810808,,-491,151854c6-445b-43a4-8ff0-34a0cf692352,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-01-08 09:04:51.891891892,,-932,a136b442-a390-46e9-ae7f-f8cc6091af5b,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-01-09 14:16:12.972972972,,-853,f0caf27a-20d3-4b11-b93f-aab7393c44e5,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-01-10 19:27:34.054054052,,-774,5d57aec5-754f-4acf-a68e-1b72c708ee90,,,,,,investments,stocks,investments,Example shared account,False
+2021-01-12 00:38:55.135135136,,-169,17d5312c-cf1a-40b4-82f8-24e7f9476f6d,,,,,,food,food_other,wants,Example shared account,False
+2021-01-13 05:50:16.216216216,,-987,8f0b7aab-aeee-4823-9c28-8a2cf69c09a5,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-01-14 11:01:37.297297296,,-494,683db79e-19e5-4092-bbea-a341d50c0679,,,,,,other,games,wants,Example shared account,False
+2021-01-15 16:12:58.378378376,,310,b3b12772-fe38-43b1-b6a6-cbbb4a8c4918,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-01-16 21:24:19.459459460,,-677,43504bfc-d71b-444c-987a-b45262f5b7b5,,,,,,investments,stocks,investments,Example shared account,False
+2021-01-18 02:35:40.540540540,,-919,96287027-12e1-460a-901e-452af81f6ce4,,,,,,investments,crypto,investments,Example shared account,False
+2021-01-19 07:47:01.621621620,,-24,997600c9-e04f-477c-8d3c-cac421ebafd6,,,,,,other,other_other,wants,Example shared account,False
+2021-01-20 12:58:22.702702700,,-993,aeaf82dd-bf95-4070-b4e3-8f4bc341c41b,,,,,,food,food_other,wants,Example shared account,False
+2021-01-21 18:09:43.783783784,,-53,7dd0d888-59c9-43aa-a632-773296477bb8,,,,,,other,other_other,wants,Example shared account,False
+2021-01-22 23:21:04.864864864,,-32,57eab22d-9038-499a-a1f4-133d2e58102f,,,,,,transport,gas,needs,Example shared account,False
+2021-01-24 04:32:25.945945944,,-964,cdce5313-31a8-4d3e-ac34-8c9be44fc8d7,,,,,,investments,crypto,investments,Example shared account,False
+2021-01-25 09:43:47.027027028,,4425,dc460c45-3edb-4d6f-9791-89c4625c6683,,,,,,jobs,my main job,income,Example shared account,True
+2021-01-26 14:55:08.108108108,,-872,189d4285-b0ec-4f49-868e-96e69618962d,,,,,,transport,gas,needs,Example shared account,False
+2021-01-27 20:06:29.189189188,,1155,9e668924-ba0d-40d2-8615-8a7094829fe5,,,,,,jobs,my main job,income,Example shared account,True
+2021-01-29 01:17:50.270270268,,-285,72dc5053-3606-4ca5-bf41-c3425b237a42,,,,,,investments,crypto,investments,Example shared account,False
+2021-01-30 06:29:11.351351352,,4390,66869c81-a721-4bfb-8e57-7cc8852ba363,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-01-31 11:40:32.432432432,,-909,16855c25-2c03-4fbc-bf3d-6e8a51429194,,,,,,other,games,wants,Example shared account,False
+2021-02-01 16:51:53.513513512,,-779,36935184-c238-4e54-9ddd-6ffeb404131b,,,,,,investments,stocks,investments,Example shared account,False
+2021-02-02 22:03:14.594594592,,-272,1baddc14-82da-4af4-9dfc-e66390e6c1f5,,,,,,investments,crypto,investments,Example shared account,False
+2021-02-04 03:14:35.675675676,,-751,05efc11c-8973-45f2-a156-672d3da57c50,,,,,,transport,transport_other,wants,Example shared account,False
+2021-02-05 08:25:56.756756756,,-898,43748334-1829-447f-955b-215d7861e782,,,,,,investments,crypto,investments,Example shared account,False
+2021-02-06 13:37:17.837837836,,-191,90531f8c-7a40-42ac-a554-014cfc6a1fbb,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-02-07 18:48:38.918918916,,-478,f37c69f9-8f28-4075-9ed9-740ef09020fa,,,,,,transport,transport_other,wants,Example shared account,False
+2021-02-09 00:00:00.000000000,,2860,aa68d290-a9da-490a-8d30-683b9c2d58f9,,,,,,jobs,my main job,income,Example shared account,True
+2021-02-10 05:11:21.081081080,,2100,023bddaa-25c7-474f-953c-5bd63c5c49a2,,,,,,jobs,my main job,income,Example shared account,True
+2021-02-11 10:22:42.162162160,,-512,203d2ae7-4537-4c6b-b2aa-cd5ab35a14dc,,,,,,food,groceries,needs,Example shared account,False
+2021-02-12 15:34:03.243243244,,2870,3e1129af-3f1a-45ee-aa67-ac81d30ecc8b,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-02-13 20:45:24.324324324,,-404,1b2b4393-5c32-4809-b962-01f9137de424,,,,,,food,restaurants,wants,Example shared account,False
+2021-02-15 01:56:45.405405404,,-962,4097f988-a313-44bc-b292-4686362527a5,,,,,,other,other_other,wants,Example shared account,False
+2021-02-16 07:08:06.486486484,,-380,706321f9-0572-4468-80b1-643bed4cafad,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-02-17 12:19:27.567567568,,-989,1b7c939a-1854-43fa-a4fa-664036a2637b,,,,,,other,other_other,wants,Example shared account,False
+2021-02-18 17:30:48.648648648,,-696,a80b1197-d693-4d61-b691-aea88b053d8f,,,,,,food,restaurants,wants,Example shared account,False
+2021-02-19 22:42:09.729729728,,-10,1971388e-fcda-4012-bab2-7e861ff505d7,,,,,,investments,investments_other,investments,Example shared account,False
+2021-02-21 03:53:30.810810808,,-844,c0d26719-75c8-4725-862b-fde3bc8e781c,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-02-22 09:04:51.891891888,,-379,357b4d85-7315-4119-982a-1ebc7752ba20,,,,,,investments,investments_other,investments,Example shared account,False
+2021-02-23 14:16:12.972972968,,-790,70d292ea-8a01-4571-8da7-104ad6371325,,,,,,food,groceries,needs,Example shared account,False
+2021-02-24 19:27:34.054054056,,905,5f17219b-4381-4756-9d5c-fd022e36c7c5,,,,,,jobs,my main job,income,Example shared account,True
+2021-02-26 00:38:55.135135136,,1205,67a0d651-8f2e-4035-acfc-93ddd852f85c,,,,,,jobs,my main job,income,Example shared account,True
+2021-02-27 05:50:16.216216216,,-553,4f7b4559-4946-4a18-86f0-88019053b8e2,,,,,,investments,stocks,investments,Example shared account,False
+2021-02-28 11:01:37.297297296,,-572,0eff3f72-55e8-43ff-8e89-649868f7fa3e,,,,,,transport,transport_other,wants,Example shared account,False
+2021-03-01 16:12:58.378378376,,-124,c9998c4c-384a-46cb-8486-5754d2fe75a0,,,,,,investments,crypto,investments,Example shared account,False
+2021-03-02 21:24:19.459459456,,1115,217d6c5b-d977-48b3-997d-ea9c75a4808c,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-03-04 02:35:40.540540536,,-344,7d527285-4569-4d34-9603-8b95e25eb8df,,,,,,other,other_other,wants,Example shared account,False
+2021-03-05 07:47:01.621621624,,-741,8f994434-7ef4-484b-978e-e47d621f74a3,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-03-06 12:58:22.702702704,,-750,8f620b66-b2c0-4ab4-a8e9-6ba15998bede,,,,,,other,games,wants,Example shared account,False
+2021-03-07 18:09:43.783783784,,-835,66cda052-5d87-4124-8ecd-2d4884c300e1,,,,,,transport,transport_other,wants,Example shared account,False
+2021-03-08 23:21:04.864864864,,-806,d6db3aba-f9f8-420d-906a-124d19433512,,,,,,investments,investments_other,investments,Example shared account,False
+2021-03-10 04:32:25.945945944,,-757,40b11e93-e7aa-41c3-95e2-57e48e0d3a00,,,,,,food,food_other,wants,Example shared account,False
+2021-03-11 09:43:47.027027024,,-518,246e5f67-0baf-4723-8e59-685f68eea0bc,,,,,,investments,crypto,investments,Example shared account,False
+2021-03-12 14:55:08.108108104,,-982,03790ff6-55c9-4f55-9bef-b581dc351cc5,,,,,,subscriptions,clouds,wants,Example shared account,False
+2021-03-13 20:06:29.189189192,,-654,b77cab6f-5838-4ccc-b246-c02e0b2c93fa,,,,,,food,restaurants,wants,Example shared account,False
+2021-03-15 01:17:50.270270272,,-134,88c16996-7c98-410c-b307-c6e5584fcac0,,,,,,other,other_other,wants,Example shared account,False
+2021-03-16 06:29:11.351351352,,-984,29e0cbd3-7221-428f-abb9-8f480ef9e66c,,,,,,investments,investments_other,investments,Example shared account,False
+2021-03-17 11:40:32.432432432,,-557,9d484650-51ed-42ad-9391-daab5342c981,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-03-18 16:51:53.513513512,,-674,cb8280af-2b37-40c1-ac45-10642c83a171,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-03-19 22:03:14.594594592,,-238,71b6b36e-9c9b-4ff2-9941-13597d7780cc,,,,,,food,restaurants,wants,Example shared account,False
+2021-03-21 03:14:35.675675672,,-146,5f92a574-66c8-4186-8c12-463177aeb589,,,,,,investments,stocks,investments,Example shared account,False
+2021-03-22 08:25:56.756756752,,-949,3420ae08-2c3d-47bf-a0d2-19a19615dae9,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-03-23 13:37:17.837837840,,-203,2f3ca4c0-0a1e-4f7a-af20-3dc7ecbadc25,,,,,,subscriptions,clouds,wants,Example shared account,False
+2021-03-24 18:48:38.918918920,,-664,67aef9b3-caf2-40db-bbdc-b443ca3c6895,,,,,,transport,public_transport,needs,Example shared account,False
+2021-03-26 00:00:00.000000000,,-91,22e3cb4a-a89c-4570-bc14-920be50dc40d,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-03-27 05:11:21.081081080,,35,3f87cd3d-eaa2-4c02-8b38-e633deeca570,,,,,,jobs,my main job,income,Example shared account,True
+2021-03-28 10:22:42.162162160,,-958,710d00f5-8a7e-4610-b470-4ac7eb2a39ac,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-03-29 15:34:03.243243240,,-605,43602a7c-dbf0-44ec-8deb-23d9c258d271,,,,,,food,food_other,wants,Example shared account,False
+2021-03-30 20:45:24.324324320,,-801,52b3afe2-2653-4363-a81e-b12f524cbaf5,,,,,,investments,crypto,investments,Example shared account,False
+2021-04-01 01:56:45.405405408,,4055,52a5bf95-2eb3-48a1-8a75-369312cf82be,,,,,,jobs,my main job,income,Example shared account,True
+2021-04-02 07:08:06.486486488,,-120,2bdc8dd5-5ae0-4fb8-a17e-212fd3849939,,,,,,investments,stocks,investments,Example shared account,False
+2021-04-03 12:19:27.567567568,,-387,9e5b1a54-729a-450b-b67c-246ff37fe697,,,,,,investments,crypto,investments,Example shared account,False
+2021-04-04 17:30:48.648648648,,-281,e9ef841a-a2cf-4c9c-81e0-558a3d0f8036,,,,,,investments,investments_other,investments,Example shared account,False
+2021-04-05 22:42:09.729729728,,4000,011b7755-5f5f-4780-afb6-e39a7543d07c,,,,,,jobs,my main job,income,Example shared account,True
+2021-04-07 03:53:30.810810808,,3860,95c44e08-d096-42ec-a5f7-76c890b20ac0,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-04-08 09:04:51.891891888,,-465,ed79aa34-6f73-43e9-93ba-3e2fa7b1db31,,,,,,food,groceries,needs,Example shared account,False
+2021-04-09 14:16:12.972972968,,-737,5dfcfa50-cd5b-4d3f-b667-59eb56643ffd,,,,,,other,other_other,wants,Example shared account,False
+2021-04-10 19:27:34.054054056,,-641,61cda114-640a-4309-9cdf-2cbba1cb86e0,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-04-12 00:38:55.135135136,,-876,d16a113e-18f7-486f-a395-716fdf536633,,,,,,food,restaurants,wants,Example shared account,False
+2021-04-13 05:50:16.216216216,,-78,d255f09f-18ad-4a4a-a7ed-f097f6df2c6f,,,,,,other,games,wants,Example shared account,False
+2021-04-14 11:01:37.297297296,,-864,53618a33-36d2-49ea-8927-8ad82645a832,,,,,,investments,stocks,investments,Example shared account,False
+2021-04-15 16:12:58.378378376,,-764,4684302c-eb52-4d2b-bd44-5573d0de1e7a,,,,,,transport,public_transport,needs,Example shared account,False
+2021-04-16 21:24:19.459459456,,1740,9afc7054-d7f2-401a-84ff-dbf00141f954,,,,,,jobs,my main job,income,Example shared account,True
+2021-04-18 02:35:40.540540536,,2685,0e66150e-9e9e-4996-a3b4-7bdeaf2b17ed,,,,,,jobs,my main job,income,Example shared account,True
+2021-04-19 07:47:01.621621624,,3175,13d08fe6-c05d-4b55-bb70-f58d1c56fd93,,,,,,jobs,my main job,income,Example shared account,True
+2021-04-20 12:58:22.702702704,,-195,166451ec-797e-47f0-8f98-04c5db9f342f,,,,,,investments,crypto,investments,Example shared account,False
+2021-04-21 18:09:43.783783784,,-46,c9fd39c5-f6ba-4f09-8238-ae5c8241a09c,,,,,,food,restaurants,wants,Example shared account,False
+2021-04-22 23:21:04.864864864,,-584,f19307fa-8427-4579-9a2e-e1e2b9e36a19,,,,,,transport,public_transport,needs,Example shared account,False
+2021-04-24 04:32:25.945945944,,-661,5c41f5de-1b0a-4993-accf-3c8962e77934,,,,,,other,other_other,wants,Example shared account,False
+2021-04-25 09:43:47.027027024,,-288,3d68110f-9598-4b54-8c2e-880f1f5b7c7a,,,,,,other,other_other,wants,Example shared account,False
+2021-04-26 14:55:08.108108104,,-150,bf72755c-2c8b-40fb-a51a-0b04a4542160,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-04-27 20:06:29.189189192,,-146,e6ea99f5-bdea-48ff-84f1-9df6faac0a70,,,,,,other,other_other,wants,Example shared account,False
+2021-04-29 01:17:50.270270272,,-295,73dabffe-f675-4dd3-9420-b985eb07ff6a,,,,,,investments,investments_other,investments,Example shared account,False
+2021-04-30 06:29:11.351351352,,3605,f7c56533-9601-4b1b-ab01-4f513872d732,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-05-01 11:40:32.432432432,,-268,97beea7f-3275-4a4f-baf5-a0a289946e76,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-05-02 16:51:53.513513512,,-289,8f89c1a1-07f8-4ed9-b413-3863ffb35c1b,,,,,,investments,stocks,investments,Example shared account,False
+2021-05-03 22:03:14.594594592,,-848,2ea39fe6-c964-40b3-a4b2-b2730cff2817,,,,,,other,games,wants,Example shared account,False
+2021-05-05 03:14:35.675675672,,-340,f70860d2-0438-4569-84a7-936e8ac1e7da,,,,,,other,games,wants,Example shared account,False
+2021-05-06 08:25:56.756756752,,-549,26998db2-6501-4882-89d1-44ffaf9501bb,,,,,,transport,transport_other,wants,Example shared account,False
+2021-05-07 13:37:17.837837840,,-501,dc310c8a-2852-45f0-b1e9-7e8ed3fc67b7,,,,,,investments,investments_other,investments,Example shared account,False
+2021-05-08 18:48:38.918918920,,-545,702317e1-1c88-414c-b3a5-4861ff8bc472,,,,,,transport,gas,needs,Example shared account,False
+2021-05-10 00:00:00.000000000,,-614,e1f49880-a7a6-470a-91ca-72dc586079b8,,,,,,investments,crypto,investments,Example shared account,False
+2021-05-11 05:11:21.081081080,,-180,1977b0f1-2f89-404f-b907-89485681ec39,,,,,,other,games,wants,Example shared account,False
+2021-05-12 10:22:42.162162160,,3515,61964107-7e14-415e-9556-5414342e48db,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-05-13 15:34:03.243243240,,-615,a82ada72-7f1f-4140-afa3-2c58892ef6c2,,,,,,food,groceries,needs,Example shared account,False
+2021-05-14 20:45:24.324324320,,-177,771f0be8-80d0-438b-b5e8-cbf1e282f4a4,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-05-16 01:56:45.405405408,,-21,29b73498-90a9-4b6c-81e0-040ade2bb3b5,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-05-17 07:08:06.486486488,,-752,d3270e06-16ee-4dea-b1ff-2815da432f03,,,,,,transport,gas,needs,Example shared account,False
+2021-05-18 12:19:27.567567568,,-720,64890c12-2752-488b-bb6e-e63e41176ce8,,,,,,other,games,wants,Example shared account,False
+2021-05-19 17:30:48.648648648,,-723,721cece6-30cd-4812-9f46-c918cb653689,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-05-20 22:42:09.729729728,,-213,1e3cea92-2392-452d-a72c-d1ba58fe0222,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-05-22 03:53:30.810810808,,4965,94cece6c-2d39-4575-ad4c-afab651d7333,,,,,,jobs,my main job,income,Example shared account,True
+2021-05-23 09:04:51.891891888,,-305,8c6123d7-4420-4479-bdc3-d846a8f4dd75,,,,,,other,other_other,wants,Example shared account,False
+2021-05-24 14:16:12.972972968,,3885,7bb4c34c-bf78-4516-b605-912d76dbfbbe,,,,,,jobs,my main job,income,Example shared account,True
+2021-05-25 19:27:34.054054056,,-602,bfe32146-7487-4478-9048-c1fe640c1b8b,,,,,,food,food_other,wants,Example shared account,False
+2021-05-27 00:38:55.135135136,,830,7a505a05-cf82-4fcf-9fd4-9dfd123adfe6,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-05-28 05:50:16.216216216,,-268,3e44657a-ce57-4743-a310-4b1f0ebde30a,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-05-29 11:01:37.297297296,,405,ff3494ce-5cf5-48fa-a438-5879224dd08a,,,,,,jobs,my main job,income,Example shared account,True
+2021-05-30 16:12:58.378378376,,-775,642e8be7-6daa-4d72-bc11-07c27a1ee389,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-05-31 21:24:19.459459456,,1260,c27d8648-f763-4b72-b761-2f091975d823,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-06-02 02:35:40.540540536,,425,a8a53a23-f737-49fe-a61c-04859480ba12,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-06-03 07:47:01.621621624,,-830,c996a07d-3bbb-4f03-8d0d-41e34b15bc8e,,,,,,transport,public_transport,needs,Example shared account,False
+2021-06-04 12:58:22.702702704,,-687,0b6a41e1-44dd-4ab2-a811-0dfb2ccf137c,,,,,,other,other_other,wants,Example shared account,False
+2021-06-05 18:09:43.783783784,,-967,3b12bb63-5b10-4d7d-a096-b6e108db45ca,,,,,,food,food_other,wants,Example shared account,False
+2021-06-06 23:21:04.864864864,,970,18285aa2-a170-4ad0-89bc-c944c1e985e6,,,,,,jobs,my main job,income,Example shared account,True
+2021-06-08 04:32:25.945945944,,-224,1bcaef60-bad0-484d-a556-5c7e9fcf34c5,,,,,,transport,public_transport,needs,Example shared account,False
+2021-06-09 09:43:47.027027024,,-853,14c6fdc6-39a8-47b9-940f-fe20b9f913f3,,,,,,investments,stocks,investments,Example shared account,False
+2021-06-10 14:55:08.108108104,,-172,33abe484-0658-41e8-8685-26473ffd1965,,,,,,transport,public_transport,needs,Example shared account,False
+2021-06-11 20:06:29.189189184,,-725,49aeca99-d3f0-42f5-867b-3c6f3a771c5e,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-06-13 01:17:50.270270272,,-125,832a9989-3010-496d-a3b6-f7360a69bacc,,,,,,other,other_other,wants,Example shared account,False
+2021-06-14 06:29:11.351351352,,-656,f91c976d-c5b0-4986-bd69-f7be9aff24d6,,,,,,other,other_other,wants,Example shared account,False
+2021-06-15 11:40:32.432432432,,2680,e8e11773-55a0-46fe-9f0b-6df038617c85,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-06-16 16:51:53.513513512,,4970,8d167450-0cab-4c2e-b781-e207016920a0,,,,,,jobs,my main job,income,Example shared account,True
+2021-06-17 22:03:14.594594592,,-999,6fc46b54-2a6e-4442-a11a-f4e28b86b4bf,,,,,,investments,crypto,investments,Example shared account,False
+2021-06-19 03:14:35.675675672,,-228,93568872-f78e-4ea0-9f53-1269e9dc82d9,,,,,,food,restaurants,wants,Example shared account,False
+2021-06-20 08:25:56.756756752,,4860,04d1fce6-ef68-49c3-9dc0-60ed0ce7bac1,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-06-21 13:37:17.837837840,,-486,f6a81631-eeca-4c30-883b-237ab9b77fb4,,,,,,investments,crypto,investments,Example shared account,False
+2021-06-22 18:48:38.918918920,,-798,5a11a3f9-d758-40bb-9c58-e6bd1e84df34,,,,,,investments,investments_other,investments,Example shared account,False
+2021-06-24 00:00:00.000000000,,-48,f329db33-7291-4949-b1ff-8086fb97ea21,,,,,,food,restaurants,wants,Example shared account,False
+2021-06-25 05:11:21.081081080,,-13,09730f89-8d14-4379-b4d2-292583a42a69,,,,,,investments,stocks,investments,Example shared account,False
+2021-06-26 10:22:42.162162160,,-3,9b2e69f4-6909-4043-8f2a-c37e4e0cd7b3,,,,,,food,restaurants,wants,Example shared account,False
+2021-06-27 15:34:03.243243240,,-52,0be3d21e-fff6-452e-8e9b-db8948696d50,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-06-28 20:45:24.324324320,,-971,06789a4a-e45a-4f79-aa8c-17e73519c12f,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-06-30 01:56:45.405405408,,-545,801420b2-2858-4ddd-98bb-30c01b899866,,,,,,food,groceries,needs,Example shared account,False
+2021-07-01 07:08:06.486486488,,4195,95d9c8ce-5679-4b22-ad4f-028afa715bdd,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-07-02 12:19:27.567567568,,-461,c4231b6d-5b46-4c76-8f74-972a7e13c57c,,,,,,investments,crypto,investments,Example shared account,False
+2021-07-03 17:30:48.648648648,,-346,c8072e33-7938-4483-b482-d1bfff7a7e1b,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-07-04 22:42:09.729729728,,-797,b0b20739-ff5b-4b55-8ec7-f1fd82f60b31,,,,,,transport,public_transport,needs,Example shared account,False
+2021-07-06 03:53:30.810810808,,-671,619fd6be-dbee-4d39-801b-84dcd85405aa,,,,,,transport,gas,needs,Example shared account,False
+2021-07-07 09:04:51.891891888,,-856,e8a778c2-25d6-4fc4-ac85-b825b017d93c,,,,,,transport,gas,needs,Example shared account,False
+2021-07-08 14:16:12.972972968,,4175,799fade7-9515-4805-8f34-61ef1b425f79,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-07-09 19:27:34.054054056,,-556,6f2013f0-c4f8-4521-9bf6-35f921eefeaa,,,,,,food,groceries,needs,Example shared account,False
+2021-07-11 00:38:55.135135136,,-193,a4404d35-169e-4ca7-a72c-e6811fe56f10,,,,,,other,games,wants,Example shared account,False
+2021-07-12 05:50:16.216216216,,-341,457d8eb6-2c60-4f0e-821d-a11a43b38960,,,,,,other,games,wants,Example shared account,False
+2021-07-13 11:01:37.297297296,,-188,c149b3eb-d210-46ed-a5f8-d6c2165c8410,,,,,,other,other_other,wants,Example shared account,False
+2021-07-14 16:12:58.378378376,,-828,f758ff95-e6d3-4668-af78-fb7a05ff164b,,,,,,other,games,wants,Example shared account,False
+2021-07-15 21:24:19.459459456,,-792,c3ad4a3f-ecd8-4909-bad9-f4f150ec5aea,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-07-17 02:35:40.540540536,,-777,e9fc7a18-4d67-4be8-97c8-5d2c5bab3530,,,,,,transport,public_transport,needs,Example shared account,False
+2021-07-18 07:47:01.621621624,,-281,939cbe90-3e97-414a-b2f8-6cff0e0a633b,,,,,,food,restaurants,wants,Example shared account,False
+2021-07-19 12:58:22.702702704,,1160,f2f0331f-4b7e-47e5-8735-15ed0fd70a04,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-07-20 18:09:43.783783784,,-745,a835846e-2bb8-468a-9db6-df91877eccaa,,,,,,investments,stocks,investments,Example shared account,False
+2021-07-21 23:21:04.864864864,,-742,380b3084-bb46-4706-8a79-4b6b48739cf1,,,,,,other,games,wants,Example shared account,False
+2021-07-23 04:32:25.945945944,,-518,e64f8e7e-23b7-4fd5-bdc7-386bceb63c1f,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-07-24 09:43:47.027027024,,2485,cd38aad3-fdc3-49c9-8e9d-a0c999ce5614,,,,,,jobs,my main job,income,Example shared account,True
+2021-07-25 14:55:08.108108104,,-857,11e42878-6220-4970-a4ff-e69ef5689364,,,,,,transport,gas,needs,Example shared account,False
+2021-07-26 20:06:29.189189184,,4810,2112a710-70da-4042-ad9b-a852c132b575,,,,,,jobs,my main job,income,Example shared account,True
+2021-07-28 01:17:50.270270272,,-716,eff9e809-d9a3-4041-926e-bfc9f7bf58bb,,,,,,transport,transport_other,wants,Example shared account,False
+2021-07-29 06:29:11.351351352,,-405,b59bb4c2-1e7e-46b3-a410-e94140dee0c1,,,,,,investments,crypto,investments,Example shared account,False
+2021-07-30 11:40:32.432432432,,-866,3fc17b21-fb5d-4b49-867d-eee1658aa9bb,,,,,,food,food_other,wants,Example shared account,False
+2021-07-31 16:51:53.513513512,,-512,f9c49875-53a2-476f-b915-5917a5ff38a7,,,,,,food,groceries,needs,Example shared account,False
+2021-08-01 22:03:14.594594592,,-932,eeaab7fa-4861-4d18-859d-ce637fe53e37,,,,,,food,groceries,needs,Example shared account,False
+2021-08-03 03:14:35.675675672,,-269,470cd6f1-a6a2-4878-8a5d-5ad224fde3de,,,,,,other,other_other,wants,Example shared account,False
+2021-08-04 08:25:56.756756752,,-170,5d10e460-aa66-42b6-b5eb-2400072c5139,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-08-05 13:37:17.837837840,,-593,c2b7850b-6142-4815-8cef-0a6d4ac20059,,,,,,other,other_other,wants,Example shared account,False
+2021-08-06 18:48:38.918918920,,-850,eb4b6f05-5abe-4f98-b477-a19705ae9d4d,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-08-08 00:00:00.000000000,,-918,5d9ff831-88ff-48a1-8224-17c6c014c4a0,,,,,,food,food_other,wants,Example shared account,False
+2021-08-09 05:11:21.081081080,,-537,54c89a5a-ba26-4390-9116-c7bb9cc33d73,,,,,,transport,gas,needs,Example shared account,False
+2021-08-10 10:22:42.162162160,,-667,bf4ad2cd-b869-4251-ab25-a79bd01abe0b,,,,,,food,food_other,wants,Example shared account,False
+2021-08-11 15:34:03.243243240,,-716,fff212b2-f614-4cb5-a2ce-1b1e485bbc29,,,,,,other,games,wants,Example shared account,False
+2021-08-12 20:45:24.324324320,,-77,7f3bdd64-0175-4425-b047-40d2ffde7804,,,,,,food,restaurants,wants,Example shared account,False
+2021-08-14 01:56:45.405405400,,-122,00e8a53e-9052-4fd4-836f-3e398fb43ea7,,,,,,investments,crypto,investments,Example shared account,False
+2021-08-15 07:08:06.486486488,,-718,bac650a5-534d-4244-9cc6-be9b6a4d95a3,,,,,,other,games,wants,Example shared account,False
+2021-08-16 12:19:27.567567568,,-202,fb217c7b-8bb3-49e0-8adc-07c6f57e766f,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-08-17 17:30:48.648648648,,-137,85bdf3c2-8a35-4cec-b87c-7403b0fa768f,,,,,,other,games,wants,Example shared account,False
+2021-08-18 22:42:09.729729728,,-824,c39a7d7a-c7f1-421f-81e7-f7fd4f2b22b1,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-08-20 03:53:30.810810808,,-935,1cb1da66-77cd-4296-b2ae-226aff95fa5b,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-08-21 09:04:51.891891888,,1025,245f676d-9a82-43e0-9d54-437367160a09,,,,,,jobs,my main job,income,Example shared account,True
+2021-08-22 14:16:12.972972968,,-183,71b5bd0d-cc36-4cf9-be53-5d8e480fff5b,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-08-23 19:27:34.054054056,,-456,6faac198-61b8-4b36-b1dc-80a857294c0d,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-08-25 00:38:55.135135136,,-252,3be50895-7e3c-412f-b014-5cc7e3632316,,,,,,investments,crypto,investments,Example shared account,False
+2021-08-26 05:50:16.216216216,,1125,fd580297-ba18-4545-9c4d-f02d0027d632,,,,,,jobs,my main job,income,Example shared account,True
+2021-08-27 11:01:37.297297296,,-377,50f3b178-f08e-4889-8433-70dadc008bb0,,,,,,transport,gas,needs,Example shared account,False
+2021-08-28 16:12:58.378378376,,-445,4b52b5ea-4b5b-49a9-9edb-1d2328b14a98,,,,,,other,other_other,wants,Example shared account,False
+2021-08-29 21:24:19.459459456,,-413,cef169ab-438d-43ba-acc7-a2adb3db8526,,,,,,transport,transport_other,wants,Example shared account,False
+2021-08-31 02:35:40.540540536,,-642,026eb90c-9ef6-4fec-8edb-ab3da4e534fc,,,,,,transport,public_transport,needs,Example shared account,False
+2021-09-01 07:47:01.621621624,,-828,f652fc37-5216-4781-84ff-bd4fd9ac98e1,,,,,,transport,public_transport,needs,Example shared account,False
+2021-09-02 12:58:22.702702704,,-416,22dbea6d-80bd-4a64-a0bd-b9e17ec5df42,,,,,,transport,public_transport,needs,Example shared account,False
+2021-09-03 18:09:43.783783784,,-769,aec73c2f-d210-4b6e-9f81-5695f83d9b14,,,,,,investments,crypto,investments,Example shared account,False
+2021-09-04 23:21:04.864864864,,-55,eb0597d7-5114-4ebe-932d-64238a553590,,,,,,other,other_other,wants,Example shared account,False
+2021-09-06 04:32:25.945945944,,-263,4d127b26-7f76-4303-9f6f-1c220cd4bf09,,,,,,investments,crypto,investments,Example shared account,False
+2021-09-07 09:43:47.027027024,,-337,9b908ae4-cd77-4912-86da-24f0a5a2e197,,,,,,other,games,wants,Example shared account,False
+2021-09-08 14:55:08.108108104,,-793,22eb6b07-f67e-4653-aeda-7d159da32453,,,,,,transport,gas,needs,Example shared account,False
+2021-09-09 20:06:29.189189184,,-72,b385fe7d-a1bf-467b-a5fa-09bb625d1a36,,,,,,food,food_other,wants,Example shared account,False
+2021-09-11 01:17:50.270270272,,-272,271d44a5-ac0f-4d85-b67b-f3cdde0e38d7,,,,,,other,games,wants,Example shared account,False
+2021-09-12 06:29:11.351351352,,-298,24fb8a92-3d5c-47b9-8dbd-9d4914d3aa44,,,,,,other,games,wants,Example shared account,False
+2021-09-13 11:40:32.432432432,,-132,5117c017-c05f-4bed-8fb6-c44b22acf0da,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-09-14 16:51:53.513513512,,-61,c7fc9ca5-df1b-4be7-bb75-5b16a817105d,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-09-15 22:03:14.594594592,,-174,777873b3-99af-4e1f-b7f2-5883a6c33c27,,,,,,food,food_other,wants,Example shared account,False
+2021-09-17 03:14:35.675675672,,-945,0f8a2995-ddbc-4d17-9d16-9d65d152cbf6,,,,,,food,food_other,wants,Example shared account,False
+2021-09-18 08:25:56.756756752,,-399,0786bdf4-0576-453f-bf78-bf8be579d735,,,,,,food,groceries,needs,Example shared account,False
+2021-09-19 13:37:17.837837840,,-253,4135b8b0-75fe-4e2f-896d-3a2adb2c30ac,,,,,,transport,public_transport,needs,Example shared account,False
+2021-09-20 18:48:38.918918920,,-582,601bce2e-25af-455b-8678-69222c63defe,,,,,,transport,transport_other,wants,Example shared account,False
+2021-09-22 00:00:00.000000000,,-162,96b1906a-9562-4d95-9db0-1a4ed61c7b38,,,,,,subscriptions,clouds,wants,Example shared account,False
+2021-09-23 05:11:21.081081080,,-970,c70ec656-da55-492e-8b9a-3870a7e11fab,,,,,,subscriptions,clouds,wants,Example shared account,False
+2021-09-24 10:22:42.162162160,,-60,2bfbbd07-fbdf-4d38-b96e-55f5c43ebfc5,,,,,,transport,gas,needs,Example shared account,False
+2021-09-25 15:34:03.243243240,,-87,97b43518-c81c-4591-a678-f64bc683da9c,,,,,,food,restaurants,wants,Example shared account,False
+2021-09-26 20:45:24.324324320,,-576,054db893-d2f9-4317-9425-62556d4ef5b3,,,,,,investments,crypto,investments,Example shared account,False
+2021-09-28 01:56:45.405405400,,4350,f5f1ca85-0875-4656-85ef-d31d8b846272,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-09-29 07:08:06.486486488,,-310,6ab9c87f-f0f5-4223-ba8d-9023854de79c,,,,,,investments,investments_other,investments,Example shared account,False
+2021-09-30 12:19:27.567567568,,-595,54994dac-dff8-4e08-b92c-65897fc4bab1,,,,,,investments,stocks,investments,Example shared account,False
+2021-10-01 17:30:48.648648648,,-681,ece4b005-81a7-4035-816a-7c01e4133018,,,,,,food,food_other,wants,Example shared account,False
+2021-10-02 22:42:09.729729728,,-598,1a512ced-6e0e-47aa-95e0-8aff892b662c,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-10-04 03:53:30.810810808,,4195,8eecedf1-b11c-4712-bd7d-56119364fa9c,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-10-05 09:04:51.891891888,,-787,2a75e937-e229-430c-a9ef-51d8eeceafdc,,,,,,food,restaurants,wants,Example shared account,False
+2021-10-06 14:16:12.972972968,,-419,0eb28008-8e01-4a74-90f7-d3b00f79056f,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-10-07 19:27:34.054054056,,-875,ffc22336-3a92-4f19-a385-ff4403e8bc1b,,,,,,transport,transport_other,wants,Example shared account,False
+2021-10-09 00:38:55.135135136,,-82,fc40dfd0-60b3-4a26-a3a3-9ebab571f7bd,,,,,,food,groceries,needs,Example shared account,False
+2021-10-10 05:50:16.216216216,,-200,8635b729-54c7-4bda-8a12-ae00d8f180f2,,,,,,transport,transport_other,wants,Example shared account,False
+2021-10-11 11:01:37.297297296,,-277,49a9799d-379e-46ae-9544-a5198cb66b6c,,,,,,food,restaurants,wants,Example shared account,False
+2021-10-12 16:12:58.378378376,,-508,cd71b9a4-d1b4-4ec8-8246-cb1ac616beea,,,,,,food,food_other,wants,Example shared account,False
+2021-10-13 21:24:19.459459456,,-74,22808ab2-649a-4f6a-8682-ed99c7ec3c1b,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-10-15 02:35:40.540540536,,-141,d30b0c5d-adfb-44e3-beed-eeca7d2390c5,,,,,,transport,gas,needs,Example shared account,False
+2021-10-16 07:47:01.621621624,,-769,2421152c-65e5-421e-9f30-79b078bad509,,,,,,food,restaurants,wants,Example shared account,False
+2021-10-17 12:58:22.702702704,,-879,05e7f129-4793-4ef8-ba88-3a3afa613442,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-10-18 18:09:43.783783784,,2720,19cd846f-e9ad-43b5-af96-ddfe188f55a0,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-10-19 23:21:04.864864864,,-644,0463790f-cd31-44f1-ab7f-ed4e34e04a48,,,,,,food,groceries,needs,Example shared account,False
+2021-10-21 04:32:25.945945944,,295,dd7396c7-c325-4715-add5-a57c8f0023b6,,,,,,jobs,my main job,income,Example shared account,True
+2021-10-22 09:43:47.027027024,,-203,ac0d00bf-cdd4-421a-877c-cd8c32a67eb0,,,,,,food,food_other,wants,Example shared account,False
+2021-10-23 14:55:08.108108104,,-981,2650d232-174c-41a7-84cd-4dc72f8b1561,,,,,,other,games,wants,Example shared account,False
+2021-10-24 20:06:29.189189184,,-31,be699de6-3d6b-4d77-bad2-ec1aecb01208,,,,,,transport,transport_other,wants,Example shared account,False
+2021-10-26 01:17:50.270270272,,335,7b249375-95e1-452c-b584-605733d3fa41,,,,,,jobs,my main job,income,Example shared account,True
+2021-10-27 06:29:11.351351352,,-288,31983ba0-be8b-48ec-ae19-74719abc4ca3,,,,,,food,food_other,wants,Example shared account,False
+2021-10-28 11:40:32.432432432,,-488,993c2288-3fb5-4ae1-a1ef-bd10ffae9e1c,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-10-29 16:51:53.513513512,,-45,66ef6417-123b-4205-8688-0a2e0626efb5,,,,,,investments,crypto,investments,Example shared account,False
+2021-10-30 22:03:14.594594592,,3780,26cb4982-005a-49db-9c3d-9f63f4126ea5,,,,,,jobs,my main job,income,Example shared account,True
+2021-11-01 03:14:35.675675672,,-79,eecb248f-c57d-497f-bf8f-89b451b5afae,,,,,,investments,stocks,investments,Example shared account,False
+2021-11-02 08:25:56.756756752,,-49,8dc4833d-7574-40d4-a7d6-0af8e8e1fa6e,,,,,,transport,public_transport,needs,Example shared account,False
+2021-11-03 13:37:17.837837840,,-843,402c545b-4853-41f8-899f-31abeb9d51bd,,,,,,investments,investments_other,investments,Example shared account,False
+2021-11-04 18:48:38.918918920,,2705,581f8608-0dfd-490d-ad73-02d079c9bb86,,,,,,jobs,my main job,income,Example shared account,True
+2021-11-06 00:00:00.000000000,,-286,80c51cfd-03d8-4031-b964-3541c7e77a30,,,,,,transport,public_transport,needs,Example shared account,False
+2021-11-07 05:11:21.081081080,,-42,cb2affd4-4644-487a-a063-55f696fa80d8,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-11-08 10:22:42.162162160,,2590,6a22e440-f128-41b6-9a76-de08b50e1e16,,,,,,jobs,my main job,income,Example shared account,True
+2021-11-09 15:34:03.243243240,,-250,5e1e811d-dc4e-41dc-9ba6-d0fa61699d1e,,,,,,other,games,wants,Example shared account,False
+2021-11-10 20:45:24.324324320,,-633,343933b3-e2ec-4d25-a98b-57af733eef47,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-11-12 01:56:45.405405400,,-874,de74e806-2985-4e52-8d36-358fde558b7d,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-11-13 07:08:06.486486488,,1985,0fefe483-4fce-4060-b789-8ef144c2e8f2,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-11-14 12:19:27.567567568,,460,7baf357b-e499-4afb-ba6c-94ca10ddcbfa,,,,,,jobs,my main job,income,Example shared account,True
+2021-11-15 17:30:48.648648648,,-698,bb6de567-2b05-48f9-8036-26607bcbf31a,,,,,,food,groceries,needs,Example shared account,False
+2021-11-16 22:42:09.729729728,,-283,8e24f240-f0d6-485d-8130-fad3b53516bb,,,,,,transport,gas,needs,Example shared account,False
+2021-11-18 03:53:30.810810808,,-517,f5eb380c-ba2f-4ee1-979e-b9146b94681b,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-11-19 09:04:51.891891888,,-684,2a136351-bed7-461e-9b70-e821be87acc9,,,,,,food,groceries,needs,Example shared account,False
+2021-11-20 14:16:12.972972968,,-785,d7364f4f-57cc-4025-8810-6b88a2554412,,,,,,transport,public_transport,needs,Example shared account,False
+2021-11-21 19:27:34.054054056,,-245,a305e4a4-137b-460e-b6e0-cedf711d7cfc,,,,,,food,food_other,wants,Example shared account,False
+2021-11-23 00:38:55.135135136,,500,10140a61-3fa7-43df-9c17-2b3bb0a507d5,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-11-24 05:50:16.216216216,,-605,f700f0b6-70a9-4313-8b36-df181d801886,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2021-11-25 11:01:37.297297296,,-342,5b082589-2846-48cf-a6f9-7c62db65815b,,,,,,transport,public_transport,needs,Example shared account,False
+2021-11-26 16:12:58.378378376,,-740,f3bc3195-40e3-402d-b2ff-ddddd3927398,,,,,,other,other_other,wants,Example shared account,False
+2021-11-27 21:24:19.459459456,,-250,f3b66b56-f54d-483a-961c-e8bb27d8ed7b,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-11-29 02:35:40.540540536,,-564,305c6c56-5668-4588-b5e3-1f2f4d8d3cc2,,,,,,transport,transport_other,wants,Example shared account,False
+2021-11-30 07:47:01.621621616,,-198,7a093a0a-c763-44e5-b2ca-820ae7aefcf0,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2021-12-01 12:58:22.702702704,,-657,e77bc3d5-3727-43a8-908c-2b253398fdea,,,,,,subscriptions,rent,needs,Example shared account,False
+2021-12-02 18:09:43.783783784,,-533,36135292-b952-4964-ab5b-e415b12e28cd,,,,,,investments,investments_other,investments,Example shared account,False
+2021-12-03 23:21:04.864864864,,3895,dbf95420-f0aa-4537-9dc9-a481c8b80eaa,,,,,,jobs,my main job,income,Example shared account,True
+2021-12-05 04:32:25.945945944,,2195,e3dfa97d-be18-473c-9a2b-70b978a81957,,,,,,jobs,my main job,income,Example shared account,True
+2021-12-06 09:43:47.027027024,,-250,5392d146-1cb2-4bc1-b594-4b5f1f1e2221,,,,,,investments,crypto,investments,Example shared account,False
+2021-12-07 14:55:08.108108104,,2380,c7079121-5b60-4edb-8db9-afb6510ff941,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-12-08 20:06:29.189189184,,3075,818153fc-76de-4822-87b5-384aaa815c40,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-12-10 01:17:50.270270272,,-962,ef08067a-adac-413c-a459-a6eb4c86bf1f,,,,,,food,restaurants,wants,Example shared account,False
+2021-12-11 06:29:11.351351352,,-846,8dd72b77-c9c5-4ae2-8736-c0f728fd7264,,,,,,transport,transport_other,wants,Example shared account,False
+2021-12-12 11:40:32.432432432,,-481,8e6868e2-35e2-4369-acc3-c7a7f65d03d6,,,,,,transport,public_transport,needs,Example shared account,False
+2021-12-13 16:51:53.513513512,,-13,0a598980-ea7c-42ed-97e7-8b81280fc1e1,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-12-14 22:03:14.594594592,,4200,ddc65bf8-f719-47b6-91c8-4422e96ce019,,,,,,jobs,my main job,income,Example shared account,True
+2021-12-16 03:14:35.675675672,,-263,65e7b855-69a0-49b6-a86a-3b26821e8ab6,,,,,,other,games,wants,Example shared account,False
+2021-12-17 08:25:56.756756752,,-946,7e082731-6e49-401c-915f-c50c48829c4d,,,,,,investments,stocks,investments,Example shared account,False
+2021-12-18 13:37:17.837837840,,-951,59d5198a-cf3b-4360-9050-551b9f351f20,,,,,,other,games,wants,Example shared account,False
+2021-12-19 18:48:38.918918920,,3675,b8989c47-0344-4fb9-8b7d-2f09ec9ba476,,,,,,jobs,my main job,income,Example shared account,True
+2021-12-21 00:00:00.000000000,,-919,822ecc9e-f0a8-49db-80ca-ecc1913c4e25,,,,,,food,groceries,needs,Example shared account,False
+2021-12-22 05:11:21.081081080,,-525,612cbd47-a653-4958-92dc-80706858dec6,,,,,,transport,gas,needs,Example shared account,False
+2021-12-23 10:22:42.162162160,,-609,91381c61-c770-4c01-b5b3-8591ff85693f,,,,,,subscriptions,streaming,wants,Example shared account,False
+2021-12-24 15:34:03.243243240,,2805,8bdcd119-9eb7-49df-943b-e01fd3d6b9d6,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-12-25 20:45:24.324324320,,-134,3c8afcf0-a676-4515-9411-eef855b65a32,,,,,,transport,gas,needs,Example shared account,False
+2021-12-27 01:56:45.405405400,,-499,f54db16d-88d3-40df-a535-fb8756f39edb,,,,,,food,food_other,wants,Example shared account,False
+2021-12-28 07:08:06.486486488,,-675,1cae93c4-f3a9-43b3-8f87-96b5b9a80332,,,,,,transport,transport_other,wants,Example shared account,False
+2021-12-29 12:19:27.567567568,,-677,fbd47320-cc94-4e0c-893a-1d246b4aacbd,,,,,,transport,gas,needs,Example shared account,False
+2021-12-30 17:30:48.648648648,,4615,3d0106dd-d361-4263-b71a-3abe22609b6a,,,,,,jobs,jobs_other,income,Example shared account,True
+2021-12-31 22:42:09.729729728,,-685,762f1f68-4be0-408d-a455-6de552fe4d21,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-01-02 03:53:30.810810808,,-105,5d4ec277-251b-45d1-9d1d-34305f9193fc,,,,,,investments,stocks,investments,Example shared account,False
+2022-01-03 09:04:51.891891888,,-860,df620f59-d6bf-4b8e-8444-b583e15cc816,,,,,,investments,investments_other,investments,Example shared account,False
+2022-01-04 14:16:12.972972968,,2420,8398868e-76f6-478a-9d37-259842b51539,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-01-05 19:27:34.054054056,,-360,ee79255a-d809-4452-bb06-482ee3651ac8,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-01-07 00:38:55.135135136,,-742,8aa77f8b-aa6c-4115-bd75-0976f1ee8290,,,,,,investments,stocks,investments,Example shared account,False
+2022-01-08 05:50:16.216216216,,-951,1ac814c7-a290-40b7-bbb0-9d0b592f7ecd,,,,,,food,restaurants,wants,Example shared account,False
+2022-01-09 11:01:37.297297296,,-711,d95ec2eb-d9c5-429d-9135-d4786eddad7a,,,,,,other,games,wants,Example shared account,False
+2022-01-10 16:12:58.378378376,,700,bd520c4e-5f98-40ec-8f85-0aec79a78ad3,,,,,,jobs,my main job,income,Example shared account,True
+2022-01-11 21:24:19.459459456,,-887,1a282a6b-02b7-45a5-936a-b903b4f9570c,,,,,,investments,crypto,investments,Example shared account,False
+2022-01-13 02:35:40.540540536,,-342,cbb7cb2c-1ca3-4d39-ae68-24d44d7882ff,,,,,,food,groceries,needs,Example shared account,False
+2022-01-14 07:47:01.621621616,,-586,9eb23ef1-c23a-4be3-a850-b6eebbfbeab0,,,,,,transport,transport_other,wants,Example shared account,False
+2022-01-15 12:58:22.702702704,,4225,5ed521d0-d535-48f0-9f74-641e261eef8d,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-01-16 18:09:43.783783784,,4905,0892ae20-f263-4297-8ee1-901abaa9b602,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-01-17 23:21:04.864864864,,1845,e8357974-1f05-4fd5-9fd0-853673aa8dfb,,,,,,jobs,my main job,income,Example shared account,True
+2022-01-19 04:32:25.945945944,,-326,5003bf13-8962-42e6-9e10-122c5ad9040f,,,,,,other,other_other,wants,Example shared account,False
+2022-01-20 09:43:47.027027024,,-516,a285eb66-a77a-438e-afc0-551eb326e78f,,,,,,transport,gas,needs,Example shared account,False
+2022-01-21 14:55:08.108108104,,-413,bb2b3872-0249-4056-834d-e04d06ce9937,,,,,,transport,gas,needs,Example shared account,False
+2022-01-22 20:06:29.189189184,,3930,3b7ee795-7f72-453c-ac55-6176f78f4646,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-01-24 01:17:50.270270272,,-887,ec63d891-b98c-4f1f-af59-a10e306443ba,,,,,,food,groceries,needs,Example shared account,False
+2022-01-25 06:29:11.351351352,,-402,51d4fd0a-531b-4a21-abcc-64a7e08065f9,,,,,,transport,gas,needs,Example shared account,False
+2022-01-26 11:40:32.432432432,,-326,791c2e20-4581-46e6-9a5e-1776d1ff52b5,,,,,,food,groceries,needs,Example shared account,False
+2022-01-27 16:51:53.513513512,,-700,6bed9066-6d00-4ab6-84bc-608e7965353d,,,,,,investments,crypto,investments,Example shared account,False
+2022-01-28 22:03:14.594594592,,850,331e5bc1-75a6-4e5b-ae7f-5b756604cedd,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-01-30 03:14:35.675675672,,-318,60ec918e-6351-481d-b68d-54f34e19f74c,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-01-31 08:25:56.756756752,,-551,33456b7d-2066-4fc7-ba97-b690ef76f337,,,,,,other,other_other,wants,Example shared account,False
+2022-02-01 13:37:17.837837832,,-390,83f9628e-7056-4cf8-b986-5f67c0f9628c,,,,,,transport,public_transport,needs,Example shared account,False
+2022-02-02 18:48:38.918918920,,-330,a019e720-dc74-4d56-a346-c2ce3d6f307f,,,,,,other,games,wants,Example shared account,False
+2022-02-04 00:00:00.000000000,,-722,4478050b-c8c6-49b2-b79b-58e2024f6c80,,,,,,investments,crypto,investments,Example shared account,False
+2022-02-05 05:11:21.081081080,,-174,75594a5a-19af-4fad-94cb-39811263767b,,,,,,other,games,wants,Example shared account,False
+2022-02-06 10:22:42.162162160,,-758,7e4d1562-56c1-45f2-9b78-a2851982d17e,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-02-07 15:34:03.243243240,,-245,8a70ed27-4133-4ceb-aadf-2e625c6bc405,,,,,,other,games,wants,Example shared account,False
+2022-02-08 20:45:24.324324320,,-3,aaba2d6a-ffa6-4d93-9ac6-e68e70e37e92,,,,,,other,games,wants,Example shared account,False
+2022-02-10 01:56:45.405405400,,-142,95ae3f57-eb9f-4cef-ae0e-27d801d2f18a,,,,,,investments,investments_other,investments,Example shared account,False
+2022-02-11 07:08:06.486486488,,30,4ff7a2e6-a53d-4367-ae0a-59cc0cf619ef,,,,,,jobs,my main job,income,Example shared account,True
+2022-02-12 12:19:27.567567568,,930,179d5a3a-3ce8-4e04-aed3-a0c451090feb,,,,,,jobs,my main job,income,Example shared account,True
+2022-02-13 17:30:48.648648648,,-625,b428805b-6932-4f52-8e65-63c004dba29f,,,,,,other,games,wants,Example shared account,False
+2022-02-14 22:42:09.729729728,,-373,e005bd79-e216-4d35-9bfd-f2da81b6b04b,,,,,,other,games,wants,Example shared account,False
+2022-02-16 03:53:30.810810808,,-366,b80c86bd-39cb-44b4-a967-585936da7d5d,,,,,,food,food_other,wants,Example shared account,False
+2022-02-17 09:04:51.891891888,,-626,8c82e7f4-a4fe-4bb6-987f-e56403394840,,,,,,food,restaurants,wants,Example shared account,False
+2022-02-18 14:16:12.972972968,,-601,a75e0f6c-452c-424c-9d5e-618cbae871e7,,,,,,investments,investments_other,investments,Example shared account,False
+2022-02-19 19:27:34.054054056,,-764,e19a4009-dc13-4aa1-bfcb-78b2854777db,,,,,,food,restaurants,wants,Example shared account,False
+2022-02-21 00:38:55.135135136,,-348,c514418b-8883-46b8-855a-55cf7a097697,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-02-22 05:50:16.216216216,,-105,daafe9c9-76de-42b5-9d26-c2b9d412ec8b,,,,,,other,games,wants,Example shared account,False
+2022-02-23 11:01:37.297297296,,735,e2a4f943-7332-4b89-84bb-800be0be8a49,,,,,,jobs,my main job,income,Example shared account,True
+2022-02-24 16:12:58.378378376,,-858,cac7ac79-0d30-443a-ad6f-e8f3f6012eef,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-02-25 21:24:19.459459456,,3085,0bc5d0ee-3a08-4f4e-a4d5-4257fdad5d18,,,,,,jobs,my main job,income,Example shared account,True
+2022-02-27 02:35:40.540540536,,-318,3a9ef94d-2da9-4573-93c7-06778400e7d9,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-02-28 07:47:01.621621616,,-652,2ccd2277-35e4-4b38-ac6b-eea3b0eb4c72,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-03-01 12:58:22.702702704,,-768,799cbd6a-869d-4e5d-a150-9735414d1783,,,,,,food,restaurants,wants,Example shared account,False
+2022-03-02 18:09:43.783783784,,-38,f28aedbb-c66e-4bc2-b958-7852116ccf19,,,,,,food,food_other,wants,Example shared account,False
+2022-03-03 23:21:04.864864864,,-635,b74f78a9-3cf1-4898-9658-50e7e7dc63bd,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-03-05 04:32:25.945945944,,-606,1d8b24f1-70dd-4084-b32b-b94bcd28638e,,,,,,investments,stocks,investments,Example shared account,False
+2022-03-06 09:43:47.027027024,,230,bbef5969-f758-4689-bebb-1cfe177a5ac5,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-03-07 14:55:08.108108104,,-829,510df740-6169-46c2-bf22-13baf5b85864,,,,,,investments,investments_other,investments,Example shared account,False
+2022-03-08 20:06:29.189189184,,-324,de29b331-9808-4dfa-babf-3515832d2058,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-03-10 01:17:50.270270272,,-383,a9ced034-a1d2-4dc3-bd0c-1607b5930c28,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-03-11 06:29:11.351351352,,1010,6eadad5d-242c-4a4d-9cdf-b92b68b873de,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-03-12 11:40:32.432432432,,-893,a5d3c1da-6e75-4b96-a0ca-301814138392,,,,,,investments,investments_other,investments,Example shared account,False
+2022-03-13 16:51:53.513513512,,-481,53b7bf7b-854e-48cc-af34-9fc27d54a3b9,,,,,,other,other_other,wants,Example shared account,False
+2022-03-14 22:03:14.594594592,,-136,5aef3c62-1f3f-4e36-bfc2-4aea730b68f8,,,,,,investments,crypto,investments,Example shared account,False
+2022-03-16 03:14:35.675675672,,-501,e6636c4d-dd2f-40d6-9336-7856ebbaa9bc,,,,,,other,games,wants,Example shared account,False
+2022-03-17 08:25:56.756756752,,-454,4c8dba56-aa02-4255-bfbd-a8dbb4ef62c6,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-03-18 13:37:17.837837832,,3465,7042e507-876f-4b01-87b6-4039a40a9581,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-03-19 18:48:38.918918920,,-928,031b7cc7-8512-4d6d-b9c5-756835989942,,,,,,other,games,wants,Example shared account,False
+2022-03-21 00:00:00.000000000,,-352,19307229-6f8c-47bb-9cee-dffb820c5f2c,,,,,,other,games,wants,Example shared account,False
+2022-03-22 05:11:21.081081080,,-104,0af4fe28-fd2a-4820-8bb7-81df95214009,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-03-23 10:22:42.162162160,,4060,ab8972e7-513b-430e-811f-d37cf4c5280f,,,,,,jobs,my main job,income,Example shared account,True
+2022-03-24 15:34:03.243243240,,3160,6a306424-422c-42ff-bb86-a3b1181c6e33,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-03-25 20:45:24.324324320,,3855,223ce3bc-05e8-4bb2-97c9-a7e2ec82d02a,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-03-27 01:56:45.405405400,,-8,4c6bd250-934b-4590-b9b9-6c51674f7797,,,,,,transport,public_transport,needs,Example shared account,False
+2022-03-28 07:08:06.486486488,,-751,d0adb482-84eb-4e16-a395-575616d66d9d,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-03-29 12:19:27.567567568,,3695,ca8b2ae8-e575-40bb-99bb-8d3a6b115fd2,,,,,,jobs,my main job,income,Example shared account,True
+2022-03-30 17:30:48.648648648,,-237,4bbf67fb-ac15-4c07-a3e0-70dc6eb0f118,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-03-31 22:42:09.729729728,,-821,26c7d78f-cd32-4c82-bd4d-c01b9c118270,,,,,,other,games,wants,Example shared account,False
+2022-04-02 03:53:30.810810808,,-773,feec1d8f-08de-43df-af88-9cc6849827d8,,,,,,investments,stocks,investments,Example shared account,False
+2022-04-03 09:04:51.891891888,,-293,7536cb71-627c-4cb6-9528-c49753522451,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-04-04 14:16:12.972972968,,-444,70b44261-e365-4a4b-8ed3-0ba5cc31890c,,,,,,other,other_other,wants,Example shared account,False
+2022-04-05 19:27:34.054054056,,-312,bd9d592f-2b0d-4c74-adba-dbbbb36e3469,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-04-07 00:38:55.135135136,,485,0b78c667-d1e1-4b47-abac-8fe072a177d0,,,,,,jobs,my main job,income,Example shared account,True
+2022-04-08 05:50:16.216216216,,-724,0ac2998d-0470-4064-b7d0-fad1b346b104,,,,,,transport,gas,needs,Example shared account,False
+2022-04-09 11:01:37.297297296,,-109,7e0ff337-9046-4204-ad6d-28c28d5b5d80,,,,,,food,restaurants,wants,Example shared account,False
+2022-04-10 16:12:58.378378376,,-363,d76e1434-9f6e-4fc8-aa08-8c28694f465b,,,,,,other,other_other,wants,Example shared account,False
+2022-04-11 21:24:19.459459456,,-309,17de2fbd-9b3e-49dc-9eb7-6c013d05e93f,,,,,,other,other_other,wants,Example shared account,False
+2022-04-13 02:35:40.540540536,,-673,c3c0ba30-95c5-4243-915e-0a236a535207,,,,,,transport,gas,needs,Example shared account,False
+2022-04-14 07:47:01.621621616,,-827,7b038e23-d78f-4765-9e75-4085618419f9,,,,,,investments,stocks,investments,Example shared account,False
+2022-04-15 12:58:22.702702704,,1035,5050b414-3db3-44d9-ba3c-cbe63018d9b6,,,,,,jobs,my main job,income,Example shared account,True
+2022-04-16 18:09:43.783783776,,-575,23c060c8-3d60-4a39-b1e1-d759514223ac,,,,,,transport,public_transport,needs,Example shared account,False
+2022-04-17 23:21:04.864864864,,-698,5151c28e-ed4d-4797-ae5f-3629e7f7517f,,,,,,food,food_other,wants,Example shared account,False
+2022-04-19 04:32:25.945945936,,915,6807635f-32e0-4a6b-8258-446caeb04f2a,,,,,,jobs,my main job,income,Example shared account,True
+2022-04-20 09:43:47.027027024,,-562,8ea4be6c-4edf-483d-9ac3-f52971f13373,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-04-21 14:55:08.108108112,,-74,599430f2-845c-4a43-be1e-9d6cfdfcb952,,,,,,food,food_other,wants,Example shared account,False
+2022-04-22 20:06:29.189189184,,-125,1b2352c3-6974-4f3e-83aa-f2ac54bbc7f2,,,,,,investments,stocks,investments,Example shared account,False
+2022-04-24 01:17:50.270270272,,-202,926d142a-e3e5-41c6-99f6-ca5cb8216ebf,,,,,,transport,transport_other,wants,Example shared account,False
+2022-04-25 06:29:11.351351344,,-312,4347fabf-676f-4fe4-8bb9-3a564317f440,,,,,,other,games,wants,Example shared account,False
+2022-04-26 11:40:32.432432432,,-537,be7eaff1-c064-4b06-8580-cc08a1ec8bc3,,,,,,investments,crypto,investments,Example shared account,False
+2022-04-27 16:51:53.513513504,,-155,8da109cf-01ca-4b89-81e9-2cc1df81463c,,,,,,investments,investments_other,investments,Example shared account,False
+2022-04-28 22:03:14.594594592,,-59,ca0799f5-b1e1-4d51-b43f-76ae75b7bfd7,,,,,,investments,investments_other,investments,Example shared account,False
+2022-04-30 03:14:35.675675680,,-989,1267a63c-9cc1-4ae5-8b80-89a273e90be5,,,,,,transport,public_transport,needs,Example shared account,False
+2022-05-01 08:25:56.756756752,,-815,01cc9d55-3962-4ff8-bc39-3f06dc941327,,,,,,investments,crypto,investments,Example shared account,False
+2022-05-02 13:37:17.837837840,,-359,f898561b-1f7c-439c-8df0-7d41a7019d2c,,,,,,food,restaurants,wants,Example shared account,False
+2022-05-03 18:48:38.918918912,,-754,9b91f61a-b444-45fd-a542-2f7bbc21f6bc,,,,,,other,games,wants,Example shared account,False
+2022-05-05 00:00:00.000000000,,-852,8a4d79e0-8dfe-4d24-999c-650d0aa5a73f,,,,,,other,games,wants,Example shared account,False
+2022-05-06 05:11:21.081081072,,-330,a05658c2-e49b-4308-8452-7fd9acb95d06,,,,,,transport,public_transport,needs,Example shared account,False
+2022-05-07 10:22:42.162162160,,4380,6e154443-c658-4d90-bb7d-610316e89d0b,,,,,,jobs,my main job,income,Example shared account,True
+2022-05-08 15:34:03.243243248,,-71,8d3f6eaf-9052-4eb5-b8e7-837059ac1f95,,,,,,investments,stocks,investments,Example shared account,False
+2022-05-09 20:45:24.324324320,,-291,147f2eb6-8a44-4725-a367-10ae3a44c0f8,,,,,,transport,public_transport,needs,Example shared account,False
+2022-05-11 01:56:45.405405408,,-900,4ccfeccd-7102-4722-86c4-f9705b2ada85,,,,,,subscriptions,clouds,wants,Example shared account,False
+2022-05-12 07:08:06.486486480,,-543,bce68904-0efa-47de-b042-b323d6b9dad1,,,,,,other,games,wants,Example shared account,False
+2022-05-13 12:19:27.567567568,,-770,dfc65013-6995-4691-b5d3-8b526a8d915c,,,,,,food,groceries,needs,Example shared account,False
+2022-05-14 17:30:48.648648640,,-113,769b6885-3a60-41c8-b230-d532889628f6,,,,,,food,food_other,wants,Example shared account,False
+2022-05-15 22:42:09.729729728,,-353,f4dca54e-611c-4dfc-bb0b-245f6c536a9f,,,,,,subscriptions,clouds,wants,Example shared account,False
+2022-05-17 03:53:30.810810816,,-471,ee10b1e2-ba4a-4e0b-937d-36393db74d72,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-05-18 09:04:51.891891888,,-737,04a2bd69-e427-45eb-af1c-23bea56b8be1,,,,,,investments,investments_other,investments,Example shared account,False
+2022-05-19 14:16:12.972972976,,-745,8eb21e5e-495f-456a-bcf4-31fa50c59a6f,,,,,,investments,crypto,investments,Example shared account,False
+2022-05-20 19:27:34.054054048,,755,743c4929-097e-43d7-88b8-76e28ebd9f60,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-05-22 00:38:55.135135136,,-94,32d4c300-7f1e-4c1e-b18b-d92c265a09bb,,,,,,food,groceries,needs,Example shared account,False
+2022-05-23 05:50:16.216216208,,1920,f27c9bb2-509b-4d18-9cde-315eeb8c08dd,,,,,,jobs,my main job,income,Example shared account,True
+2022-05-24 11:01:37.297297296,,2300,30ff50d3-8c64-408b-9d39-89d72826f431,,,,,,jobs,my main job,income,Example shared account,True
+2022-05-25 16:12:58.378378384,,-302,cfe99cbc-d1e1-4835-8746-03275cc29696,,,,,,other,games,wants,Example shared account,False
+2022-05-26 21:24:19.459459456,,-747,fb8ef77f-6baf-4621-8a6f-b18c1b9b04e3,,,,,,other,other_other,wants,Example shared account,False
+2022-05-28 02:35:40.540540544,,2075,5066ed45-ab61-483c-bee5-139d12bdb5ba,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-05-29 07:47:01.621621616,,400,2f8769cc-49d6-4855-8fa1-6fd02e8d9bee,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-05-30 12:58:22.702702704,,-593,737ecfa7-885b-4ed7-a168-45d7d1b917f4,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-05-31 18:09:43.783783776,,-6,3e037990-9eb9-46f2-91df-cb06d8037dd9,,,,,,other,games,wants,Example shared account,False
+2022-06-01 23:21:04.864864864,,-655,2a2cac0e-6893-4143-a56a-d8c21f7eab03,,,,,,transport,gas,needs,Example shared account,False
+2022-06-03 04:32:25.945945936,,2130,9824e6cc-930e-4455-8a08-804767844380,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-06-04 09:43:47.027027024,,-163,81a9691e-a695-49e5-8a4a-33c6b2f1392a,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-06-05 14:55:08.108108112,,-638,71d84b83-6c69-4497-a748-94dc9321d73e,,,,,,other,games,wants,Example shared account,False
+2022-06-06 20:06:29.189189184,,-463,89ee0a45-6e6e-4f13-a19a-124087765373,,,,,,other,other_other,wants,Example shared account,False
+2022-06-08 01:17:50.270270272,,-93,f06a21fc-b9cb-400d-82fb-68089e8a278b,,,,,,transport,transport_other,wants,Example shared account,False
+2022-06-09 06:29:11.351351344,,-620,cd5f9439-9dd6-4dd8-9d8b-bc0cfbd77cf2,,,,,,transport,gas,needs,Example shared account,False
+2022-06-10 11:40:32.432432432,,4230,2f01de11-7d81-46bd-b172-4e89424daa1a,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-06-11 16:51:53.513513504,,540,c084b76c-c596-467f-8c3a-625371d4cc30,,,,,,jobs,my main job,income,Example shared account,True
+2022-06-12 22:03:14.594594592,,-664,ce6cc489-e09b-47ef-9349-a7a83466d97f,,,,,,investments,stocks,investments,Example shared account,False
+2022-06-14 03:14:35.675675680,,-864,1b25f0ff-bc11-4e16-a2e0-747bf723ad68,,,,,,food,food_other,wants,Example shared account,False
+2022-06-15 08:25:56.756756752,,3735,123734fe-9e6c-449e-98d8-6b8d0b8556b9,,,,,,jobs,my main job,income,Example shared account,True
+2022-06-16 13:37:17.837837840,,-374,42eb258d-d2e1-443d-8ce3-a14736242b09,,,,,,investments,investments_other,investments,Example shared account,False
+2022-06-17 18:48:38.918918912,,-659,38f9879a-6081-44ca-969a-925b3f31b0f0,,,,,,subscriptions,clouds,wants,Example shared account,False
+2022-06-19 00:00:00.000000000,,-750,5079ca29-fdf1-4022-802e-7ba8586148a3,,,,,,other,other_other,wants,Example shared account,False
+2022-06-20 05:11:21.081081072,,-444,64ec2cc9-15e2-439e-bc3b-997e4fc656f7,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-06-21 10:22:42.162162160,,-464,b9846475-71d1-4985-8000-e7b2e48ad4bd,,,,,,transport,gas,needs,Example shared account,False
+2022-06-22 15:34:03.243243248,,-337,8cbfcfa8-1fc4-4de4-9375-b8e082c432da,,,,,,other,other_other,wants,Example shared account,False
+2022-06-23 20:45:24.324324320,,-826,bb861b81-a719-450d-bee6-a8a692174230,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-06-25 01:56:45.405405408,,-976,5ff80535-f84b-431a-959e-53106510fcb6,,,,,,transport,public_transport,needs,Example shared account,False
+2022-06-26 07:08:06.486486480,,-901,aecdd672-becd-478a-a7ab-06df8c4c6042,,,,,,other,games,wants,Example shared account,False
+2022-06-27 12:19:27.567567568,,-469,c1183817-3a18-4cd3-9d24-d6b80166c8fd,,,,,,food,groceries,needs,Example shared account,False
+2022-06-28 17:30:48.648648640,,-985,e1e980e3-5c52-49bc-bcf8-fcb4b85762f3,,,,,,transport,public_transport,needs,Example shared account,False
+2022-06-29 22:42:09.729729728,,-833,ee517f03-00e8-4b3d-842f-0d90bd8abeed,,,,,,food,groceries,needs,Example shared account,False
+2022-07-01 03:53:30.810810816,,2780,fd02e184-1e2d-49b3-8244-0f47e2974041,,,,,,jobs,my main job,income,Example shared account,True
+2022-07-02 09:04:51.891891888,,4695,ef798a6d-b946-4709-862c-3dc8a65bb37c,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-07-03 14:16:12.972972976,,-216,1be20a22-b78b-47ba-9cc2-1b9c53650b5a,,,,,,food,food_other,wants,Example shared account,False
+2022-07-04 19:27:34.054054048,,2725,5ac475c5-1c68-44b8-a954-ecf694b7a4f5,,,,,,jobs,my main job,income,Example shared account,True
+2022-07-06 00:38:55.135135136,,-579,1dda83c9-456e-4758-9d65-8eb5ce14e7fb,,,,,,investments,investments_other,investments,Example shared account,False
+2022-07-07 05:50:16.216216208,,-501,d6a17e69-e8bc-4a32-bb77-03c97abbcba9,,,,,,investments,investments_other,investments,Example shared account,False
+2022-07-08 11:01:37.297297296,,-152,39da7efb-3b63-4b0e-93d0-eaa9beffb943,,,,,,transport,transport_other,wants,Example shared account,False
+2022-07-09 16:12:58.378378384,,-165,dccee67f-4dc7-4431-8498-2dabfd0b3b52,,,,,,other,games,wants,Example shared account,False
+2022-07-10 21:24:19.459459456,,-739,9a2f3f5a-cec8-470e-b627-09e6e5f8a385,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-07-12 02:35:40.540540544,,-795,325f8ebb-18b7-4ff7-9dd2-b58107292f90,,,,,,food,restaurants,wants,Example shared account,False
+2022-07-13 07:47:01.621621616,,260,c91532d0-841e-452f-a6ff-5a40cf8c2c0c,,,,,,jobs,my main job,income,Example shared account,True
+2022-07-14 12:58:22.702702704,,-726,85a27be5-c84b-40e9-bc3a-db18f0699469,,,,,,food,food_other,wants,Example shared account,False
+2022-07-15 18:09:43.783783776,,-128,d4cdaa5c-ebca-4e72-a8cc-522048858619,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-07-16 23:21:04.864864864,,-982,b5a83806-0a44-426d-a9c4-252e963ea22e,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-07-18 04:32:25.945945936,,-784,02a45798-a46d-458c-b7b6-34c6636dcbae,,,,,,other,other_other,wants,Example shared account,False
+2022-07-19 09:43:47.027027024,,-199,002500d3-b723-40a3-8095-078d3a8b2b68,,,,,,other,games,wants,Example shared account,False
+2022-07-20 14:55:08.108108112,,2995,973c0d4d-0776-439b-8c0c-4db645ab89a6,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-07-21 20:06:29.189189184,,505,de253ed9-2919-4921-9862-480166634dcd,,,,,,jobs,my main job,income,Example shared account,True
+2022-07-23 01:17:50.270270272,,1835,b9933269-daf2-473a-a20a-a3eb0232fd2c,,,,,,jobs,my main job,income,Example shared account,True
+2022-07-24 06:29:11.351351344,,-120,8db25e50-03c3-4fbf-8087-51acb38ea6ee,,,,,,transport,transport_other,wants,Example shared account,False
+2022-07-25 11:40:32.432432432,,-216,b0a10c01-027c-4f25-a599-a7a79f11c41e,,,,,,transport,transport_other,wants,Example shared account,False
+2022-07-26 16:51:53.513513504,,1180,ba12047a-3cdd-440b-a16f-498cc77f49d0,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-07-27 22:03:14.594594592,,-11,1164dae2-07dd-49ec-aeb1-6fa4101aabbf,,,,,,transport,gas,needs,Example shared account,False
+2022-07-29 03:14:35.675675680,,-766,4e8c16e3-963b-440d-bf15-589d010a8a55,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-07-30 08:25:56.756756752,,-931,45120399-73cb-49d5-804d-0ed152c60060,,,,,,transport,gas,needs,Example shared account,False
+2022-07-31 13:37:17.837837840,,-863,d1cfa47b-77ab-4a4b-9246-9aa3a8754d07,,,,,,transport,public_transport,needs,Example shared account,False
+2022-08-01 18:48:38.918918912,,-791,b8ab1d29-6ac4-44f9-a1d3-7fbe3e792c61,,,,,,subscriptions,clouds,wants,Example shared account,False
+2022-08-03 00:00:00.000000000,,-14,1b52d07e-1ea7-4576-8afa-09b49e5642b4,,,,,,food,restaurants,wants,Example shared account,False
+2022-08-04 05:11:21.081081072,,-396,febb891e-65be-444f-adc1-292f30fcf15c,,,,,,food,restaurants,wants,Example shared account,False
+2022-08-05 10:22:42.162162160,,-223,8f25b9a2-9e0b-4156-87d4-6b635b6b0b97,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-08-06 15:34:03.243243248,,-942,3a57e58c-5b07-40d4-ae27-b3d0000914b2,,,,,,transport,transport_other,wants,Example shared account,False
+2022-08-07 20:45:24.324324320,,-159,ae2286f4-dc6f-4778-8e44-9fe7b4ddc100,,,,,,transport,gas,needs,Example shared account,False
+2022-08-09 01:56:45.405405408,,-595,7864224a-376e-4ea2-b192-87ec9cd7144d,,,,,,other,other_other,wants,Example shared account,False
+2022-08-10 07:08:06.486486480,,-666,2582d89d-17e3-409a-bc57-7d6b0f4efd7a,,,,,,investments,crypto,investments,Example shared account,False
+2022-08-11 12:19:27.567567568,,-603,fffcf5b4-4ece-420e-85fc-1231acb264d9,,,,,,food,restaurants,wants,Example shared account,False
+2022-08-12 17:30:48.648648640,,-199,7d1f07fd-fcff-46c0-baf3-5290ea9f7e4b,,,,,,food,food_other,wants,Example shared account,False
+2022-08-13 22:42:09.729729728,,-783,d4afd5c9-29ba-480c-a8f4-f7e57ada1900,,,,,,investments,investments_other,investments,Example shared account,False
+2022-08-15 03:53:30.810810816,,100,fe67de0b-dd7b-48a9-81bc-35e9fd7ae68e,,,,,,jobs,my main job,income,Example shared account,True
+2022-08-16 09:04:51.891891888,,-640,5d2283db-1379-4803-90e0-8b7e5359ca64,,,,,,food,restaurants,wants,Example shared account,False
+2022-08-17 14:16:12.972972976,,980,0242fdac-0231-4091-9ddb-587918439314,,,,,,jobs,my main job,income,Example shared account,True
+2022-08-18 19:27:34.054054048,,-991,bd68d8ee-ff9b-40c7-b925-44fb8c970008,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-08-20 00:38:55.135135136,,-934,d3feb6ed-d1f0-4b9c-84ce-e2ddb7b89ca7,,,,,,transport,transport_other,wants,Example shared account,False
+2022-08-21 05:50:16.216216208,,-287,3711cc75-0cbc-4e54-9c67-7a313338e927,,,,,,transport,transport_other,wants,Example shared account,False
+2022-08-22 11:01:37.297297296,,-312,b4eeefa7-cb98-44fa-8046-69dcf23a814d,,,,,,other,games,wants,Example shared account,False
+2022-08-23 16:12:58.378378384,,-430,61ba6522-ebb8-4bfa-b303-dc82afa5903f,,,,,,investments,crypto,investments,Example shared account,False
+2022-08-24 21:24:19.459459456,,-599,32d3af92-8bc8-4ec5-bbd3-fd71489d6835,,,,,,investments,investments_other,investments,Example shared account,False
+2022-08-26 02:35:40.540540544,,-661,c3dfc81d-4024-4f9a-b44a-3d8095ff0da6,,,,,,other,games,wants,Example shared account,False
+2022-08-27 07:47:01.621621616,,-497,c0b1696b-d366-43e7-81df-c186e52274ac,,,,,,food,groceries,needs,Example shared account,False
+2022-08-28 12:58:22.702702704,,-493,f588c5c1-c6d2-4fe3-af36-6af30ae08f57,,,,,,food,food_other,wants,Example shared account,False
+2022-08-29 18:09:43.783783776,,-212,c3f3c5a7-f2f7-4683-af88-fcc04e7b114e,,,,,,transport,public_transport,needs,Example shared account,False
+2022-08-30 23:21:04.864864864,,-429,e4a18a68-be05-4b4b-a538-da9749d463ab,,,,,,other,other_other,wants,Example shared account,False
+2022-09-01 04:32:25.945945936,,-549,0fc06242-8ef1-4ce2-a372-c2e11600927c,,,,,,other,other_other,wants,Example shared account,False
+2022-09-02 09:43:47.027027024,,70,0af3c33f-d2d0-4114-a887-ef3ca1b2a4db,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-09-03 14:55:08.108108112,,-476,5683737d-db84-4213-bd02-a2983bab1fa2,,,,,,transport,public_transport,needs,Example shared account,False
+2022-09-04 20:06:29.189189184,,400,df1499cb-a2f1-4664-be05-78f1fab959ef,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-09-06 01:17:50.270270272,,-978,73c4742b-32c0-4d17-ab43-db53a1e07eeb,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-09-07 06:29:11.351351344,,-846,ee368094-924c-453a-b103-d3653d42d419,,,,,,food,restaurants,wants,Example shared account,False
+2022-09-08 11:40:32.432432432,,-279,9b80da87-0253-410c-8c85-e48f65d5a98d,,,,,,investments,crypto,investments,Example shared account,False
+2022-09-09 16:51:53.513513504,,-246,6a74c422-2f89-4b57-95c2-3baeefedca63,,,,,,investments,stocks,investments,Example shared account,False
+2022-09-10 22:03:14.594594592,,-688,823bb1e8-8cbb-4997-af28-ae5d87e7b666,,,,,,other,other_other,wants,Example shared account,False
+2022-09-12 03:14:35.675675680,,-796,a057f5fd-7643-4b45-868b-a553df840c96,,,,,,transport,gas,needs,Example shared account,False
+2022-09-13 08:25:56.756756752,,-400,355aead5-8dfc-4dea-a4a1-b927682b9e09,,,,,,investments,crypto,investments,Example shared account,False
+2022-09-14 13:37:17.837837840,,-424,04d85c45-aad5-42cd-bf09-e12c718e4aff,,,,,,food,groceries,needs,Example shared account,False
+2022-09-15 18:48:38.918918912,,-378,46e69d63-a0f6-406a-85e6-4d732e55f377,,,,,,food,food_other,wants,Example shared account,False
+2022-09-17 00:00:00.000000000,,-723,bcd01f25-b59b-4e69-8efe-a4b7180524aa,,,,,,food,groceries,needs,Example shared account,False
+2022-09-18 05:11:21.081081072,,-569,2ecf5ccd-0ed2-4ec5-83ea-2629c78e6339,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-09-19 10:22:42.162162160,,-240,8e191a78-21b9-47c3-b7c8-fd09332e7d43,,,,,,transport,transport_other,wants,Example shared account,False
+2022-09-20 15:34:03.243243248,,-658,a9e2b7ce-6375-49ce-b06c-012ff668b93e,,,,,,investments,crypto,investments,Example shared account,False
+2022-09-21 20:45:24.324324320,,640,30424ec8-1bae-4ea1-855e-f65c4720148f,,,,,,jobs,my main job,income,Example shared account,True
+2022-09-23 01:56:45.405405408,,-589,457a3714-4f7c-4138-9325-3b1aa3e65265,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-09-24 07:08:06.486486480,,-510,fd4a1ba9-450b-49eb-8aa3-a6f3db3d1d1f,,,,,,other,games,wants,Example shared account,False
+2022-09-25 12:19:27.567567568,,-519,bf2f1ab1-f2d5-4cb4-b8c2-05cb74271e08,,,,,,transport,transport_other,wants,Example shared account,False
+2022-09-26 17:30:48.648648640,,-446,6e39e425-fd2a-4bfe-83d9-0e8366fef62f,,,,,,food,restaurants,wants,Example shared account,False
+2022-09-27 22:42:09.729729728,,-389,4dac7700-e29b-43f7-8695-bc890ad6405d,,,,,,investments,crypto,investments,Example shared account,False
+2022-09-29 03:53:30.810810816,,-611,b5aef151-2ef2-4dc3-bf6f-0b8ccbcc1d10,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-09-30 09:04:51.891891888,,-292,754abb23-5ab4-427e-aee6-28d8c75d8a6e,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-10-01 14:16:12.972972976,,-836,e809676d-8986-4e5a-98bd-6fbf51c0a117,,,,,,food,food_other,wants,Example shared account,False
+2022-10-02 19:27:34.054054048,,-671,5bcb94bc-8023-45a1-b981-a4111c3d1eed,,,,,,subscriptions,clouds,wants,Example shared account,False
+2022-10-04 00:38:55.135135136,,-390,bfa3246f-b939-4981-97b1-e8c2cae23a1e,,,,,,other,games,wants,Example shared account,False
+2022-10-05 05:50:16.216216208,,4370,4ac50dbd-7264-46ca-9e8b-26930900041c,,,,,,jobs,my main job,income,Example shared account,True
+2022-10-06 11:01:37.297297296,,-268,9ed6aff1-9439-4be7-92ca-87442ea44fbd,,,,,,subscriptions,streaming,wants,Example shared account,False
+2022-10-07 16:12:58.378378368,,-631,576859b4-e543-441a-8a12-9e55e7c5807b,,,,,,food,restaurants,wants,Example shared account,False
+2022-10-08 21:24:19.459459456,,-579,84d4607a-33c4-4e2c-96de-558b5f6891c9,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-10-10 02:35:40.540540544,,-794,45eacc25-9af3-4908-9e0c-d1041b3314bc,,,,,,investments,stocks,investments,Example shared account,False
+2022-10-11 07:47:01.621621616,,-181,a13dbd06-454a-4c6e-b8fa-92af40bbb954,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-10-12 12:58:22.702702704,,-538,2df5bb76-e577-4d6e-a57c-cf97a587cca6,,,,,,investments,stocks,investments,Example shared account,False
+2022-10-13 18:09:43.783783776,,3275,fd97b10d-aad1-48fa-94f1-133cdd6ec371,,,,,,jobs,my main job,income,Example shared account,True
+2022-10-14 23:21:04.864864864,,-708,61c0a5c7-71cf-46fc-9adc-90cb99e3262b,,,,,,subscriptions,clouds,wants,Example shared account,False
+2022-10-16 04:32:25.945945936,,-562,b1f74ce5-b864-4f82-8501-f8dba394188c,,,,,,transport,transport_other,wants,Example shared account,False
+2022-10-17 09:43:47.027027024,,-332,0da0f047-040e-4311-8e9a-ad6eb97b6852,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-10-18 14:55:08.108108112,,-848,46aa065b-4908-4de8-8e8a-b54d6f6b87b8,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-10-19 20:06:29.189189184,,-292,52716e5c-a1e3-4ba4-8273-d02decc88602,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-10-21 01:17:50.270270272,,-901,fe8d168e-25bb-46b1-b67e-80f0e1a7b4ff,,,,,,other,games,wants,Example shared account,False
+2022-10-22 06:29:11.351351344,,-453,d2cff6ac-9715-4aeb-87ff-4483800a887d,,,,,,other,games,wants,Example shared account,False
+2022-10-23 11:40:32.432432432,,-633,935970a3-7a27-4c4e-9aca-96a8c5e58cf8,,,,,,food,groceries,needs,Example shared account,False
+2022-10-24 16:51:53.513513504,,-160,70d7e0d7-eb7d-42e1-a9f9-31d7abc57894,,,,,,other,games,wants,Example shared account,False
+2022-10-25 22:03:14.594594592,,-600,fc2e9ef9-ad3c-4f17-8fe1-30c70b635505,,,,,,investments,stocks,investments,Example shared account,False
+2022-10-27 03:14:35.675675680,,-117,eea7d039-825e-4661-bc0e-7e98b0105b2e,,,,,,other,games,wants,Example shared account,False
+2022-10-28 08:25:56.756756752,,995,965f9a5c-659f-4e12-9f38-0f2338eb24e8,,,,,,jobs,my main job,income,Example shared account,True
+2022-10-29 13:37:17.837837840,,-2,273be53e-ed0a-42d9-a111-d7d5bccd5f17,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-10-30 18:48:38.918918912,,-550,e968fc2d-429f-4caa-88d1-a3d1aff82730,,,,,,transport,gas,needs,Example shared account,False
+2022-11-01 00:00:00.000000000,,-83,0c63db7c-f766-4600-b9e8-402b9076480a,,,,,,investments,investments_other,investments,Example shared account,False
+2022-11-02 05:11:21.081081072,,2320,8f5faf66-edc8-4bb6-9240-40805f29dc5a,,,,,,jobs,my main job,income,Example shared account,True
+2022-11-03 10:22:42.162162160,,-743,8b62ed12-0f6d-4e90-a847-5424c3525c4b,,,,,,food,food_other,wants,Example shared account,False
+2022-11-04 15:34:03.243243248,,-749,bdb80325-bc74-43a0-a97a-ee00a2dd4180,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-11-05 20:45:24.324324320,,-723,2148a674-1842-4c03-a4ad-5f9e2df52075,,,,,,food,groceries,needs,Example shared account,False
+2022-11-07 01:56:45.405405408,,-678,2932baca-c05b-420f-a9ec-0b44e52ab663,,,,,,transport,gas,needs,Example shared account,False
+2022-11-08 07:08:06.486486480,,4265,ea4fc6e4-b619-40a8-b693-b47950b17cce,,,,,,jobs,my main job,income,Example shared account,True
+2022-11-09 12:19:27.567567568,,-731,105083c8-cb35-4b14-bcab-6ee389d07c0c,,,,,,food,restaurants,wants,Example shared account,False
+2022-11-10 17:30:48.648648640,,-734,c3b21946-7722-4318-9489-2da543fe7cdf,,,,,,other,other_other,wants,Example shared account,False
+2022-11-11 22:42:09.729729728,,-878,a0698d77-edea-46ef-89a5-a0539e4d1a5d,,,,,,food,groceries,needs,Example shared account,False
+2022-11-13 03:53:30.810810816,,-969,533169ff-227e-4c20-8cfb-0bf386fe6366,,,,,,investments,stocks,investments,Example shared account,False
+2022-11-14 09:04:51.891891888,,1920,56d2c8d6-56a4-479f-8bb1-92dd97a6ebd9,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-11-15 14:16:12.972972976,,630,a86cf68f-fda9-433b-bc65-b88d1952a70f,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-11-16 19:27:34.054054048,,2315,477cdd4f-a0e4-4863-bf17-895513e6a48f,,,,,,jobs,my main job,income,Example shared account,True
+2022-11-18 00:38:55.135135136,,-633,91d04359-d93c-4c0e-b829-6e995cdbd6c7,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-11-19 05:50:16.216216208,,-991,f83bc389-754e-47c0-b4c1-c7c5d82b3b12,,,,,,food,restaurants,wants,Example shared account,False
+2022-11-20 11:01:37.297297296,,-714,16149c35-e763-4f2d-a878-dbe9a4809640,,,,,,other,games,wants,Example shared account,False
+2022-11-21 16:12:58.378378368,,905,cf35c0bd-a1e7-4d7a-94e4-4b6acacad0b8,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-11-22 21:24:19.459459456,,3090,b780777e-1878-46f2-8166-dfc860b90b0e,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-11-24 02:35:40.540540544,,-322,e9e0ccf5-2501-419e-8aae-bf0ef4c781e7,,,,,,investments,crypto,investments,Example shared account,False
+2022-11-25 07:47:01.621621616,,-962,71e50f0a-1002-4502-8ca2-80004c43df3f,,,,,,investments,stocks,investments,Example shared account,False
+2022-11-26 12:58:22.702702704,,-384,87d48ccd-b556-4c7f-ae00-2189cbcb2970,,,,,,other,other_other,wants,Example shared account,False
+2022-11-27 18:09:43.783783776,,3125,fa53a192-782a-44b7-adda-2fb3c75b1258,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-11-28 23:21:04.864864864,,-962,e841da4b-4e75-42a4-8857-53eb2cb1c842,,,,,,food,restaurants,wants,Example shared account,False
+2022-11-30 04:32:25.945945936,,-833,2e1929a4-3371-4531-9618-3478b6cbdfac,,,,,,food,restaurants,wants,Example shared account,False
+2022-12-01 09:43:47.027027024,,-567,08a74688-03b1-4548-882b-f4d9d051c0ff,,,,,,investments,stocks,investments,Example shared account,False
+2022-12-02 14:55:08.108108112,,3310,097f01d8-c936-4e24-94b6-e767376a91cd,,,,,,jobs,my main job,income,Example shared account,True
+2022-12-03 20:06:29.189189184,,-194,aa52c520-f04f-4104-931f-a12c1bd8004f,,,,,,other,other_other,wants,Example shared account,False
+2022-12-05 01:17:50.270270272,,-729,d646f465-cb05-40da-b09b-3593537449fc,,,,,,other,other_other,wants,Example shared account,False
+2022-12-06 06:29:11.351351344,,-987,935c9863-83ac-412d-bc44-6ccc62fe8aee,,,,,,other,other_other,wants,Example shared account,False
+2022-12-07 11:40:32.432432432,,-875,81d01ae8-309f-4a9c-a820-27323fb0ae77,,,,,,investments,investments_other,investments,Example shared account,False
+2022-12-08 16:51:53.513513504,,-130,e872b945-43ba-4e4f-b5e7-be088eb03031,,,,,,food,food_other,wants,Example shared account,False
+2022-12-09 22:03:14.594594592,,2265,7710ee64-8bf4-405c-955b-1315aaa7a576,,,,,,jobs,my main job,income,Example shared account,True
+2022-12-11 03:14:35.675675680,,-202,bb8458e3-a960-41d6-97cc-52649a0179f2,,,,,,transport,transport_other,wants,Example shared account,False
+2022-12-12 08:25:56.756756752,,485,e8ded2ec-058a-4b61-889b-377397775d52,,,,,,jobs,my main job,income,Example shared account,True
+2022-12-13 13:37:17.837837840,,-367,aed5cfd0-0b63-4916-bd04-2a30c147024d,,,,,,food,food_other,wants,Example shared account,False
+2022-12-14 18:48:38.918918912,,1665,c50eb6a8-1241-4768-9036-ee4aa108b269,,,,,,jobs,my main job,income,Example shared account,True
+2022-12-16 00:00:00.000000000,,-955,b99f1b2c-ece7-40ba-8ef8-d427b4727feb,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-12-17 05:11:21.081081072,,-966,344697fc-aec5-4529-980d-ff8f51a517b2,,,,,,other,games,wants,Example shared account,False
+2022-12-18 10:22:42.162162160,,-645,8e7f048b-3ea0-434d-9a18-606b72cdeb78,,,,,,investments,crypto,investments,Example shared account,False
+2022-12-19 15:34:03.243243248,,-46,771f7346-9b89-4ee6-bbcf-9e82238ecce9,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-12-20 20:45:24.324324320,,-161,5a59110f-e9ef-4661-8f01-135975f7ad81,,,,,,food,restaurants,wants,Example shared account,False
+2022-12-22 01:56:45.405405408,,-253,0247ac72-937d-432d-a32b-733ecf22146b,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2022-12-23 07:08:06.486486480,,4910,35c20593-8502-4faf-915b-0f10c012f8e1,,,,,,jobs,jobs_other,income,Example shared account,True
+2022-12-24 12:19:27.567567568,,-498,ec247826-f96d-457e-93c4-78b582bd0ac6,,,,,,food,food_other,wants,Example shared account,False
+2022-12-25 17:30:48.648648640,,-626,5aa50a32-3362-45ba-be0e-4718d4dd9c38,,,,,,other,other_other,wants,Example shared account,False
+2022-12-26 22:42:09.729729728,,-28,43d4de24-14b2-4eb7-9f7b-8e14d85219c8,,,,,,food,restaurants,wants,Example shared account,False
+2022-12-28 03:53:30.810810816,,-836,b2a1ec01-c1e8-469c-b16b-99bff879f772,,,,,,food,groceries,needs,Example shared account,False
+2022-12-29 09:04:51.891891888,,-284,1fe238a5-2790-4726-9d1b-b275f7217ed7,,,,,,investments,investments_other,investments,Example shared account,False
+2022-12-30 14:16:12.972972976,,-795,10476968-b551-4e14-ae13-087b8fcb2a26,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2022-12-31 19:27:34.054054048,,-10,b3fb9517-e5a4-425d-b2ca-44e9e65ec27a,,,,,,other,other_other,wants,Example shared account,False
+2023-01-02 00:38:55.135135136,,-422,f945f342-0832-40a5-bdc7-e5b1b825f0d0,,,,,,transport,gas,needs,Example shared account,False
+2023-01-03 05:50:16.216216208,,-922,cc1d219a-6f67-454f-bb3c-6f2e7f4563b4,,,,,,investments,stocks,investments,Example shared account,False
+2023-01-04 11:01:37.297297296,,-485,cd4e73c7-3677-4522-a365-210fc06182bf,,,,,,transport,gas,needs,Example shared account,False
+2023-01-05 16:12:58.378378368,,-678,4530beb9-31f6-40fd-9800-56e01874cd95,,,,,,subscriptions,rent,needs,Example shared account,False
+2023-01-06 21:24:19.459459456,,-246,3c12187c-0d36-4bf5-a76b-da4560e688c5,,,,,,investments,stocks,investments,Example shared account,False
+2023-01-08 02:35:40.540540544,,-363,e26b4cc6-1572-419b-8649-f2f1992d4675,,,,,,transport,transport_other,wants,Example shared account,False
+2023-01-09 07:47:01.621621616,,4665,77cad311-83c4-42bd-ad5f-6909dcad0007,,,,,,jobs,jobs_other,income,Example shared account,True
+2023-01-10 12:58:22.702702704,,2455,f0d96e93-dfc6-4723-9879-53afaedb3b6c,,,,,,jobs,jobs_other,income,Example shared account,True
+2023-01-11 18:09:43.783783776,,-343,3b2463f1-5099-4934-a77c-ae983b86025b,,,,,,investments,investments_other,investments,Example shared account,False
+2023-01-12 23:21:04.864864864,,4555,a1e3ac33-5ede-49d1-8ee9-6b38f6d86a1a,,,,,,jobs,my main job,income,Example shared account,True
+2023-01-14 04:32:25.945945936,,-989,e536373b-826b-4471-8d73-127601601b42,,,,,,other,games,wants,Example shared account,False
+2023-01-15 09:43:47.027027024,,-210,7a507384-9b12-4084-9e7f-ebdfc0ca0263,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2023-01-16 14:55:08.108108112,,2780,fc476def-d7fb-4857-8716-3c13bc248e81,,,,,,jobs,jobs_other,income,Example shared account,True
+2023-01-17 20:06:29.189189184,,-723,06a7cd04-56a3-4cc9-ba43-ae742a35b4a3,,,,,,investments,investments_other,investments,Example shared account,False
+2023-01-19 01:17:50.270270272,,-943,ec480aa0-41ff-40c4-985a-a29f83310554,,,,,,food,restaurants,wants,Example shared account,False
+2023-01-20 06:29:11.351351344,,-775,4ff4f3fa-6340-4962-a99e-b7e6164b9fbe,,,,,,food,restaurants,wants,Example shared account,False
+2023-01-21 11:40:32.432432432,,-99,8b4c633a-7629-453c-8127-b326ec1d90d5,,,,,,subscriptions,streaming,wants,Example shared account,False
+2023-01-22 16:51:53.513513504,,-292,66323d03-cd31-49c2-8cf4-0c9c38161920,,,,,,food,food_other,wants,Example shared account,False
+2023-01-23 22:03:14.594594592,,-747,f753cb13-5c4c-4c4e-8fb1-5267943e8fc8,,,,,,investments,stocks,investments,Example shared account,False
+2023-01-25 03:14:35.675675680,,-630,77012b3c-5a46-4821-bed4-7fb34af9bbab,,,,,,food,restaurants,wants,Example shared account,False
+2023-01-26 08:25:56.756756752,,4315,f72973c0-628a-43d9-aa47-2fb5e9eb2573,,,,,,jobs,my main job,income,Example shared account,True
+2023-01-27 13:37:17.837837840,,-360,5dc4b626-917f-4bb1-bba5-093590641eb8,,,,,,other,games,wants,Example shared account,False
+2023-01-28 18:48:38.918918912,,-39,bd1e722e-3004-4990-b165-fbdc88e0a60c,,,,,,transport,gas,needs,Example shared account,False
+2023-01-30 00:00:00.000000000,,-731,3d7d6923-e08a-4327-99e6-79d62695b941,,,,,,subscriptions,clouds,wants,Example shared account,False
+2023-01-31 05:11:21.081081072,,3815,eb489d3d-f4cf-4a93-bd3e-0d0b9ba61441,,,,,,jobs,my main job,income,Example shared account,True
+2023-02-01 10:22:42.162162160,,-987,59e59ac9-6ed8-4db7-8535-b594061733d2,,,,,,other,other_other,wants,Example shared account,False
+2023-02-02 15:34:03.243243248,,-214,088b7fb6-16b4-4775-b55f-4108995bab75,,,,,,investments,crypto,investments,Example shared account,False
+2023-02-03 20:45:24.324324320,,-550,8edd59e4-915e-4c38-aa1e-3e75258dbba7,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2023-02-05 01:56:45.405405408,,-671,f3f9c479-c431-4473-862a-c20f2ab0d888,,,,,,other,games,wants,Example shared account,False
+2023-02-06 07:08:06.486486480,,1220,32598a5c-005c-4b89-bb05-fc4bf65c058e,,,,,,jobs,my main job,income,Example shared account,True
+2023-02-07 12:19:27.567567568,,-265,47156eff-d95f-4823-a174-84ed8f930cb4,,,,,,other,games,wants,Example shared account,False
+2023-02-08 17:30:48.648648640,,-930,96991488-adc9-4467-8d31-2cbaed91bb09,,,,,,investments,crypto,investments,Example shared account,False
+2023-02-09 22:42:09.729729728,,-644,d524a923-d605-46c1-89ad-b215e2f11080,,,,,,food,groceries,needs,Example shared account,False
+2023-02-11 03:53:30.810810816,,-112,69808737-bfab-403a-bc75-ac6b039c0ea5,,,,,,subscriptions,clouds,wants,Example shared account,False
+2023-02-12 09:04:51.891891888,,1965,3338fc78-157e-49d5-9c11-41c9f5936eeb,,,,,,jobs,jobs_other,income,Example shared account,True
+2023-02-13 14:16:12.972972976,,-36,ef07fea0-5f2e-448a-a11e-a46999fd9193,,,,,,investments,stocks,investments,Example shared account,False
+2023-02-14 19:27:34.054054048,,-406,e3aa38d0-49ee-4161-a3fb-c61af0673784,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2023-02-16 00:38:55.135135136,,-445,a566547c-d5bf-4b9e-991c-f8c11b18240a,,,,,,subscriptions,clouds,wants,Example shared account,False
+2023-02-17 05:50:16.216216208,,-398,f8c95fe5-97ab-4feb-969b-0296ac3f26a5,,,,,,investments,investments_other,investments,Example shared account,False
+2023-02-18 11:01:37.297297296,,-316,ec66a8c0-8775-4c7e-97b8-9ab7a202c334,,,,,,food,food_other,wants,Example shared account,False
+2023-02-19 16:12:58.378378368,,-36,ba6ba57a-1243-4815-8ea5-c16f2067df39,,,,,,subscriptions,streaming,wants,Example shared account,False
+2023-02-20 21:24:19.459459456,,-131,7d4f1ea9-6c7d-4522-88c1-fc48bab1978e,,,,,,food,food_other,wants,Example shared account,False
+2023-02-22 02:35:40.540540544,,-239,e816ff10-5a52-41ab-9d57-f926fbdd0f73,,,,,,subscriptions,clouds,wants,Example shared account,False
+2023-02-23 07:47:01.621621616,,-51,50467282-af3c-4508-a07f-9d2fa56afa3c,,,,,,food,restaurants,wants,Example shared account,False
+2023-02-24 12:58:22.702702704,,-930,09bafe1f-a38c-458c-8416-e28f423f13d0,,,,,,investments,crypto,investments,Example shared account,False
+2023-02-25 18:09:43.783783776,,-819,61775d4e-e992-45c8-a57d-878216ac0f95,,,,,,other,other_other,wants,Example shared account,False
+2023-02-26 23:21:04.864864864,,-691,c5213ce9-7b4e-4cb4-98a8-97c10f870ee6,,,,,,other,games,wants,Example shared account,False
+2023-02-28 04:32:25.945945936,,-475,8b6a8a91-2baf-41ac-989d-f718ee811fd8,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2023-03-01 09:43:47.027027024,,-873,938625d1-e10b-45b1-837a-e8bed029cc95,,,,,,transport,transport_other,wants,Example shared account,False
+2023-03-02 14:55:08.108108112,,-660,dfb6ee8e-94be-4075-b263-8e09a9d08956,,,,,,investments,stocks,investments,Example shared account,False
+2023-03-03 20:06:29.189189184,,-555,f423abb5-bf3e-4fcc-ab1d-cc9b7afee0d8,,,,,,investments,investments_other,investments,Example shared account,False
+2023-03-05 01:17:50.270270272,,-863,981b4955-c568-47e6-acba-74e6e37d5a47,,,,,,transport,gas,needs,Example shared account,False
+2023-03-06 06:29:11.351351344,,-376,563917bd-28a1-46cd-bf3f-620086c7ef71,,,,,,transport,transport_other,wants,Example shared account,False
+2023-03-07 11:40:32.432432432,,-121,0c1d47f9-6ebc-4b74-8e53-0cb351a29885,,,,,,transport,gas,needs,Example shared account,False
+2023-03-08 16:51:53.513513504,,-110,612aa547-2087-4caa-9c7f-cac5fd5f431a,,,,,,investments,stocks,investments,Example shared account,False
+2023-03-09 22:03:14.594594592,,4000,fdb53eb7-0dfa-480c-a7e1-681210eed301,,,,,,jobs,jobs_other,income,Example shared account,True
+2023-03-11 03:14:35.675675680,,-473,f71b2103-3a40-4666-84fc-df3932ec7067,,,,,,food,food_other,wants,Example shared account,False
+2023-03-12 08:25:56.756756752,,-842,b4cc707f-5ff6-4d1e-8afc-94558d2a7474,,,,,,other,games,wants,Example shared account,False
+2023-03-13 13:37:17.837837840,,-429,4b0a4b93-97a6-490b-af98-4ac33ec63e0a,,,,,,subscriptions,rent,needs,Example shared account,False
+2023-03-14 18:48:38.918918912,,-996,6ddc60b1-d5b1-4013-9e53-3dcdd64f5dde,,,,,,food,restaurants,wants,Example shared account,False
+2023-03-16 00:00:00.000000000,,-414,b7050514-c818-49f3-924a-73bdc3f0233e,,,,,,food,restaurants,wants,Example shared account,False
+2023-03-17 05:11:21.081081072,,200,8c1c09c0-8276-42dc-9153-944d9de029bb,,,,,,jobs,my main job,income,Example shared account,True
+2023-03-18 10:22:42.162162160,,-821,9e982f1a-2e5f-4f5d-bfa3-c595edf63ccc,,,,,,subscriptions,streaming,wants,Example shared account,False
+2023-03-19 15:34:03.243243248,,-561,2f156059-9190-408b-8760-536e98864587,,,,,,investments,crypto,investments,Example shared account,False
+2023-03-20 20:45:24.324324320,,-397,41103c93-1ffe-46b8-bfc5-ee821709baef,,,,,,food,food_other,wants,Example shared account,False
+2023-03-22 01:56:45.405405408,,-523,d8688137-81f2-4d66-a75e-c0cee6ccf6db,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2023-03-23 07:08:06.486486480,,-227,97ea6615-3e06-448e-b6fb-f08994117467,,,,,,food,food_other,wants,Example shared account,False
+2023-03-24 12:19:27.567567568,,-849,50c7f843-fc0d-46d6-a023-e9b6e9a7c80d,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2023-03-25 17:30:48.648648640,,4275,ac959bab-cab7-474a-a6b4-66f92f79379d,,,,,,jobs,my main job,income,Example shared account,True
+2023-03-26 22:42:09.729729728,,-642,8a41bd75-b620-4536-b754-be6863c16d31,,,,,,subscriptions,rent,needs,Example shared account,False
+2023-03-28 03:53:30.810810800,,2870,72663c69-042c-4cac-8723-00e51abb3d4b,,,,,,jobs,jobs_other,income,Example shared account,True
+2023-03-29 09:04:51.891891888,,-80,edae3124-45d1-4905-8873-8f91eb8be10e,,,,,,transport,transport_other,wants,Example shared account,False
+2023-03-30 14:16:12.972972976,,2435,a43e867d-fd2b-4c4f-9b89-38919e600d16,,,,,,jobs,my main job,income,Example shared account,True
+2023-03-31 19:27:34.054054048,,-989,8fbea873-7b02-4068-8180-72db2726c0cd,,,,,,investments,investments_other,investments,Example shared account,False
+2023-04-02 00:38:55.135135136,,-29,2448cfe9-2de1-456d-83a1-0189efbde3c4,,,,,,investments,stocks,investments,Example shared account,False
+2023-04-03 05:50:16.216216208,,-497,4ad97867-2b49-4cc1-9424-b9810e640a14,,,,,,investments,investments_other,investments,Example shared account,False
+2023-04-04 11:01:37.297297296,,-844,1f7ef08c-a100-420b-8c38-0f09e3a6ae6b,,,,,,food,groceries,needs,Example shared account,False
+2023-04-05 16:12:58.378378368,,350,1c1d16ea-74fe-4f8c-a065-18ea32ff9ac4,,,,,,jobs,my main job,income,Example shared account,True
+2023-04-06 21:24:19.459459456,,-481,13ed9d9a-7019-4390-9eb9-57b62d245373,,,,,,transport,gas,needs,Example shared account,False
+2023-04-08 02:35:40.540540544,,-699,038c5d0c-080e-46ed-b1bb-8398580e648c,,,,,,transport,transport_other,wants,Example shared account,False
+2023-04-09 07:47:01.621621616,,-117,1902fcbc-23dd-42a9-9231-7a66a668b7a8,,,,,,investments,crypto,investments,Example shared account,False
+2023-04-10 12:58:22.702702704,,-778,009e077d-98ca-47d0-a228-43ecce26f551,,,,,,investments,investments_other,investments,Example shared account,False
+2023-04-11 18:09:43.783783776,,-413,e5755f77-6f25-4008-a1d2-2013c645bb4b,,,,,,transport,gas,needs,Example shared account,False
+2023-04-12 23:21:04.864864864,,-352,6ec77e42-f0ea-4fe0-b0f9-0b2c5d0649cf,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2023-04-14 04:32:25.945945936,,-471,83bcf70a-f4b1-4fb5-ada0-3fc726b20836,,,,,,food,restaurants,wants,Example shared account,False
+2023-04-15 09:43:47.027027024,,-528,c32213e3-179a-4eba-a278-399b5471f32b,,,,,,subscriptions,rent,needs,Example shared account,False
+2023-04-16 14:55:08.108108112,,-754,2410024f-0355-4c1d-9e2f-a28f61e95443,,,,,,subscriptions,rent,needs,Example shared account,False
+2023-04-17 20:06:29.189189184,,-699,305b838d-3964-45d1-bb7d-842c943b9752,,,,,,investments,stocks,investments,Example shared account,False
+2023-04-19 01:17:50.270270272,,1310,2c3cba38-241d-49b6-bf61-31a6f8a1d068,,,,,,jobs,my main job,income,Example shared account,True
+2023-04-20 06:29:11.351351344,,-957,a4b57f4d-f979-429e-8c3c-4e55a9cd473c,,,,,,other,games,wants,Example shared account,False
+2023-04-21 11:40:32.432432432,,-297,5122c73a-fc7d-49bb-8375-47d1081a1f6f,,,,,,transport,transport_other,wants,Example shared account,False
+2023-04-22 16:51:53.513513504,,-513,66f2b2f3-beca-4d32-af57-2289722e9045,,,,,,investments,investments_other,investments,Example shared account,False
+2023-04-23 22:03:14.594594592,,-32,cec68b11-7091-42bb-92f7-34e41596b074,,,,,,subscriptions,subscriptions_other,wants,Example shared account,False
+2023-04-25 03:14:35.675675680,,-698,c46350ed-9380-43bd-8024-e4b21cda7279,,,,,,subscriptions,internet_provider,needs,Example shared account,False
+2023-04-26 08:25:56.756756752,,-6,c0c5ad31-b803-4fd8-8531-1a339846f3b8,,,,,,food,groceries,needs,Example shared account,False
+2023-04-27 13:37:17.837837840,,-119,1b39756f-9053-46be-9715-1d43e6b1262c,,,,,,investments,stocks,investments,Example shared account,False
+2023-04-28 18:48:38.918918912,,-491,e24ebced-a1fd-4cf4-b07a-9b8f514bd291,,,,,,transport,public_transport,needs,Example shared account,False
+2023-04-30 00:00:00.000000000,,-329,74109448-7eba-43e0-9803-be1ebcdddeeb,,,,,,subscriptions,rent,needs,Example shared account,False
+2022-05-23 05:50:16.216216208,,33,38d58f5f-18f3-418c-b1c2-a9e38897b312,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2022-06-10 11:40:32.432432432,,532,e1e522a7-f575-4bae-9bae-49b73d684ddd,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2023-04-14 04:32:25.945945936,,-2580,f80a59f7-642b-41fa-bfcc-dac4eab40c46,,,,,,account_transfer,Example main account,account_transfer,Example shared account,False
+2023-03-18 10:22:42.162162160,,69,55805636-10ec-47c0-b1cf-037a22d5c5d2,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2021-05-23 09:04:51.891891888,,738,444454f1-ffd2-4d38-a121-ca2421d4a4de,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2021-10-02 22:42:09.729729728,,-1530,b14e697c-18c1-4a07-a6b0-c2fc9b45c42d,,,,,,account_transfer,Example main account,account_transfer,Example shared account,False
+2022-06-11 16:51:53.513513504,,980,d0fc3e24-193a-4e4c-bfc9-89116cf7e7f1,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2021-07-07 09:04:51.891891888,,979,db1bf70b-3cb8-4b87-bedb-15ede58229c0,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2021-01-29 01:17:50.270270268,,503,ba95788b-f60a-47c8-9e50-8f521c70ab44,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2022-04-13 02:35:40.540540536,,400,ec48016a-37ff-4633-822d-96b116fc2c17,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2022-03-29 12:19:27.567567568,,539,05e16386-fcf3-47f6-a071-7b6977437631,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2023-02-14 19:27:34.054054048,,744,2fb476d6-e771-4ee0-968c-af64baa6d61e,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2022-04-24 01:17:50.270270272,,802,3dab4509-c93f-4b69-9e50-136a2c7a6cd7,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2020-05-23 12:19:27.567567568,,176,7aba09f9-1b11-433d-befd-ab518dada0ac,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2021-09-29 07:08:06.486486488,,-4760,49bee3da-219d-41fa-8f28-1a6612138f75,,,,,,account_transfer,Example main account,account_transfer,Example shared account,False
+2020-10-24 23:21:04.864864864,,235,2b509e10-a7d2-4a18-b71e-e7f34be323c2,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2022-09-14 13:37:17.837837840,,985,b1ca6342-53f5-412e-8251-3bbc13b85746,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2022-03-05 04:32:25.945945944,,668,84f6730c-b766-4027-8e47-ebf9ce657bf2,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2020-09-09 23:21:04.864864864,,27,0a0d02b9-252b-4d31-a5b2-ecabe3822b7c,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2021-06-17 22:03:14.594594592,,224,e554ea93-d55b-46f7-a3bb-dc8d0f6ab302,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2021-06-05 18:09:43.783783784,,845,2da8ba34-e8ea-4620-b728-4467a4a5b151,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2020-12-22 08:25:56.756756756,,957,64902bca-ae3b-4d14-aaae-f3f2fb8d1d4a,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2020-07-03 20:45:24.324324324,,255,be6656a7-b6f1-437c-86be-1380b9853fa9,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2020-11-18 07:08:06.486486484,,14,4a3e5828-1442-47b2-a726-277dd35ad3ca,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
+2022-08-27 07:47:01.621621616,,554,9679150a-f366-48e6-902f-f5f312fca6bc,,,,,,account_transfer,Example main account,account_transfer,Example shared account,True
