@@ -77,7 +77,7 @@ with tab_cats:
             sub_cat_options = categories[cat_select_str]
         sub_select_str = st.selectbox("To which subcategory?", options=sub_cat_options)
 
-        wni_select_str = st.selectbox("Is this always a Want / Need / Investment / Icnome / UNNASSIGNED",
+        wni_select_str = st.selectbox("Is this always a Want / Need / Investment / Income / UNNASSIGNED",
                                       options=categories_wni)
 
         new_str_add_butt = st.button("ADD", key="str_add")
