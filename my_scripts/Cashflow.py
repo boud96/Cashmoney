@@ -301,9 +301,9 @@ class Cashflow:
         """
 
         if df is None:
-            df = self.df
+            df = self.df.copy()
 
-        df = self.df.copy().reset_index()
+        df = df.reset_index()
         df = df[["value", "wni"]]
         df = df.query("wni != 'income' &"
                       "wni != 'UNASSIGNED'").copy()
