@@ -225,7 +225,7 @@ st.divider()
 # Pies
 # WNI pie
 st.header("WNI Pie")
-wni_pie = cashflow.plot_wni_pie(exclude="account_transfer")
+wni_pie = cashflow.plot_wni_pie(df=cashflow_df, exclude="account_transfer")
 st.plotly_chart(wni_pie, use_container_width=True)
 
 st.divider()
