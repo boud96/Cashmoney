@@ -32,8 +32,6 @@ from widgets.stats.dataframe import DataFrameWidget
 from widgets.stats.category_sunburst import TransactionSunburstWidget
 from widgets.stats.wni_sunburst import TransactionWNIWidget
 from widgets.stats.overview_stats import OverviewStatsWidget
-import os
-from dotenv import load_dotenv
 
 
 # TODO: Figure out the reruns for the whole app but keep the tabs etc.
@@ -70,9 +68,6 @@ def manage_tags_section():
 
 
 def main():
-    load_dotenv()
-    DEBUG = os.getenv("DEBUG") == "True"  # TODO: Do properly
-
     models = app_launcher.get_models()
     Transaction = models[
         "Transaction"
@@ -119,7 +114,7 @@ def main():
 
     # Get combined filter params
     filter_params = filter_manager.get_combined_params()
-    if DEBUG:
+    if settings.DEBUG:
         st.info("Combined Filter Parameters:")
         st.json(filter_params, expanded=False)
 
