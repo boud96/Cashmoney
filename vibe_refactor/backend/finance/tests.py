@@ -348,6 +348,98 @@ class APITests(FinanceTestCase):
         self.assertEqual(json_body(visible)["count"], 1)
         self.assertEqual(json_body(visible)["limit"], 1)
 
+    def test_transaction_filters_support_multi_select_and_unassigned_values(self):
+        second_account = BankAccount.objects.create(
+            name="Second",
+            account_number="456/0100",
+            default_csv_mapping=self.mapping,
+        )
+        transport = Category.objects.create(name="Transport")
+        fuel = Subcategory.objects.create(name="Fuel", category=transport)
+        other_tag = Tag.objects.create(name="Other tag")
+
+        food = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            amount=Decimal("-12.50"),
+            subcategory=self.subcategory,
+            want_need_investment=WantNeedInvestment.WANT,
+        )
+        food.tags.add(self.tag)
+        Transaction.objects.create(
+            bank_account=second_account,
+            transaction_date="2026-01-03",
+            description="Fuel",
+            amount=Decimal("-30.00"),
+            subcategory=fuel,
+            want_need_investment=WantNeedInvestment.NEED,
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-04",
+            description="Uncategorized",
+            amount=Decimal("-3.00"),
+        )
+        tagged_uncategorized = Transaction.objects.create(
+            bank_account=second_account,
+            transaction_date="2026-01-05",
+            description="Tagged uncategorized",
+            amount=Decimal("-4.00"),
+            want_need_investment=WantNeedInvestment.INVESTMENT,
+        )
+        tagged_uncategorized.tags.add(other_tag)
+
+        account_response = self.client.get(
+            "/api/transactions/",
+            {
+                "bank_account": f"{self.account.id},{second_account.id}",
+                "limit": "10",
+            },
+        )
+        category_response = self.client.get(
+            "/api/transactions/",
+            {"category": f"{self.category.id},__unassigned__", "limit": "10"},
+        )
+        subcategory_response = self.client.get(
+            "/api/transactions/",
+            {"subcategory": "__unassigned__", "limit": "10"},
+        )
+        wni_response = self.client.get(
+            "/api/transactions/?want_need_investment=want&want_need_investment=__unassigned__&limit=10"
+        )
+        tag_response = self.client.get(
+            "/api/transactions/",
+            {"tag": f"{self.tag.id},__unassigned__", "limit": "10"},
+        )
+
+        self.assertEqual(json_body(account_response)["count"], 4)
+        self.assertEqual(json_body(category_response)["count"], 3)
+        self.assertEqual(json_body(subcategory_response)["count"], 2)
+        self.assertEqual(json_body(wni_response)["count"], 2)
+        self.assertEqual(json_body(tag_response)["count"], 3)
+
+    def test_transaction_filter_metadata_returns_oldest_date_and_today(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-03",
+            description="Later",
+            amount=Decimal("-3.00"),
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-01",
+            description="Earlier",
+            amount=Decimal("-1.00"),
+        )
+
+        response = self.client.get("/api/transactions/filter-metadata/")
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["oldest_transaction_date"], "2026-01-01")
+        self.assertRegex(payload["today"], r"^\d{4}-\d{2}-\d{2}$")
+
     def test_import_preview_dry_run_and_commit(self):
         self.keyword("McDonalds", ["mcdonald"])
         body = "ID,Date,Description,Amount,Currency\napi-1,2026-01-02,McDonalds,-12.50,CZK\n"

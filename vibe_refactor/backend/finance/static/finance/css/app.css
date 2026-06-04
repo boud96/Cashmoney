@@ -214,21 +214,26 @@ h2 {
     display: block;
 }
 
-.filter-bar,
+.filter-panel,
 .panel,
 .metrics-grid,
 .settings-grid {
     margin-bottom: 18px;
 }
 
-.filter-bar {
+.filter-panel {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     box-shadow: var(--shadow);
     padding: 14px;
     display: grid;
-    grid-template-columns: repeat(8, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.filter-bar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(130px, 1fr));
     gap: 12px;
     align-items: end;
 }
@@ -258,6 +263,11 @@ textarea {
     outline: none;
 }
 
+select[multiple] {
+    min-height: 104px;
+    padding: 6px;
+}
+
 textarea {
     resize: vertical;
 }
@@ -283,6 +293,19 @@ textarea:focus {
 .check-row input {
     width: 16px;
     height: 16px;
+}
+
+.relative-range-form {
+    display: grid;
+    grid-template-columns: minmax(120px, 160px) minmax(130px, 180px) auto;
+    gap: 12px;
+    align-items: end;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.relative-range-form button {
+    align-self: end;
 }
 
 .metrics-grid {
@@ -721,6 +744,7 @@ td.description-cell {
     }
 
     .filter-bar,
+    .relative-range-form,
     .metrics-grid,
     .recategorize-stats,
     .mapping-column-map {
@@ -749,6 +773,7 @@ td.description-cell {
     }
 
     .filter-bar,
+    .relative-range-form,
     .metrics-grid,
     .compact-form,
     .mapping-form,

@@ -41,6 +41,11 @@ urlpatterns = [
     path("keywords/<uuid:pk>/", views.KeywordDetailView.as_view(), name="keyword-detail"),
     path("transactions/", views.TransactionCollectionView.as_view(), name="transactions"),
     path(
+        "transactions/filter-metadata/",
+        views.TransactionFilterMetadataView.as_view(),
+        name="transaction-filter-metadata",
+    ),
+    path(
         "transactions/<uuid:pk>/",
         views.TransactionDetailView.as_view(),
         name="transaction-detail",

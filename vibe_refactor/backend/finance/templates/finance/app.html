@@ -43,57 +43,74 @@
             </header>
 
             <section class="page is-active" id="dashboard-page" data-page="dashboard">
-                <form class="filter-bar" id="filters-form">
-                    <label>
-                        <span>From</span>
-                        <input type="date" name="date_from">
-                    </label>
-                    <label>
-                        <span>To</span>
-                        <input type="date" name="date_to">
-                    </label>
-                    <label>
-                        <span>Account</span>
-                        <select name="bank_account" id="filter-account">
-                            <option value="">All accounts</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>Category</span>
-                        <select name="category" id="filter-category">
-                            <option value="">All categories</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>Subcategory</span>
-                        <select name="subcategory" id="filter-subcategory">
-                            <option value="">All subcategories</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>WNI</span>
-                        <select name="want_need_investment">
-                            <option value="">All</option>
-                            <option value="want">Want</option>
-                            <option value="need">Need</option>
-                            <option value="investment">Investment</option>
-                        </select>
-                    </label>
-                    <label>
-                        <span>Tag</span>
-                        <select name="tag" id="filter-tag">
-                            <option value="">All tags</option>
-                        </select>
-                    </label>
-                    <label class="wide-field">
-                        <span>Search</span>
-                        <input type="search" name="q" placeholder="Description">
-                    </label>
-                    <label class="check-row">
-                        <input type="checkbox" name="include_ignored">
-                        <span>Ignored</span>
-                    </label>
-                </form>
+                <section class="filter-panel">
+                    <form class="filter-bar" id="filters-form">
+                        <label>
+                            <span>From</span>
+                            <input type="date" name="date_from">
+                        </label>
+                        <label>
+                            <span>To</span>
+                            <input type="date" name="date_to">
+                        </label>
+                        <label>
+                            <span>Account</span>
+                            <select name="bank_account" id="filter-account" multiple size="4">
+                                <option value="">All accounts</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Category</span>
+                            <select name="category" id="filter-category" multiple size="4">
+                                <option value="">All categories</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Subcategory</span>
+                            <select name="subcategory" id="filter-subcategory" multiple size="4">
+                                <option value="">All subcategories</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>WNI</span>
+                            <select name="want_need_investment" id="filter-wni" multiple size="4">
+                                <option value="want">Want</option>
+                                <option value="need">Need</option>
+                                <option value="investment">Investment</option>
+                                <option value="__unassigned__">Unassigned</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Tag</span>
+                            <select name="tag" id="filter-tag" multiple size="4">
+                                <option value="">All tags</option>
+                            </select>
+                        </label>
+                        <label class="wide-field">
+                            <span>Search</span>
+                            <input type="search" name="q" placeholder="Description">
+                        </label>
+                        <label class="check-row">
+                            <input type="checkbox" name="include_ignored">
+                            <span>Ignored</span>
+                        </label>
+                    </form>
+                    <form class="relative-range-form" id="relative-range-form">
+                        <label>
+                            <span>Last</span>
+                            <input type="number" name="relative_count" min="1" step="1" value="10">
+                        </label>
+                        <label>
+                            <span>Unit</span>
+                            <select name="relative_unit">
+                                <option value="days">Days</option>
+                                <option value="weeks">Weeks</option>
+                                <option value="months" selected>Months</option>
+                            </select>
+                        </label>
+                        <button class="link-button" type="submit">Show</button>
+                    </form>
+                </section>
 
                 <section class="panel recategorize-panel">
                     <div class="panel-header">

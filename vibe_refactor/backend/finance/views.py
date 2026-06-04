@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.http import Http404
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
 from django.views import View
@@ -44,6 +45,9 @@ from .services import (
     recategorize_transactions,
     serialize_categorization_result,
 )
+
+
+UNASSIGNED_FILTER_VALUE = "__unassigned__"
 
 
 class APIValidationError(Exception):
@@ -212,6 +216,29 @@ def id_list(value):
     if isinstance(value, list):
         return value
     return [item for item in str(value).split(",") if item]
+
+
+def filter_values(params, field_name):
+    raw_values = params.getlist(field_name) if hasattr(params, "getlist") else [params.get(field_name)]
+    values = []
+    for raw_value in raw_values:
+        if raw_value in (None, ""):
+            continue
+        if isinstance(raw_value, (list, tuple)):
+            candidates = raw_value
+        else:
+            candidates = str(raw_value).split(",")
+        for candidate in candidates:
+            value = str(candidate).strip()
+            if value and value not in values:
+                values.append(value)
+    return values
+
+
+def split_unassigned_filter(params, field_name):
+    values = filter_values(params, field_name)
+    assigned_values = [value for value in values if value != UNASSIGNED_FILTER_VALUE]
+    return assigned_values, UNASSIGNED_FILTER_VALUE in values
 
 
 class AppShellView(TemplateView):
@@ -629,22 +656,60 @@ def filtered_transactions(request):
     if params.get("direction"):
         clean_choice(params["direction"], "direction", Direction.CHOICES, allow_blank=False)
         queryset = queryset.filter(direction=params["direction"])
-    if params.get("want_need_investment"):
-        clean_choice(
-            params["want_need_investment"],
-            "want_need_investment",
-            WantNeedInvestment.CHOICES,
-            allow_blank=False,
-        )
-        queryset = queryset.filter(want_need_investment=params["want_need_investment"])
-    if params.get("bank_account"):
-        queryset = queryset.filter(bank_account_id__in=id_list(params["bank_account"]))
-    if params.get("category"):
-        queryset = queryset.filter(subcategory__category_id__in=id_list(params["category"]))
-    if params.get("subcategory"):
-        queryset = queryset.filter(subcategory_id__in=id_list(params["subcategory"]))
-    if params.get("tag"):
-        queryset = queryset.filter(tags__id__in=id_list(params["tag"]))
+    wni_values, include_unassigned_wni = split_unassigned_filter(
+        params, "want_need_investment"
+    )
+    if wni_values or include_unassigned_wni:
+        wni_query = Q()
+        if wni_values:
+            for value in wni_values:
+                clean_choice(
+                    value,
+                    "want_need_investment",
+                    WantNeedInvestment.CHOICES,
+                    allow_blank=False,
+                )
+            wni_query |= Q(want_need_investment__in=wni_values)
+        if include_unassigned_wni:
+            wni_query |= Q(want_need_investment__isnull=True) | Q(
+                want_need_investment=""
+            )
+        queryset = queryset.filter(wni_query)
+
+    bank_account_values = filter_values(params, "bank_account")
+    if bank_account_values:
+        queryset = queryset.filter(bank_account_id__in=bank_account_values)
+
+    category_values, include_unassigned_category = split_unassigned_filter(
+        params, "category"
+    )
+    if category_values or include_unassigned_category:
+        category_query = Q()
+        if category_values:
+            category_query |= Q(subcategory__category_id__in=category_values)
+        if include_unassigned_category:
+            category_query |= Q(subcategory__isnull=True)
+        queryset = queryset.filter(category_query)
+
+    subcategory_values, include_unassigned_subcategory = split_unassigned_filter(
+        params, "subcategory"
+    )
+    if subcategory_values or include_unassigned_subcategory:
+        subcategory_query = Q()
+        if subcategory_values:
+            subcategory_query |= Q(subcategory_id__in=subcategory_values)
+        if include_unassigned_subcategory:
+            subcategory_query |= Q(subcategory__isnull=True)
+        queryset = queryset.filter(subcategory_query)
+
+    tag_values, include_unassigned_tags = split_unassigned_filter(params, "tag")
+    if tag_values or include_unassigned_tags:
+        tag_query = Q()
+        if tag_values:
+            tag_query |= Q(tags__id__in=tag_values)
+        if include_unassigned_tags:
+            tag_query |= Q(tags__isnull=True)
+        queryset = queryset.filter(tag_query)
     if params.get("q"):
         query = params["q"]
         queryset = queryset.filter(
@@ -713,6 +778,23 @@ class TransactionCollectionView(JsonView):
         if "tag_ids" in data:
             set_tags(transaction_obj, data["tag_ids"])
         return json_response(serialize_transaction(transaction_obj), status=201)
+
+
+class TransactionFilterMetadataView(JsonView):
+    def get(self, request):
+        oldest_date = (
+            Transaction.objects.order_by("transaction_date")
+            .values_list("transaction_date", flat=True)
+            .first()
+        )
+        return json_response(
+            {
+                "oldest_transaction_date": oldest_date.isoformat()
+                if oldest_date
+                else None,
+                "today": timezone.localdate().isoformat(),
+            }
+        )
 
 
 class TransactionDetailView(JsonView):

@@ -1,4 +1,5 @@
 const API_BASE = "/api";
+const UNASSIGNED_FILTER_VALUE = "__unassigned__";
 const palette = ["#2f6f9f", "#2f8f65", "#c96e26", "#7655a6", "#b1842f", "#2f8a91", "#b34545", "#5f6f7a", "#4f9a6e", "#9d6b34"];
 
 const state = {
@@ -13,6 +14,11 @@ const state = {
     summary: null,
     recategorizeResult: null,
     recategorizeFilterKey: "",
+    filterDefaults: {
+        initialized: false,
+        from: "",
+        to: "",
+    },
 };
 
 const pages = {
@@ -78,7 +84,9 @@ function bindNavigation() {
     });
 
     document.getElementById("refresh-button").addEventListener("click", () => loadAll());
-    document.getElementById("filters-form").addEventListener("input", debounce(loadDashboard, 200));
+    const debouncedDashboardLoad = debounce(loadDashboard, 200);
+    document.getElementById("filters-form").addEventListener("input", debouncedDashboardLoad);
+    document.getElementById("filters-form").addEventListener("change", debouncedDashboardLoad);
 }
 
 function bindForms() {
@@ -90,6 +98,7 @@ function bindForms() {
     document.getElementById("tag-form").addEventListener("submit", submitTag);
     document.getElementById("keyword-form").addEventListener("submit", submitKeyword);
     document.getElementById("recategorize-button").addEventListener("click", submitRecategorize);
+    document.getElementById("relative-range-form").addEventListener("submit", applyRelativeRange);
     document.getElementById("mapping-detect-button").addEventListener("click", detectMappingColumns);
     document.getElementById("mapping-detect-file").addEventListener("change", detectMappingColumns);
     document.addEventListener("click", handleDeleteClick);
@@ -98,6 +107,7 @@ function bindForms() {
 async function loadAll() {
     await checkHealth();
     await loadReferenceData();
+    await loadFilterDefaults();
     renderSettings();
     await loadDashboard();
 }
@@ -126,6 +136,30 @@ async function loadReferenceData() {
 
     Object.assign(state, { accounts, mappings, categories, subcategories, tags, keywords });
     fillReferenceSelects();
+}
+
+async function loadFilterDefaults() {
+    const metadata = await apiGet("/transactions/filter-metadata/");
+    const form = document.getElementById("filters-form");
+    const fromInput = form.elements.date_from;
+    const toInput = form.elements.date_to;
+    const nextFrom = metadata.oldest_transaction_date || "";
+    const nextTo = metadata.today || todayInputValue();
+    const fromWasAuto = !state.filterDefaults.initialized || !fromInput.value || fromInput.value === state.filterDefaults.from;
+    const toWasAuto = !state.filterDefaults.initialized || !toInput.value || toInput.value === state.filterDefaults.to;
+
+    if (fromWasAuto) {
+        fromInput.value = nextFrom;
+    }
+    if (toWasAuto) {
+        toInput.value = nextTo;
+    }
+
+    state.filterDefaults = {
+        initialized: true,
+        from: nextFrom,
+        to: nextTo,
+    };
 }
 
 async function loadDashboard() {
@@ -158,8 +192,11 @@ function filterParams() {
     const data = new FormData(form);
     const params = {};
     for (const [key, value] of data.entries()) {
+        if (key === "include_ignored") {
+            continue;
+        }
         if (value) {
-            params[key] = value;
+            addParamValue(params, key, value);
         }
     }
     if (form.elements.include_ignored.checked) {
@@ -171,9 +208,15 @@ function filterParams() {
 function fillReferenceSelects() {
     fillSelect("filter-account", state.accounts, "All accounts");
     fillSelect("import-account", state.accounts);
-    fillSelect("filter-category", state.categories, "All categories");
-    fillSelect("filter-subcategory", state.subcategories, "All subcategories", subLabel);
-    fillSelect("filter-tag", state.tags, "All tags");
+    fillSelect("filter-category", state.categories, "All categories", (item) => item.name, [
+        { value: UNASSIGNED_FILTER_VALUE, label: "Unassigned category" },
+    ]);
+    fillSelect("filter-subcategory", state.subcategories, "All subcategories", subLabel, [
+        { value: UNASSIGNED_FILTER_VALUE, label: "Unassigned subcategory" },
+    ]);
+    fillSelect("filter-tag", state.tags, "All tags", (item) => item.name, [
+        { value: UNASSIGNED_FILTER_VALUE, label: "No tags" },
+    ]);
     fillSelect("import-mapping", state.mappings, "Account default");
     fillSelect("account-mapping", state.mappings, "No default mapping");
     fillSelect("subcategory-category", state.categories);
@@ -181,7 +224,7 @@ function fillReferenceSelects() {
     fillSelect("keyword-tags", state.tags);
 }
 
-function fillSelect(id, items, blankLabel, labeler = (item) => item.name) {
+function fillSelect(id, items, blankLabel, labeler = (item) => item.name, extraOptions = []) {
     const select = document.getElementById(id);
     if (!select) {
         return;
@@ -191,6 +234,7 @@ function fillSelect(id, items, blankLabel, labeler = (item) => item.name) {
     if (blankLabel) {
         select.append(new Option(blankLabel, ""));
     }
+    extraOptions.forEach((item) => select.append(new Option(item.label, item.value)));
     items.forEach((item) => select.append(new Option(labeler(item), item.id)));
     selected.forEach((value) => {
         const option = Array.from(select.options).find((candidate) => candidate.value === value);
@@ -480,6 +524,20 @@ async function submitRecategorize() {
     }
 }
 
+async function applyRelativeRange(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const amount = Math.max(1, Number(form.elements.relative_count.value || 1));
+    const unit = form.elements.relative_unit.value;
+    const today = parseDateInput(state.filterDefaults.to || todayInputValue()) || new Date();
+    const fromDate = subtractRelativeDate(today, amount, unit);
+    const filtersForm = document.getElementById("filters-form");
+
+    filtersForm.elements.date_from.value = formatDateInput(fromDate);
+    filtersForm.elements.date_to.value = formatDateInput(today);
+    await loadDashboard();
+}
+
 async function submitImport(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -753,22 +811,14 @@ function guessColumnMap(headers) {
 
 async function apiGet(path, params = {}) {
     const url = new URL(`${API_BASE}${path}`, window.location.origin);
-    Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-            url.searchParams.set(key, value);
-        }
-    });
+    appendSearchParams(url, params);
     const response = await fetch(url);
     return readJson(response);
 }
 
 async function apiPost(path, data, params = {}) {
     const url = new URL(`${API_BASE}${path}`, window.location.origin);
-    Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-            url.searchParams.set(key, value);
-        }
-    });
+    appendSearchParams(url, params);
     const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -848,6 +898,70 @@ function lines(value) {
     return String(value || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
 }
 
+function addParamValue(params, key, value) {
+    if (params[key] === undefined) {
+        params[key] = value;
+        return;
+    }
+    if (!Array.isArray(params[key])) {
+        params[key] = [params[key]];
+    }
+    params[key].push(value);
+}
+
+function appendSearchParams(url, params) {
+    Object.entries(params).forEach(([key, value]) => {
+        const values = Array.isArray(value) ? value : [value];
+        values.forEach((item) => {
+            if (item !== undefined && item !== null && item !== "") {
+                url.searchParams.append(key, item);
+            }
+        });
+    });
+}
+
+function todayInputValue() {
+    return formatDateInput(new Date());
+}
+
+function parseDateInput(value) {
+    if (!value) {
+        return null;
+    }
+    const parts = String(value).split("-").map(Number);
+    if (parts.length !== 3 || parts.some((part) => Number.isNaN(part))) {
+        return null;
+    }
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function formatDateInput(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+}
+
+function subtractRelativeDate(date, amount, unit) {
+    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    if (unit === "weeks") {
+        next.setDate(next.getDate() - amount * 7);
+        return next;
+    }
+    if (unit === "months") {
+        return subtractMonths(next, amount);
+    }
+    next.setDate(next.getDate() - amount);
+    return next;
+}
+
+function subtractMonths(date, amount) {
+    const target = new Date(date.getFullYear(), date.getMonth() - amount, 1);
+    const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+    target.setDate(Math.min(date.getDate(), lastDay));
+    return target;
+}
+
 function titleCase(value) {
     return String(value || "").replace(/_/g, " ").replace(/\b\w/g, (match) => match.toUpperCase());
 }
@@ -865,7 +979,11 @@ function pluralize(word, count) {
 }
 
 function paramsKey(params) {
-    return JSON.stringify(Object.entries(params).sort(([left], [right]) => left.localeCompare(right)));
+    return JSON.stringify(
+        Object.entries(params)
+            .map(([key, value]) => [key, Array.isArray(value) ? [...value].sort() : value])
+            .sort(([left], [right]) => left.localeCompare(right))
+    );
 }
 
 function escapeHtml(value) {
