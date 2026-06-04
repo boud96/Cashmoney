@@ -1,0 +1,13 @@
+{
+  "name": "cashmoney-vibe-refactor-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell for the Cashmoney Vibe Refactor app.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^42.3.3"
+  }
+}
