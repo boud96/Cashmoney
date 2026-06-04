@@ -1,5 +1,6 @@
 .venv/
 desktop/node_modules/
+frontend/node_modules/
 tools/node/
 tools/node.old/
 tools/*.zip

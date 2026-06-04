@@ -2,6 +2,7 @@ import json
 from datetime import date
 from decimal import Decimal
 from decimal import InvalidOperation
+from pathlib import Path
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
@@ -243,6 +244,24 @@ def split_unassigned_filter(params, field_name):
 
 class AppShellView(TemplateView):
     template_name = "finance/app.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        manifest_path = (
+            Path(__file__).resolve().parent
+            / "static"
+            / "finance"
+            / "react"
+            / ".vite"
+            / "manifest.json"
+        )
+        entry = {}
+        if manifest_path.exists():
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            entry = manifest.get("index.html", manifest.get("src/main.jsx", {}))
+        context["react_entry_js"] = entry.get("file")
+        context["react_entry_css"] = entry.get("css", [])
+        return context
 
 
 @method_decorator(csrf_exempt, name="dispatch")

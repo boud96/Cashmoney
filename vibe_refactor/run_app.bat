@@ -19,6 +19,11 @@ if not exist "%PY%" (
 "%PY%" -m pip install -r "%BACKEND%\requirements.txt"
 "%PY%" "%BACKEND%\manage.py" migrate
 
+if exist "%ROOT%frontend\package.json" (
+    call "%ROOT%build_frontend.bat"
+    if errorlevel 1 exit /b 1
+)
+
 start "Vibe Refactor Backend" /min cmd /c ""%PY%" "%BACKEND%\manage.py" runserver 127.0.0.1:8000 --noreload"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(20); do { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8000/api/health/' | Out-Null; exit 0 } catch { Start-Sleep -Milliseconds 500 } } while ((Get-Date) -lt $deadline); exit 1"

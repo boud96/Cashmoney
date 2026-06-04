@@ -32,6 +32,13 @@ The launcher starts Django, applies migrations, and opens the app. If Electron h
 been installed in `desktop\node_modules`, it launches the Electron shell; otherwise
 it opens the Django-served frontend in the default browser.
 
+The launcher also builds the React frontend when `frontend\package.json` is
+present. To build it manually, run:
+
+```powershell
+.\build_frontend.bat
+```
+
 To install the Electron shell:
 
 ```powershell
