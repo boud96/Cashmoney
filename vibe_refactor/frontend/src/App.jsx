@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
 import { AgGridReact } from "ag-grid-react";
@@ -356,11 +356,12 @@ function DashboardPage({
         ))}
       </div>
 
-      <div className="chart-grid">
-        <ChartPanel title="Monthly Flow"><MonthlyChart rows={summary?.monthly || []} /></ChartPanel>
+      <div className="dashboard-charts">
+        <ChartPanel className="chart-panel-wide" title="Monthly Flow"><MonthlyChart rows={summary?.monthly || []} /></ChartPanel>
         <ChartPanel title="Income Categories"><SunburstChart rows={summary?.income_categories || []} label="Income" /></ChartPanel>
         <ChartPanel title="Expense Categories"><SunburstChart rows={summary?.expense_categories || []} label="Expenses" /></ChartPanel>
         <ChartPanel title="Want / Need / Investment"><WniChart rows={summary?.want_need_investment || []} /></ChartPanel>
+        <ChartPanel title="Top Expense Subcategories"><TopExpenseChart rows={summary?.expense_categories || []} /></ChartPanel>
       </div>
 
       <section className="panel transaction-panel">
@@ -816,20 +817,64 @@ function KeywordForm({ notify, refs, reloadAll }) {
   );
 }
 
-function ChartPanel({ children, title }) {
-  return <section className="panel chart-panel"><div className="panel-header"><h2>{title}</h2></div>{children}</section>;
+function ChartPanel({ children, className = "", title }) {
+  return <section className={`panel chart-panel ${className}`}><div className="panel-header"><h2>{title}</h2></div>{children}</section>;
 }
 
 function MonthlyChart({ rows }) {
-  if (!rows.length) return <EmptyChart />;
+  const monthlyRows = completeMonthlyRows(rows);
+  if (!monthlyRows.length) return <EmptyChart />;
+  const months = monthlyRows.map((row) => row.month);
+  const incomes = monthlyRows.map((row) => row.income);
+  const expenses = monthlyRows.map((row) => -row.expense);
+  const net = monthlyRows.map((row) => row.net);
+  const barWidth = monthlyRows.map(() => 0.78);
+  const netColors = monthlyRows.map(() => "rgba(0, 0, 0, 0.22)");
   return (
     <Plot
       config={{ displaylogo: false, responsive: true }}
       data={[
-        { marker: { color: "#2f8f65" }, name: "Income", type: "bar", x: rows.map((row) => row.month), y: rows.map((row) => row.income) },
-        { marker: { color: "#c96e26" }, name: "Expenses", type: "bar", x: rows.map((row) => row.month), y: rows.map((row) => row.expense) },
+        {
+          customdata: monthlyRows.map((row) => [row.expense, row.net]),
+          hovertemplate: "Month: %{x}<br>Income: %{y:,.0f}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          marker: { color: "#2f8f65" },
+          name: "Income",
+          type: "bar",
+          width: barWidth,
+          x: months,
+          y: incomes,
+        },
+        {
+          customdata: monthlyRows.map((row) => [row.expense, row.net]),
+          hovertemplate: "Month: %{x}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          marker: { color: "#c96e26" },
+          name: "Expenses",
+          type: "bar",
+          width: barWidth,
+          x: months,
+          y: expenses,
+        },
+        {
+          customdata: monthlyRows.map((row) => [row.income, row.expense]),
+          hovertemplate: "Month: %{x}<br>Net: %{y:,.0f}<br>Income: %{customdata[0]:,.0f}<br>Expenses: %{customdata[1]:,.0f}<extra></extra>",
+          marker: {
+            color: netColors,
+            line: { width: 0 },
+          },
+          name: "Net",
+          type: "bar",
+          width: barWidth,
+          x: months,
+          y: net,
+        },
       ]}
-      layout={baseLayout({ barmode: "group", yaxis: { tickprefix: "CZK " } })}
+      layout={baseLayout({
+        bargap: 0.24,
+        barmode: "overlay",
+        hovermode: "x unified",
+        xaxis: { type: "category" },
+        yaxis: { tickprefix: "CZK ", zeroline: true, zerolinecolor: "#9facb5", zerolinewidth: 1 },
+      })}
       useResizeHandler
     />
   );
@@ -862,6 +907,32 @@ function WniChart({ rows }) {
         values: cleanRows.map((row) => row.amount),
       }]}
       layout={baseLayout({ margin: { t: 8, r: 8, b: 8, l: 8 }, showlegend: true })}
+      useResizeHandler
+    />
+  );
+}
+
+function TopExpenseChart({ rows }) {
+  const topRows = topExpenseSubcategories(rows);
+  if (!topRows.length) return <EmptyChart />;
+  return (
+    <Plot
+      config={{ displaylogo: false, responsive: true }}
+      data={[{
+        marker: { color: "#2f6f9f" },
+        orientation: "h",
+        text: topRows.map((row) => money(row.amount)),
+        textposition: "auto",
+        type: "bar",
+        x: topRows.map((row) => row.amount),
+        y: topRows.map((row) => row.label),
+      }]}
+      layout={baseLayout({
+        height: 285,
+        margin: { t: 8, r: 18, b: 36, l: 150 },
+        xaxis: { tickprefix: "CZK " },
+        yaxis: { automargin: true },
+      })}
       useResizeHandler
     />
   );
@@ -913,13 +984,129 @@ function DateInput({ label, name, onChange, value }) {
 }
 
 function MultiSelect({ label, name, onChange, options, value }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const rootRef = useRef(null);
+  const selectedValues = value || [];
+  const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
+  const selectedOptions = useMemo(
+    () => selectedValues
+      .map((selectedValue) => options.find(([optionValue]) => optionValue === selectedValue))
+      .filter(Boolean),
+    [options, selectedValues],
+  );
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = normalizeName(query);
+    if (!normalizedQuery) {
+      return options;
+    }
+    return options.filter(([, text]) => normalizeName(text).includes(normalizedQuery));
+  }, [options, query]);
+  const placeholder = `All ${label.toLowerCase()}${label === "WNI" ? "" : "s"}`;
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  function toggleOption(optionValue) {
+    const next = selectedSet.has(optionValue)
+      ? selectedValues.filter((item) => item !== optionValue)
+      : [...selectedValues, optionValue];
+    onChange(name, next);
+  }
+
+  function removeOption(event, optionValue) {
+    event.stopPropagation();
+    onChange(name, selectedValues.filter((item) => item !== optionValue));
+  }
+
   return (
-    <label>
-      <span>{label}</span>
-      <select multiple onChange={(event) => onChange(name, Array.from(event.target.selectedOptions).map((option) => option.value))} size="4" value={value}>
-        {options.map(([optionValue, text]) => <option key={optionValue} value={optionValue}>{text}</option>)}
-      </select>
-    </label>
+    <div className="filter-multiselect" ref={rootRef}>
+      <span className="filter-label">{label}</span>
+      <button
+        aria-expanded={isOpen}
+        className={`filter-multiselect-control ${isOpen ? "is-open" : ""}`}
+        onClick={() => setIsOpen((current) => !current)}
+        type="button"
+      >
+        <span className={`filter-chip-list ${selectedOptions.length ? "" : "is-empty"}`}>
+          {selectedOptions.length ? selectedOptions.map(([optionValue, text]) => (
+            <span className="filter-chip" key={optionValue}>
+              <span title={text}>{text}</span>
+              <span
+                aria-label={`Remove ${text}`}
+                className="filter-chip-remove"
+                onClick={(event) => removeOption(event, optionValue)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    removeOption(event, optionValue);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+              >
+                x
+              </span>
+            </span>
+          )) : placeholder}
+        </span>
+        <span className="filter-chevron">▾</span>
+      </button>
+      {isOpen && (
+        <div className="filter-multiselect-menu">
+          <div className="filter-menu-header">
+            <input
+              autoFocus
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Search ${label.toLowerCase()}`}
+              type="search"
+              value={query}
+            />
+            {selectedValues.length > 0 && (
+              <button className="filter-clear" onClick={() => onChange(name, [])} type="button">Clear</button>
+            )}
+          </div>
+          <div className="filter-option-list">
+            {filteredOptions.length ? filteredOptions.map(([optionValue, text]) => {
+              const selected = selectedSet.has(optionValue);
+              return (
+                <button
+                  className={`filter-option ${selected ? "is-selected" : ""}`}
+                  key={optionValue}
+                  onClick={() => toggleOption(optionValue)}
+                  title={text}
+                  type="button"
+                >
+                  <span className="filter-option-check">{selected ? "✓" : ""}</span>
+                  <span>{text}</span>
+                </button>
+              );
+            }) : <div className="filter-no-matches">No matches</div>}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -999,6 +1186,52 @@ function sunburstData(rows) {
     });
   });
   return { ids, labels, parents, values };
+}
+
+function topExpenseSubcategories(rows) {
+  return rows
+    .flatMap((category) => (category.children || []).map((child) => ({
+      amount: Number(child.amount || 0),
+      label: `${category.name} / ${child.name}`,
+    })))
+    .filter((row) => row.amount > 0)
+    .sort((left, right) => right.amount - left.amount)
+    .slice(0, 8)
+    .reverse();
+}
+
+function completeMonthlyRows(rows) {
+  const cleanRows = rows
+    .map((row) => ({
+      expense: Number(row.expense || 0),
+      income: Number(row.income || 0),
+      month: String(row.month || ""),
+    }))
+    .filter((row) => /^\d{4}-\d{2}$/.test(row.month))
+    .sort((left, right) => left.month.localeCompare(right.month));
+
+  if (!cleanRows.length) {
+    return [];
+  }
+
+  const byMonth = new Map(cleanRows.map((row) => [row.month, row]));
+  const [startYear, startMonth] = cleanRows[0].month.split("-").map(Number);
+  const [endYear, endMonth] = cleanRows[cleanRows.length - 1].month.split("-").map(Number);
+  const cursor = new Date(startYear, startMonth - 1, 1);
+  const end = new Date(endYear, endMonth - 1, 1);
+  const completed = [];
+
+  while (cursor <= end) {
+    const month = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+    const row = byMonth.get(month) || { expense: 0, income: 0, month };
+    completed.push({
+      ...row,
+      net: row.income - row.expense,
+    });
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+
+  return completed;
 }
 
 function formObject(form) {
