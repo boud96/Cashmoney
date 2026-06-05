@@ -438,7 +438,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       headerName: "Category",
       cellRenderer: (params) => {
         const category = categoryLookup.get(params.value?.id);
-        return <ColorPill color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
+        return <ColorCell color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
       },
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
       width: 150,
@@ -451,7 +451,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       headerName: "Subcategory",
       cellRenderer: (params) => {
         const subcategory = subcategoryLookup.get(params.value);
-        return <ColorPill color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
+        return <ColorCell color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
       },
       valueFormatter: (params) => {
         const subcategory = subcategoryLookup.get(params.value);
@@ -466,7 +466,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       editable: true,
       field: "want_need_investment",
       headerName: "WNI",
-      cellRenderer: (params) => <WniPill value={params.value} />,
+      cellRenderer: (params) => <WniCell value={params.value} />,
       valueFormatter: (params) => (params.value ? titleCase(params.value) : "Unassigned"),
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
       width: 135,
@@ -1417,11 +1417,18 @@ function ColorPill({ color, label, muted = false }) {
   return <span className="pill color-pill" style={colorPillStyle(color)}>{label}</span>;
 }
 
-function WniPill({ value }) {
-  if (!value) {
-    return <span className="pill muted-pill">Unassigned</span>;
+function ColorCell({ color, label, muted = false }) {
+  if (muted) {
+    return <span className="color-cell color-cell-muted">{label}</span>;
   }
-  return <span className="pill color-pill" style={colorPillStyle(wniColor(value))}>{titleCase(value)}</span>;
+  return <span className="color-cell" style={colorPillStyle(color)}>{label}</span>;
+}
+
+function WniCell({ value }) {
+  if (!value) {
+    return <span className="color-cell color-cell-muted">Unassigned</span>;
+  }
+  return <span className="color-cell" style={colorPillStyle(wniColor(value))}>{titleCase(value)}</span>;
 }
 
 function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {

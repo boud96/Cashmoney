@@ -717,6 +717,30 @@ textarea:focus {
   font-weight: 700;
 }
 
+.transaction-grid .ag-cell:has(.color-cell) {
+  padding: 0;
+}
+
+.color-cell {
+  align-items: center;
+  display: flex;
+  font-weight: 700;
+  height: 100%;
+  line-height: 1.2;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.color-cell-muted {
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+
 .transaction-grid .ag-cell-inline-editing,
 .transaction-grid .ag-cell-edit-wrapper,
 .transaction-grid .ag-popup,
