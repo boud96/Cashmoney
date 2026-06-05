@@ -1,9 +1,11 @@
 """Settings for the Vibe Refactor Django backend."""
 
+import os
 from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = Path(os.environ.get("CASHMONEY_DATA_DIR", BASE_DIR))
 
 SECRET_KEY = "vibe-refactor-local-development-key"
 DEBUG = True
@@ -59,7 +61,7 @@ WSGI_APPLICATION = "cashmoney_backend.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": DATA_DIR / "db.sqlite3",
     }
 }
 
@@ -86,4 +88,3 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
-
