@@ -23,6 +23,14 @@ const wniOptions = [
   ["need", "Need"],
   ["investment", "Investment"],
 ];
+const definitionHelp = {
+  "Bank Accounts": "Bank accounts group imported transactions by account, bank, currency, owner count, and optional default CSV mapping.",
+  "CSV Mappings": "CSV mappings describe how a bank statement file should be parsed, including separators, date formats, columns, and categorization text fields.",
+  Categories: "Categories are the top-level buckets used for dashboard breakdowns and reporting.",
+  Subcategories: "Subcategories sit under categories and are the actual category-like value assigned to transactions.",
+  Tags: "Tags are optional labels that can be attached to multiple transactions for flexible filtering.",
+  Keywords: "Keywords automatically categorize transactions by matching text and assigning subcategory, WNI, tags, or ignored status.",
+};
 const mappingFields = [
   ["original_id", "Original ID"],
   ["transaction_date", "Transaction Date"],
@@ -821,32 +829,35 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
 function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraft }) {
   return (
     <div className="settings-grid">
-      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} items={refs.accounts} title="Bank Accounts">
+      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} title="Bank Accounts">
         <AccountForm notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} items={refs.mappings} title="CSV Mappings">
+      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} title="CSV Mappings">
         <MappingForm draft={mappingDraft} notify={notify} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} items={refs.categories} title="Categories">
+      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} title="Categories">
         <SimpleForm endpoint="/categories/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} items={refs.subcategories} title="Subcategories">
+      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} title="Subcategories">
         <SubcategoryForm notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} items={refs.tags} title="Tags">
+      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} title="Tags">
         <SimpleForm endpoint="/tags/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} items={refs.keywords} title="Keywords" wide>
+      <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} title="Keywords" wide>
         <KeywordForm notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
     </div>
   );
 }
 
-function DefinitionPanel({ children, endpoint, formatter, items, title, wide = false }) {
+function DefinitionPanel({ children, endpoint, formatter, helpText, items, title, wide = false }) {
   return (
     <section className={`panel ${wide ? "wide-panel" : ""}`}>
-      <div className="panel-header"><h2>{title}</h2></div>
+      <div className="panel-header">
+        <h2>{title}</h2>
+        {helpText && <HelpTooltip text={helpText} />}
+      </div>
       {children}
       <div className="item-list">
         {items.length ? items.map((item) => {
@@ -866,6 +877,15 @@ function DefinitionPanel({ children, endpoint, formatter, items, title, wide = f
         }) : <div className="muted">No records yet.</div>}
       </div>
     </section>
+  );
+}
+
+function HelpTooltip({ text }) {
+  return (
+    <span className="help-tooltip">
+      <button aria-label={text} className="help-tooltip-button" type="button">?</button>
+      <span className="help-tooltip-bubble" role="tooltip">{text}</span>
+    </span>
   );
 }
 
@@ -1043,7 +1063,11 @@ function SimpleForm({ endpoint, fields, notify, reloadAll }) {
   }
   return (
     <form className="compact-form" onSubmit={submit}>
-      {fields.map(([name, placeholder, required]) => <input key={name} name={name} placeholder={placeholder} required={required} />)}
+      {fields.map(([name, placeholder, required]) => (
+        name === "color"
+          ? <ColorInput key={name} name={name} />
+          : <input key={name} name={name} placeholder={placeholder} required={required} />
+      ))}
       <button type="submit">Add</button>
     </form>
   );
@@ -1065,9 +1089,55 @@ function SubcategoryForm({ notify, refs, reloadAll }) {
     <form className="compact-form" onSubmit={submit}>
       <Select name="category_id" options={refs.categories.map((item) => [item.id, item.name])} required />
       <input name="name" placeholder="Name" required />
-      <input name="color" placeholder="Color" />
+      <ColorInput name="color" />
       <button type="submit">Add</button>
     </form>
+  );
+}
+
+function ColorInput({ name }) {
+  const [value, setValue] = useState("");
+  const wrapperRef = useRef(null);
+  const pickerValue = normalizeHexColor(value) || "#2f6f9f";
+
+  useEffect(() => {
+    const form = wrapperRef.current?.closest("form");
+    if (!form) {
+      return undefined;
+    }
+    function clearColor() {
+      setValue("");
+    }
+    form.addEventListener("reset", clearColor);
+    return () => form.removeEventListener("reset", clearColor);
+  }, []);
+
+  function updateColor(nextValue) {
+    setValue(String(nextValue || "").trim().toUpperCase());
+  }
+
+  return (
+    <div className="color-input" ref={wrapperRef}>
+      <input name={name} type="hidden" value={value} />
+      <input
+        aria-label="Choose color"
+        className="color-input-picker"
+        onChange={(event) => updateColor(event.target.value)}
+        type="color"
+        value={pickerValue}
+      />
+      <input
+        className="color-input-text"
+        onChange={(event) => updateColor(event.target.value)}
+        placeholder="Auto color"
+        value={value}
+      />
+      {value && (
+        <button className="color-input-clear" onClick={() => setValue("")} title="Use auto color" type="button">
+          Clear
+        </button>
+      )}
+    </div>
   );
 }
 
