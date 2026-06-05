@@ -451,15 +451,14 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       headerName: "Subcategory",
       cellRenderer: (params) => {
         const subcategory = subcategoryLookup.get(params.value);
-        const category = categoryLookup.get(subcategory?.category?.id);
-        return <ColorPill color={category?.color} label={subcategory ? subLabel(subcategory) : "Unassigned"} muted={!subcategory} />;
+        return <ColorPill color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
       },
       valueFormatter: (params) => {
         const subcategory = subcategoryLookup.get(params.value);
-        return subcategory ? subLabel(subcategory) : "Unassigned";
+        return subcategory?.name || "Unassigned";
       },
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
-      width: 230,
+      width: 170,
     },
     {
       cellEditor: "agSelectCellEditor",
@@ -467,6 +466,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       editable: true,
       field: "want_need_investment",
       headerName: "WNI",
+      cellRenderer: (params) => <WniPill value={params.value} />,
       valueFormatter: (params) => (params.value ? titleCase(params.value) : "Unassigned"),
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
       width: 135,
@@ -1169,12 +1169,12 @@ function MonthlyChart({ rows }) {
 
 function SunburstChart({ label, rows }) {
   if (!rows.length) return <EmptyChart />;
-  const { ids, labels, parents, values } = sunburstData(rows);
+  const { colors, ids, labels, parents, values } = sunburstData(rows);
   return (
     <Plot
       config={{ displaylogo: false, responsive: true }}
-      data={[{ branchvalues: "total", ids, labels, parents, type: "sunburst", values }]}
-      layout={baseLayout({ margin: { t: 8, r: 8, b: 8, l: 8 }, title: undefined })}
+      data={[{ branchvalues: "total", ids, labels, marker: { colors }, parents, type: "sunburst", values }]}
+      layout={baseLayout({ extendsunburstcolors: false, margin: { t: 8, r: 8, b: 8, l: 8 }, title: undefined })}
       useResizeHandler
     />
   );
@@ -1189,7 +1189,7 @@ function WniChart({ rows }) {
       data={[{
         hole: 0.48,
         labels: cleanRows.map((row) => titleCase(row.name)),
-        marker: { colors: [cssVar("--violet", "#7655a6"), cssVar("--green", "#2f8f65"), cssVar("--warning", "#b1842f"), cssVar("--muted", "#5f6f7a")] },
+        marker: { colors: cleanRows.map((row) => wniColor(row.name)) },
         type: "pie",
         values: cleanRows.map((row) => row.amount),
       }]}
@@ -1415,6 +1415,13 @@ function ColorPill({ color, label, muted = false }) {
     return <span className="pill muted-pill">{label}</span>;
   }
   return <span className="pill color-pill" style={colorPillStyle(color)}>{label}</span>;
+}
+
+function WniPill({ value }) {
+  if (!value) {
+    return <span className="pill muted-pill">Unassigned</span>;
+  }
+  return <span className="pill color-pill" style={colorPillStyle(wniColor(value))}>{titleCase(value)}</span>;
 }
 
 function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
@@ -1673,7 +1680,18 @@ function cssVar(name, fallback) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
+function wniColor(value) {
+  const colors = {
+    investment: cssVar("--wni-investment", "#059669"),
+    need: cssVar("--wni-need", "#2563eb"),
+    uncategorized: cssVar("--wni-uncategorized", "#64748b"),
+    want: cssVar("--wni-want", "#f59e0b"),
+  };
+  return colors[String(value || "uncategorized").toLowerCase()] || colors.uncategorized;
+}
+
 function sunburstData(rows) {
+  const colors = [];
   const ids = [];
   const labels = [];
   const parents = [];
@@ -1684,14 +1702,16 @@ function sunburstData(rows) {
     labels.push(category.name);
     parents.push("");
     values.push(category.amount);
+    colors.push(normalizeHexColor(category.color) || cssVar("--muted", "#667481"));
     (category.children || []).forEach((child) => {
       ids.push(`${categoryId}:${child.name}`);
       labels.push(child.name);
       parents.push(categoryId);
       values.push(child.amount);
+      colors.push(normalizeHexColor(child.color) || normalizeHexColor(category.color) || cssVar("--surface-2", "#eef3f6"));
     });
   });
-  return { ids, labels, parents, values };
+  return { colors, ids, labels, parents, values };
 }
 
 function topExpenseSubcategories(rows) {

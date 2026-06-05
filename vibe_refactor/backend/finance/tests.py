@@ -678,6 +678,11 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["expense_categories"][0]["name"], "Food")
         self.assertEqual(payload["expense_categories"][0]["amount"], 12.5)
+        self.assertEqual(payload["expense_categories"][0]["color"], self.category.color)
+        self.assertEqual(
+            payload["expense_categories"][0]["children"][0]["color"],
+            self.subcategory.color,
+        )
         self.assertEqual(payload["want_need_investment"][0]["name"], "want")
 
     def test_maintenance_summary_returns_counts(self):

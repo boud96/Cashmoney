@@ -25,6 +25,10 @@
   --red: #dc2626;
   --violet: #7655a6;
   --warning: #b1842f;
+  --wni-want: #7c3aed;
+  --wni-need: #2563eb;
+  --wni-investment: #f59e0b;
+  --wni-uncategorized: #64748b;
   --focus-ring: rgba(47, 111, 159, 0.16);
   --shadow: 0 14px 40px rgba(29, 45, 53, 0.08);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;

@@ -670,8 +670,8 @@ def build_dashboard_summary(queryset):
     }
 
     monthly = defaultdict(lambda: {"income": Decimal("0"), "expense": Decimal("0")})
-    income_categories = defaultdict(lambda: defaultdict(Decimal))
-    expense_categories = defaultdict(lambda: defaultdict(Decimal))
+    income_categories = {}
+    expense_categories = {}
     wni = defaultdict(Decimal)
 
     for transaction_obj in queryset.select_related("subcategory", "subcategory__category"):
@@ -682,13 +682,27 @@ def build_dashboard_summary(queryset):
             monthly[month_key]["income"] += amount
             category_name = category.name if category else "Uncategorized"
             subcategory_name = transaction_obj.subcategory.name if transaction_obj.subcategory else "Other"
-            income_categories[category_name][subcategory_name] += amount
+            _add_category_amount(
+                income_categories,
+                category_name,
+                subcategory_name,
+                amount,
+                category.color if category else "",
+                transaction_obj.subcategory.color if transaction_obj.subcategory else "",
+            )
         else:
             absolute_amount = abs(amount)
             monthly[month_key]["expense"] += absolute_amount
             category_name = category.name if category else "Uncategorized"
             subcategory_name = transaction_obj.subcategory.name if transaction_obj.subcategory else "Other"
-            expense_categories[category_name][subcategory_name] += absolute_amount
+            _add_category_amount(
+                expense_categories,
+                category_name,
+                subcategory_name,
+                absolute_amount,
+                category.color if category else "",
+                transaction_obj.subcategory.color if transaction_obj.subcategory else "",
+            )
 
         if amount < 0:
             wni_key = transaction_obj.want_need_investment or "uncategorized"
@@ -714,16 +728,46 @@ def build_dashboard_summary(queryset):
 
 def _category_tree(grouped_amounts):
     tree = []
-    for category_name, subcategories in sorted(grouped_amounts.items()):
+    for category_name, category_data in sorted(grouped_amounts.items()):
+        subcategories = category_data["children"]
         children = [
-            {"name": subcategory_name, "amount": float(amount)}
-            for subcategory_name, amount in sorted(subcategories.items())
+            {
+                "name": subcategory_name,
+                "amount": float(subcategory_data["amount"]),
+                "color": subcategory_data["color"],
+            }
+            for subcategory_name, subcategory_data in sorted(subcategories.items())
         ]
         tree.append(
             {
                 "name": category_name,
-                "amount": float(sum(subcategories.values(), Decimal("0"))),
+                "amount": float(category_data["amount"]),
+                "color": category_data["color"],
                 "children": children,
             }
         )
     return tree
+
+
+def _add_category_amount(
+    grouped_amounts,
+    category_name,
+    subcategory_name,
+    amount,
+    category_color,
+    subcategory_color,
+):
+    category_data = grouped_amounts.setdefault(
+        category_name,
+        {"amount": Decimal("0"), "children": {}, "color": category_color},
+    )
+    if category_color and not category_data["color"]:
+        category_data["color"] = category_color
+    category_data["amount"] += amount
+    subcategory_data = category_data["children"].setdefault(
+        subcategory_name,
+        {"amount": Decimal("0"), "color": subcategory_color},
+    )
+    if subcategory_color and not subcategory_data["color"]:
+        subcategory_data["color"] = subcategory_color
+    subcategory_data["amount"] += amount
