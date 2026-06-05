@@ -16,6 +16,7 @@ const pages = {
   dashboard: ["Dashboard", "Monthly flow, category mix, and transaction review."],
   import: ["Import", "Load bank statement CSV files into the local transaction database."],
   settings: ["Definitions", "Manage accounts, mappings, categories, tags, and keyword rules."],
+  maintenance: ["Maintenance", "Database snapshot and destructive cleanup tools."],
 };
 const wniOptions = [
   ["want", "Want"],
@@ -83,6 +84,7 @@ export default function App() {
   const [recategorizeResult, setRecategorizeResult] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [importReport, setImportReport] = useState(null);
+  const [maintenanceSummary, setMaintenanceSummary] = useState(null);
   const [mappingDraft, setMappingDraft] = useState({
     column_map: {},
     categorization_fields: defaultCategorizationFields,
@@ -148,15 +150,34 @@ export default function App() {
     }
   }, [filterParams, notify]);
 
+  const loadMaintenance = useCallback(async () => {
+    try {
+      setMaintenanceSummary(await apiGet("/maintenance/summary/"));
+    } catch (error) {
+      notify(error.message);
+    }
+  }, [notify]);
+
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    document.documentElement.removeAttribute("data-theme");
+    window.localStorage.removeItem("cashmoney-theme");
+  }, []);
 
   useEffect(() => {
     if (filterDefaults.to || filterDefaults.from) {
       loadDashboard();
     }
   }, [filterDefaults, filterParams, loadDashboard]);
+
+  useEffect(() => {
+    if (activePage === "maintenance") {
+      loadMaintenance();
+    }
+  }, [activePage, loadMaintenance]);
 
   const updateFilter = (name, value) => {
     setRecategorizeResult(null);
@@ -242,6 +263,15 @@ export default function App() {
             refs={refs}
             reloadAll={loadAll}
             setMappingDraft={setMappingDraft}
+          />
+        )}
+        {activePage === "maintenance" && (
+          <MaintenancePage
+            notify={notify}
+            reloadAll={loadAll}
+            reloadDashboard={loadDashboard}
+            reloadMaintenance={loadMaintenance}
+            summary={maintenanceSummary}
           />
         )}
       </main>
@@ -377,7 +407,8 @@ function DashboardPage({
 
 function TransactionGrid({ notify, refs, rows, updateTransaction }) {
   const subcategoryOptions = useMemo(() => ["", ...refs.subcategories.map((item) => item.id)], [refs.subcategories]);
-  const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, subLabel(item)])), [refs.subcategories]);
+  const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
+  const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
   const accountLookup = useMemo(() => new Map(refs.accounts.map((item) => [item.id, item.name])), [refs.accounts]);
 
   const rowData = useMemo(() => rows.map((row) => ({
@@ -393,8 +424,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
       field: "amount",
       headerName: "Amount",
-      type: "rightAligned",
-      valueFormatter: (params) => money(params.value),
+      valueFormatter: (params) => amountNumber(params.value),
       width: 130,
     },
     {
@@ -406,7 +436,10 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
     {
       field: "category",
       headerName: "Category",
-      valueFormatter: (params) => params.value?.name || "Unassigned",
+      cellRenderer: (params) => {
+        const category = categoryLookup.get(params.value?.id);
+        return <ColorPill color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
+      },
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
       width: 150,
     },
@@ -416,7 +449,15 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       editable: true,
       field: "subcategory_id",
       headerName: "Subcategory",
-      valueFormatter: (params) => subcategoryLookup.get(params.value) || "Unassigned",
+      cellRenderer: (params) => {
+        const subcategory = subcategoryLookup.get(params.value);
+        const category = categoryLookup.get(subcategory?.category?.id);
+        return <ColorPill color={category?.color} label={subcategory ? subLabel(subcategory) : "Unassigned"} muted={!subcategory} />;
+      },
+      valueFormatter: (params) => {
+        const subcategory = subcategoryLookup.get(params.value);
+        return subcategory ? subLabel(subcategory) : "Unassigned";
+      },
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
       width: 230,
     },
@@ -433,9 +474,18 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
     {
       field: "tags",
       headerName: "Tags",
-      cellRenderer: (params) => <TagCloud tags={params.value || []} />,
+      cellRenderer: (params) => (
+        <EditableTagCell
+          allTags={refs.tags}
+          notify={notify}
+          row={params.data}
+          tags={params.value || []}
+          updateTransaction={updateTransaction}
+        />
+      ),
       sortable: false,
-      minWidth: 180,
+      flex: 1,
+      minWidth: 240,
     },
     {
       field: "is_ignored",
@@ -456,7 +506,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       ),
       width: 110,
     },
-  ], [accountLookup, notify, subcategoryLookup, subcategoryOptions, updateTransaction]);
+  ], [accountLookup, categoryLookup, notify, refs.tags, subcategoryLookup, subcategoryOptions, updateTransaction]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {
@@ -481,6 +531,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
         defaultColDef={{ resizable: true, sortable: true }}
         onCellValueChanged={onCellValueChanged}
         rowData={rowData}
+        rowHeight={48}
         stopEditingWhenCellsLoseFocus
       />
     </div>
@@ -528,6 +579,242 @@ function ImportPage({ importReport, notify, refs, reloadAll, setImportReport }) 
         )}
       </div>
     </section>
+  );
+}
+
+function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance, summary }) {
+  const [deleting, setDeleting] = useState(false);
+  const [restoreFile, setRestoreFile] = useState(null);
+  const [safeBusy, setSafeBusy] = useState("");
+  const counts = summary || {};
+  const snapshot = [
+    ["Transactions", counts.transactions],
+    ["Imports", counts.imports],
+    ["Sample Transactions", counts.sample_transactions],
+    ["Accounts", counts.bank_accounts],
+    ["CSV Mappings", counts.csv_mappings],
+    ["Categories", counts.categories],
+    ["Subcategories", counts.subcategories],
+    ["Tags", counts.tags],
+    ["Keywords", counts.keywords],
+  ];
+  const financeObjectCount = [
+    counts.transactions,
+    counts.imports,
+    counts.bank_accounts,
+    counts.csv_mappings,
+    counts.categories,
+    counts.subcategories,
+    counts.tags,
+    counts.keywords,
+  ].reduce((total, value) => total + Number(value || 0), 0);
+  const sampleObjectCount = [
+    counts.sample_transactions,
+    counts.sample_imports,
+    counts.sample_bank_accounts,
+    counts.sample_csv_mappings,
+    counts.sample_categories,
+    counts.sample_subcategories,
+    counts.sample_tags,
+    counts.sample_keywords,
+  ].reduce((total, value) => total + Number(value || 0), 0);
+  const transactionObjectCount = Number(counts.transactions || 0) + Number(counts.imports || 0);
+  const actions = [
+    {
+      count: sampleObjectCount,
+      description: "Remove only objects created by the first-launch demo dataset.",
+      endpoint: "/maintenance/sample-data/",
+      phrase: "DELETE SAMPLE DATA",
+      title: "Delete sample data",
+    },
+    {
+      count: transactionObjectCount,
+      description: "Remove every transaction and all CSV import history. Definitions stay intact.",
+      endpoint: "/maintenance/transactions/",
+      phrase: "DELETE ALL TRANSACTIONS",
+      title: "Delete all transactions",
+    },
+    {
+      count: financeObjectCount,
+      description: "Remove transactions, imports, keywords, accounts, mappings, tags, subcategories, and categories. Admin users stay intact.",
+      endpoint: "/maintenance/finance-data/",
+      phrase: "DELETE ALL FINANCE DATA",
+      title: "Delete all finance data",
+    },
+  ];
+
+  async function deleteMaintenanceData(action) {
+    if (!window.confirm(`${action.title}?\n\n${action.description}`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await apiDelete(action.endpoint, { confirmation: action.phrase });
+      notify(`${action.title} completed`);
+      await Promise.all([reloadMaintenance(), reloadAll(), reloadDashboard()]);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function recreateSampleData() {
+    setSafeBusy("samples");
+    try {
+      await apiPost("/maintenance/sample-data/recreate/", {});
+      notify("Sample data recreated");
+      await Promise.all([reloadMaintenance(), reloadAll(), reloadDashboard()]);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSafeBusy("");
+    }
+  }
+
+  async function exportBackup() {
+    setSafeBusy("backup");
+    try {
+      const response = await fetch("/api/maintenance/database-backup/");
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.error || "Backup failed");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || "cashmoney-backup.sqlite3";
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      notify("Database backup downloaded");
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSafeBusy("");
+    }
+  }
+
+  async function restoreDatabase(event) {
+    event.preventDefault();
+    if (!restoreFile) {
+      return;
+    }
+    if (!window.confirm("Restore database backup?\n\nThis replaces the current local database. A pre-restore backup will be saved automatically.")) {
+      return;
+    }
+    setSafeBusy("restore");
+    try {
+      const formData = new FormData();
+      formData.append("backup_file", restoreFile);
+      formData.append("confirmation", "RESTORE DATABASE");
+      const response = await fetch("/api/maintenance/database-restore/", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "Restore failed");
+      }
+      notify("Database restored");
+      setRestoreFile(null);
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSafeBusy("");
+    }
+  }
+
+  return (
+    <>
+      <section className="panel maintenance-snapshot">
+        <div className="panel-header">
+          <h2>Database Snapshot</h2>
+          <button className="link-button" onClick={reloadMaintenance} type="button">Refresh Counts</button>
+        </div>
+        <div className="maintenance-counts">
+          {snapshot.map(([label, value]) => (
+            <Metric key={label} label={label} value={formatCount(value)} />
+          ))}
+        </div>
+      </section>
+
+      <section className="panel maintenance-tools">
+        <div className="panel-header">
+          <h2>Safe Tools</h2>
+          <span className="muted">Useful before or after cleanup.</span>
+        </div>
+        <div className="maintenance-tool-grid">
+          <article className="maintenance-tool-card">
+            <div>
+              <h3>Export database backup</h3>
+              <p>Download a SQLite backup of the current local database.</p>
+            </div>
+            <button className="primary-action" disabled={Boolean(safeBusy)} onClick={exportBackup} type="button">
+              Export Backup
+            </button>
+          </article>
+          <article className="maintenance-tool-card">
+            <div>
+              <h3>Recreate sample data</h3>
+              <p>Reset only the sample dataset and create the demo records again.</p>
+            </div>
+            <button className="link-button" disabled={Boolean(safeBusy)} onClick={recreateSampleData} type="button">
+              Recreate Samples
+            </button>
+          </article>
+          <article className="maintenance-tool-card restore-card">
+            <div>
+              <h3>Restore database backup</h3>
+              <p>Replace the current local database from a Cashmoney SQLite backup. A pre-restore backup is saved automatically.</p>
+            </div>
+            <form className="restore-form" onSubmit={restoreDatabase}>
+              <label>
+                <span>Backup file</span>
+                <input
+                  accept=".sqlite3,.db,application/x-sqlite3"
+                  onChange={(event) => setRestoreFile(event.target.files?.[0] || null)}
+                  type="file"
+                />
+              </label>
+              <button
+                className="danger-button"
+                disabled={Boolean(safeBusy) || !restoreFile}
+                type="submit"
+              >
+                Restore Database
+              </button>
+            </form>
+          </article>
+        </div>
+      </section>
+
+      <section className="danger-zone">
+        <div className="danger-zone-header">
+          <h2>Danger Zone</h2>
+          <p>These actions permanently remove local finance data from this database.</p>
+        </div>
+        <div className="danger-action-grid">
+          {actions.map((action) => (
+            <article className="danger-card" key={action.phrase}>
+              <div>
+                <h3>{action.title}</h3>
+                <p>{action.description}</p>
+                <div className="danger-count">{formatCount(action.count)} affected</div>
+              </div>
+              <button className="danger-button" disabled={deleting} onClick={() => deleteMaintenanceData(action)} type="button">
+                {action.title}
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -837,7 +1124,7 @@ function MonthlyChart({ rows }) {
         {
           customdata: monthlyRows.map((row) => [row.expense, row.net]),
           hovertemplate: "Month: %{x}<br>Income: %{y:,.0f}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
-          marker: { color: "#2f8f65" },
+          marker: { color: cssVar("--green", "#2f8f65") },
           name: "Income",
           type: "bar",
           width: barWidth,
@@ -847,7 +1134,7 @@ function MonthlyChart({ rows }) {
         {
           customdata: monthlyRows.map((row) => [row.expense, row.net]),
           hovertemplate: "Month: %{x}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
-          marker: { color: "#c96e26" },
+          marker: { color: cssVar("--orange", "#c96e26") },
           name: "Expenses",
           type: "bar",
           width: barWidth,
@@ -873,7 +1160,7 @@ function MonthlyChart({ rows }) {
         barmode: "overlay",
         hovermode: "x unified",
         xaxis: { type: "category" },
-        yaxis: { tickprefix: "CZK ", zeroline: true, zerolinecolor: "#9facb5", zerolinewidth: 1 },
+        yaxis: { tickprefix: "CZK ", zeroline: true, zerolinecolor: cssVar("--border", "#9facb5"), zerolinewidth: 1 },
       })}
       useResizeHandler
     />
@@ -902,7 +1189,7 @@ function WniChart({ rows }) {
       data={[{
         hole: 0.48,
         labels: cleanRows.map((row) => titleCase(row.name)),
-        marker: { colors: ["#7655a6", "#2f8f65", "#b1842f", "#5f6f7a"] },
+        marker: { colors: [cssVar("--violet", "#7655a6"), cssVar("--green", "#2f8f65"), cssVar("--warning", "#b1842f"), cssVar("--muted", "#5f6f7a")] },
         type: "pie",
         values: cleanRows.map((row) => row.amount),
       }]}
@@ -919,7 +1206,7 @@ function TopExpenseChart({ rows }) {
     <Plot
       config={{ displaylogo: false, responsive: true }}
       data={[{
-        marker: { color: "#2f6f9f" },
+        marker: { color: cssVar("--blue", "#2f6f9f") },
         orientation: "h",
         text: topRows.map((row) => money(row.amount)),
         textposition: "auto",
@@ -1123,8 +1410,193 @@ function Metric({ label, tone = "", value }) {
   return <div className="metric"><div className="metric-label">{label}</div><div className={`metric-value ${tone}`}>{value}</div></div>;
 }
 
-function TagCloud({ tags }) {
-  return <div className="tag-cloud">{tags.map((tag) => <span className="pill" key={tag.id} style={tag.color ? { borderColor: tag.color } : undefined}>{tag.name}</span>)}</div>;
+function ColorPill({ color, label, muted = false }) {
+  if (muted) {
+    return <span className="pill muted-pill">{label}</span>;
+  }
+  return <span className="pill color-pill" style={colorPillStyle(color)}>{label}</span>;
+}
+
+function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
+  const [draftIds, setDraftIds] = useState([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [popoverPosition, setPopoverPosition] = useState({ left: 0, top: 0 });
+  const buttonRef = useRef(null);
+  const popoverRef = useRef(null);
+  const rootRef = useRef(null);
+  const selectedIds = useMemo(() => tags.map((tag) => tag.id), [tags]);
+  const selectedSet = useMemo(() => new Set(draftIds), [draftIds]);
+  const selectedDraftTags = useMemo(
+    () => draftIds.map((id) => allTags.find((tag) => tag.id === id)).filter(Boolean),
+    [allTags, draftIds],
+  );
+  const filteredTags = useMemo(() => {
+    const normalizedQuery = normalizeName(query);
+    if (!normalizedQuery) {
+      return allTags;
+    }
+    return allTags.filter((tag) => normalizeName(tag.name).includes(normalizedQuery));
+  }, [allTags, query]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      const clickedCell = rootRef.current?.contains(event.target);
+      const clickedPopover = popoverRef.current?.contains(event.target);
+      if (!clickedCell && !clickedPopover) {
+        setIsOpen(false);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    function updatePosition() {
+      const rect = buttonRef.current?.getBoundingClientRect();
+      if (!rect) {
+        return;
+      }
+      const popoverWidth = 360;
+      const popoverHeight = 340;
+      const left = Math.min(
+        Math.max(12, rect.left),
+        Math.max(12, window.innerWidth - popoverWidth - 12),
+      );
+      const preferredTop = rect.bottom + 6;
+      const top = preferredTop + popoverHeight > window.innerHeight && rect.top > popoverHeight
+        ? rect.top - popoverHeight - 6
+        : preferredTop;
+      setPopoverPosition({ left, top: Math.max(12, top) });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [isOpen]);
+
+  function openEditor() {
+    setDraftIds(selectedIds);
+    setQuery("");
+    setIsOpen(true);
+  }
+
+  function stopGridEvent(event) {
+    event.stopPropagation();
+  }
+
+  function toggleTag(tagId) {
+    setDraftIds((current) => (
+      current.includes(tagId)
+        ? current.filter((id) => id !== tagId)
+        : [...current, tagId]
+    ));
+  }
+
+  async function applyTags() {
+    setSaving(true);
+    try {
+      await updateTransaction(row, { tag_ids: draftIds });
+      notify("Transaction tags saved");
+      setIsOpen(false);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="tag-edit-cell" onClick={stopGridEvent} onDoubleClick={stopGridEvent} onMouseDown={stopGridEvent} ref={rootRef}>
+      <button className="tag-cell-button" onClick={openEditor} ref={buttonRef} title={tagTitle(tags)} type="button">
+        <TagCloud tags={tags} />
+      </button>
+      {isOpen && (
+        <div className="tag-popover" onClick={stopGridEvent} onDoubleClick={stopGridEvent} onMouseDown={stopGridEvent} ref={popoverRef} style={{ left: popoverPosition.left, top: popoverPosition.top }}>
+          <div className="tag-popover-selected">
+            {selectedDraftTags.length ? <TagCloud collapse={false} tags={selectedDraftTags} /> : <span className="muted">No tags selected</span>}
+          </div>
+          <input
+            autoFocus
+            className="tag-search"
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search tags"
+            type="search"
+            value={query}
+          />
+          <div className="tag-option-list">
+            {filteredTags.length ? filteredTags.map((tag) => (
+              <button className={`tag-option ${selectedSet.has(tag.id) ? "is-selected" : ""}`} key={tag.id} onClick={() => toggleTag(tag.id)} type="button">
+                <span className="tag-option-check">{selectedSet.has(tag.id) ? "✓" : ""}</span>
+                <span className="pill tag-pill" style={colorPillStyle(tag.color)}>{tag.name}</span>
+              </button>
+            )) : <div className="tag-no-matches">No matches</div>}
+          </div>
+          <div className="tag-popover-actions">
+            <button className="link-button" disabled={saving} onClick={() => setIsOpen(false)} type="button">Cancel</button>
+            <button className="primary-action" disabled={saving} onClick={applyTags} type="button">Apply</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TagCloud({ collapse = true, tags }) {
+  const containerRef = useRef(null);
+  const [width, setWidth] = useState(0);
+  const visibleCount = useMemo(() => (collapse ? estimateVisibleTagCount(tags, width) : tags.length), [collapse, tags, width]);
+  const visibleTags = tags.slice(0, visibleCount);
+  const hiddenCount = Math.max(tags.length - visibleCount, 0);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) {
+      return undefined;
+    }
+    function updateWidth() {
+      setWidth(element.clientWidth);
+    }
+    updateWidth();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateWidth);
+      return () => window.removeEventListener("resize", updateWidth);
+    }
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div className="tag-cloud" ref={containerRef} title={tagTitle(tags)}>
+      {visibleTags.map((tag) => <span className="pill tag-pill" key={tag.id} style={colorPillStyle(tag.color)}>{tag.name}</span>)}
+      {hiddenCount > 0 && <span className="pill tag-more-pill">+{hiddenCount}</span>}
+    </div>
+  );
 }
 
 function buildFilterParams(filters) {
@@ -1156,15 +1628,49 @@ function buildMetrics(summary, transactionPage) {
 }
 
 function baseLayout(extra = {}) {
+  const axisDefaults = {
+    color: cssVar("--muted", "#667481"),
+    gridcolor: cssVar("--border", "#d8e0e5"),
+    linecolor: cssVar("--border", "#d8e0e5"),
+    tickcolor: cssVar("--border", "#d8e0e5"),
+    zerolinecolor: cssVar("--border", "#d8e0e5"),
+  };
+  const xaxis = { ...axisDefaults, ...(extra.xaxis || {}) };
+  const yaxis = { ...axisDefaults, ...(extra.yaxis || {}) };
   return {
     autosize: true,
-    font: { color: "#17212b", family: "Inter, Segoe UI, sans-serif" },
+    colorway: [
+      cssVar("--blue", "#2f6f9f"),
+      cssVar("--orange", "#c96e26"),
+      cssVar("--green", "#2f8f65"),
+      cssVar("--violet", "#7655a6"),
+      cssVar("--warning", "#b1842f"),
+      cssVar("--red", "#b34545"),
+    ],
+    font: { color: cssVar("--text", "#17212b"), family: "Inter, Segoe UI, sans-serif" },
     height: 285,
+    hoverlabel: {
+      bgcolor: cssVar("--surface", "#ffffff"),
+      bordercolor: cssVar("--border", "#d8e0e5"),
+      font: { color: cssVar("--text", "#17212b") },
+    },
+    legend: {
+      font: { color: cssVar("--text", "#17212b") },
+    },
     margin: { t: 24, r: 20, b: 42, l: 54 },
     paper_bgcolor: "rgba(255,255,255,0)",
     plot_bgcolor: "rgba(255,255,255,0)",
     ...extra,
+    xaxis,
+    yaxis,
   };
+}
+
+function cssVar(name, fallback) {
+  if (typeof window === "undefined") {
+    return fallback;
+  }
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
 function sunburstData(rows) {
@@ -1288,6 +1794,76 @@ function subLabel(item) {
 
 function money(value) {
   return new Intl.NumberFormat("en-US", { currency: "CZK", maximumFractionDigits: 0, style: "currency" }).format(Number(value || 0));
+}
+
+function amountNumber(value) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 0 }).format(Number(value || 0));
+}
+
+function formatCount(value) {
+  return Number(value || 0).toLocaleString();
+}
+
+function colorPillStyle(color) {
+  const background = normalizeHexColor(color);
+  if (!background) {
+    return undefined;
+  }
+  return {
+    background,
+    borderColor: background,
+    color: readableTextColor(background),
+  };
+}
+
+function tagTitle(tags) {
+  return tags.length ? tags.map((tag) => tag.name).join(", ") : "No tags";
+}
+
+function estimateVisibleTagCount(tags, width) {
+  if (!tags.length) {
+    return 0;
+  }
+  if (!width) {
+    return Math.min(tags.length, 2);
+  }
+
+  const gap = 4;
+  const morePillWidth = 42;
+  let usedWidth = 0;
+  let visibleCount = 0;
+
+  for (const tag of tags) {
+    const pillWidth = estimateTagPillWidth(tag.name);
+    const nextWidth = usedWidth + (visibleCount ? gap : 0) + pillWidth;
+    const hasHiddenAfterThis = visibleCount + 1 < tags.length;
+    const reserveWidth = hasHiddenAfterThis ? gap + morePillWidth : 0;
+    if (nextWidth + reserveWidth > width) {
+      break;
+    }
+    usedWidth = nextWidth;
+    visibleCount += 1;
+  }
+
+  return Math.max(visibleCount, Math.min(tags.length, 1));
+}
+
+function estimateTagPillWidth(label) {
+  return Math.min(150, Math.max(42, String(label || "").length * 7 + 24));
+}
+
+function normalizeHexColor(color) {
+  const value = String(color || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(value) ? value : "";
+}
+
+function readableTextColor(hex) {
+  const value = hex.replace("#", "");
+  const red = parseInt(value.slice(0, 2), 16);
+  const green = parseInt(value.slice(2, 4), 16);
+  const blue = parseInt(value.slice(4, 6), 16);
+  const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+  return luminance > 0.62 ? "#17212b" : "#ffffff";
 }
 
 function titleCase(value) {

@@ -1,14 +1,18 @@
 import json
+import sqlite3
+import tempfile
 from datetime import date
 from decimal import Decimal
 from decimal import InvalidOperation
 from pathlib import Path
 
+from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import IntegrityError
+from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
 from django.http import Http404
+from django.http import HttpResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -20,6 +24,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .constants import Direction, WantNeedInvestment
 from .models import (
     BankAccount,
+    CSVImport,
     CSVMapping,
     Category,
     HEX_COLOR_VALIDATOR,
@@ -27,6 +32,12 @@ from .models import (
     Subcategory,
     Tag,
     Transaction,
+)
+from .sample_data import (
+    SAMPLE_IMPORT_SOURCE,
+    SAMPLE_PREFIX,
+    delete_sample_data,
+    seed_sample_data,
 )
 from .serializers import (
     serialize_bank_account,
@@ -49,6 +60,19 @@ from .services import (
 
 
 UNASSIGNED_FILTER_VALUE = "__unassigned__"
+CONFIRM_DELETE_SAMPLE_DATA = "DELETE SAMPLE DATA"
+CONFIRM_DELETE_ALL_TRANSACTIONS = "DELETE ALL TRANSACTIONS"
+CONFIRM_DELETE_ALL_FINANCE_DATA = "DELETE ALL FINANCE DATA"
+CONFIRM_RESTORE_DATABASE = "RESTORE DATABASE"
+REQUIRED_BACKUP_TABLES = {
+    "finance_bankaccount",
+    "finance_category",
+    "finance_csvmapping",
+    "finance_keyword",
+    "finance_subcategory",
+    "finance_tag",
+    "finance_transaction",
+}
 
 
 class APIValidationError(Exception):
@@ -977,6 +1001,237 @@ class KeywordPreviewView(JsonView):
 class DashboardSummaryView(JsonView):
     def get(self, request):
         return json_response(build_dashboard_summary(filtered_transactions(request)))
+
+
+def maintenance_counts():
+    return {
+        "transactions": Transaction.objects.count(),
+        "imports": CSVImport.objects.count(),
+        "sample_transactions": Transaction.objects.filter(
+            import_batch__source_filename=SAMPLE_IMPORT_SOURCE
+        ).count(),
+        "sample_imports": CSVImport.objects.filter(
+            source_filename=SAMPLE_IMPORT_SOURCE
+        ).count(),
+        "sample_bank_accounts": BankAccount.objects.filter(
+            name__startswith=SAMPLE_PREFIX
+        ).count(),
+        "sample_csv_mappings": CSVMapping.objects.filter(
+            name__startswith=SAMPLE_PREFIX
+        ).count(),
+        "sample_categories": Category.objects.filter(
+            name__startswith=SAMPLE_PREFIX
+        ).count(),
+        "sample_subcategories": Subcategory.objects.filter(
+            name__startswith=SAMPLE_PREFIX
+        ).count(),
+        "sample_tags": Tag.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
+        "sample_keywords": Keyword.objects.filter(
+            name__startswith=SAMPLE_PREFIX
+        ).count(),
+        "bank_accounts": BankAccount.objects.count(),
+        "csv_mappings": CSVMapping.objects.count(),
+        "categories": Category.objects.count(),
+        "subcategories": Subcategory.objects.count(),
+        "tags": Tag.objects.count(),
+        "keywords": Keyword.objects.count(),
+    }
+
+
+def require_confirmation(request, expected):
+    data = parse_json_body(request)
+    if data.get("confirmation") != expected:
+        raise APIValidationError(
+            "Confirmation text does not match",
+            {"expected": expected},
+        )
+
+
+def delete_all_transactions():
+    counts = {
+        "transactions": Transaction.objects.count(),
+        "imports": CSVImport.objects.count(),
+    }
+    with transaction.atomic():
+        Transaction.objects.all().delete()
+        CSVImport.objects.all().delete()
+    return counts
+
+
+def delete_all_finance_data():
+    counts = maintenance_counts()
+    with transaction.atomic():
+        Transaction.objects.all().delete()
+        CSVImport.objects.all().delete()
+        Keyword.objects.all().delete()
+        BankAccount.objects.all().delete()
+        CSVMapping.objects.all().delete()
+        Tag.objects.all().delete()
+        Subcategory.objects.all().delete()
+        Category.objects.all().delete()
+    return counts
+
+
+class MaintenanceSummaryView(JsonView):
+    def get(self, request):
+        return json_response(maintenance_counts())
+
+
+class MaintenanceSampleDataView(JsonView):
+    def delete(self, request):
+        require_confirmation(request, CONFIRM_DELETE_SAMPLE_DATA)
+        return json_response(
+            {
+                "deleted": True,
+                "counts": delete_sample_data(),
+                "summary": maintenance_counts(),
+            }
+        )
+
+
+class MaintenanceRecreateSampleDataView(JsonView):
+    def post(self, request):
+        result = seed_sample_data(reset_sample=True, skip_admin=True)
+        return json_response(
+            {
+                "created": True,
+                "result": result,
+                "summary": maintenance_counts(),
+            },
+            status=201,
+        )
+
+
+class MaintenanceTransactionsView(JsonView):
+    def delete(self, request):
+        require_confirmation(request, CONFIRM_DELETE_ALL_TRANSACTIONS)
+        return json_response(
+            {
+                "deleted": True,
+                "counts": delete_all_transactions(),
+                "summary": maintenance_counts(),
+            }
+        )
+
+
+class MaintenanceFinanceDataView(JsonView):
+    def delete(self, request):
+        require_confirmation(request, CONFIRM_DELETE_ALL_FINANCE_DATA)
+        return json_response(
+            {
+                "deleted": True,
+                "counts": delete_all_finance_data(),
+                "summary": maintenance_counts(),
+            }
+        )
+
+
+class MaintenanceDatabaseBackupView(JsonView):
+    def get(self, request):
+        if connection.vendor != "sqlite":
+            raise APIValidationError(
+                "Database backup is only supported for SQLite",
+                {"vendor": connection.vendor},
+            )
+
+        connection.ensure_connection()
+        content = connection.connection.serialize()
+
+        timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
+        response = HttpResponse(content, content_type="application/x-sqlite3")
+        response["Content-Disposition"] = (
+            f'attachment; filename="cashmoney-backup-{timestamp}.sqlite3"'
+        )
+        return response
+
+
+def validate_sqlite_backup(backup_path):
+    candidate = None
+    try:
+        candidate = sqlite3.connect(str(backup_path))
+        integrity = candidate.execute("PRAGMA integrity_check").fetchone()
+        if not integrity or integrity[0] != "ok":
+            raise APIValidationError(
+                "Backup database failed integrity check",
+                {"result": integrity[0] if integrity else None},
+            )
+        table_rows = candidate.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    except sqlite3.DatabaseError as exc:
+        raise APIValidationError(
+            "Uploaded file is not a valid SQLite database",
+            {"filename": backup_path.name},
+        ) from exc
+    finally:
+        if candidate is not None:
+            candidate.close()
+
+    tables = {row[0] for row in table_rows}
+    missing = sorted(REQUIRED_BACKUP_TABLES - tables)
+    if missing:
+        raise APIValidationError(
+            "Backup database does not match the Cashmoney schema",
+            {"missing_tables": missing},
+        )
+
+
+def create_pre_restore_backup():
+    connection.ensure_connection()
+    timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
+    backup_dir = Path(getattr(settings, "DATA_DIR", Path.cwd())) / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / f"pre-restore-{timestamp}.sqlite3"
+    backup_path.write_bytes(connection.connection.serialize())
+    return backup_path
+
+
+class MaintenanceDatabaseRestoreView(JsonView):
+    def post(self, request):
+        if connection.vendor != "sqlite":
+            raise APIValidationError(
+                "Database restore is only supported for SQLite",
+                {"vendor": connection.vendor},
+            )
+        if request.POST.get("confirmation") != CONFIRM_RESTORE_DATABASE:
+            raise APIValidationError(
+                "Confirmation text does not match",
+                {"expected": CONFIRM_RESTORE_DATABASE},
+            )
+        backup_file = request.FILES.get("backup_file")
+        if not backup_file:
+            raise APIValidationError("Missing required field", {"field": "backup_file"})
+
+        upload_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as upload:
+                upload_path = Path(upload.name)
+                for chunk in backup_file.chunks():
+                    upload.write(chunk)
+
+            validate_sqlite_backup(upload_path)
+            pre_restore_path = create_pre_restore_backup()
+
+            source = None
+            try:
+                connection.ensure_connection()
+                source = sqlite3.connect(str(upload_path))
+                source.backup(connection.connection)
+            finally:
+                if source is not None:
+                    source.close()
+            connection.close()
+        finally:
+            if upload_path and upload_path.exists():
+                upload_path.unlink()
+
+        return json_response(
+            {
+                "restored": True,
+                "pre_restore_backup": str(pre_restore_path),
+                "summary": maintenance_counts(),
+            }
+        )
 
 
 def handler400(request, exception=None):

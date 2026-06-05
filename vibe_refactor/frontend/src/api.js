@@ -46,7 +46,12 @@ export async function apiPatch(path, data = {}) {
   return readJson(response);
 }
 
-export async function apiDelete(path) {
-  const response = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
+export async function apiDelete(path, data = null) {
+  const options = { method: "DELETE" };
+  if (data !== null) {
+    options.headers = { "Content-Type": "application/json" };
+    options.body = JSON.stringify(data);
+  }
+  const response = await fetch(`${API_BASE}${path}`, options);
   return readJson(response);
 }

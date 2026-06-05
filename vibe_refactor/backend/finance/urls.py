@@ -58,4 +58,39 @@ urlpatterns = [
     path("imports/preview/", views.ImportPreviewView.as_view(), name="import-preview"),
     path("imports/", views.ImportTransactionsView.as_view(), name="import-transactions"),
     path("dashboard/summary/", views.DashboardSummaryView.as_view(), name="dashboard-summary"),
+    path(
+        "maintenance/summary/",
+        views.MaintenanceSummaryView.as_view(),
+        name="maintenance-summary",
+    ),
+    path(
+        "maintenance/sample-data/",
+        views.MaintenanceSampleDataView.as_view(),
+        name="maintenance-sample-data",
+    ),
+    path(
+        "maintenance/sample-data/recreate/",
+        views.MaintenanceRecreateSampleDataView.as_view(),
+        name="maintenance-recreate-sample-data",
+    ),
+    path(
+        "maintenance/transactions/",
+        views.MaintenanceTransactionsView.as_view(),
+        name="maintenance-transactions",
+    ),
+    path(
+        "maintenance/finance-data/",
+        views.MaintenanceFinanceDataView.as_view(),
+        name="maintenance-finance-data",
+    ),
+    path(
+        "maintenance/database-backup/",
+        views.MaintenanceDatabaseBackupView.as_view(),
+        name="maintenance-database-backup",
+    ),
+    path(
+        "maintenance/database-restore/",
+        views.MaintenanceDatabaseRestoreView.as_view(),
+        name="maintenance-database-restore",
+    ),
 ]
