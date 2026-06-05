@@ -1134,7 +1134,7 @@ function MonthlyChart({ rows }) {
         {
           customdata: monthlyRows.map((row) => [row.expense, row.net]),
           hovertemplate: "Month: %{x}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
-          marker: { color: cssVar("--orange", "#c96e26") },
+          marker: { color: cssVar("--red", "#dc2626") },
           name: "Expenses",
           type: "bar",
           width: barWidth,
@@ -1160,7 +1160,7 @@ function MonthlyChart({ rows }) {
         barmode: "overlay",
         hovermode: "x unified",
         xaxis: { type: "category" },
-        yaxis: { tickprefix: "CZK ", zeroline: true, zerolinecolor: cssVar("--border", "#9facb5"), zerolinewidth: 1 },
+        yaxis: { zeroline: true, zerolinecolor: cssVar("--border", "#9facb5"), zerolinewidth: 1 },
       })}
       useResizeHandler
     />
@@ -1217,7 +1217,7 @@ function TopExpenseChart({ rows }) {
       layout={baseLayout({
         height: 285,
         margin: { t: 8, r: 18, b: 36, l: 150 },
-        xaxis: { tickprefix: "CZK " },
+        xaxis: {},
         yaxis: { automargin: true },
       })}
       useResizeHandler
@@ -1793,11 +1793,15 @@ function subLabel(item) {
 }
 
 function money(value) {
-  return new Intl.NumberFormat("en-US", { currency: "CZK", maximumFractionDigits: 0, style: "currency" }).format(Number(value || 0));
+  return formatNumber(value, { maximumFractionDigits: 0 });
 }
 
 function amountNumber(value) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 0 }).format(Number(value || 0));
+  return formatNumber(value, { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+}
+
+function formatNumber(value, options = {}) {
+  return new Intl.NumberFormat("en-US", options).format(Number(value || 0)).replace(/,/g, " ");
 }
 
 function formatCount(value) {
