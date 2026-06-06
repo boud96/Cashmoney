@@ -677,10 +677,49 @@ textarea:focus {
   font-weight: 760;
 }
 
+.metric-secondary {
+  margin-top: 4px;
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metric-secondary strong {
+  font-size: 13px;
+}
+
 .dashboard-action-card {
   display: grid;
   align-content: space-between;
-  gap: 12px;
+  gap: 0;
+}
+
+.dashboard-action-section {
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.dashboard-action-section:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dashboard-action-section:last-child {
+  padding-bottom: 0;
+}
+
+.dashboard-action-card .relative-range-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dashboard-action-card .relative-range-form button {
+  grid-column: 1 / -1;
 }
 
 .dashboard-action-card .primary-action {
@@ -696,6 +735,10 @@ textarea:focus {
 .negative,
 .amount-expense {
   color: var(--red);
+}
+
+.metric-blue {
+  color: var(--blue);
 }
 
 .recategorize-panel {

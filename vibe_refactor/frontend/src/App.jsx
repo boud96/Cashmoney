@@ -352,7 +352,6 @@ function DashboardPage({
             <span>Split by owners</span>
           </label>
         </div>
-        <RelativeRangeForm setFilters={setFilters} />
         <div className="filter-checkbox-grid">
           <CheckboxFilterPanel className="filter-account" label="Account" name="bank_account" onChange={onFilterChange} options={refs.accounts.map((item) => [item.id, item.name])} value={filters.bank_account} />
           <CheckboxFilterPanel
@@ -391,15 +390,26 @@ function DashboardPage({
       </section>
 
       <div className="metrics-grid">
-        {metrics.map(([label, value, tone]) => (
+        {metrics.map(([label, value, tone, secondary]) => (
           <div className="metric" key={label}>
             <div className="metric-label">{label}</div>
             <div className={`metric-value ${tone}`}>{value}</div>
+            {secondary && (
+              <div className="metric-secondary">
+                <span>Avg / month:</span>
+                <strong className={secondary.tone}>{secondary.value}</strong>
+              </div>
+            )}
           </div>
         ))}
         <div className="metric dashboard-action-card">
           <div className="metric-label">Actions</div>
-          <button className="primary-action" disabled={!transactionPage.count || importBusy} onClick={recategorize} type="button">Recategorize Filtered</button>
+          <div className="dashboard-action-section">
+            <RelativeRangeForm setFilters={setFilters} />
+          </div>
+          <div className="dashboard-action-section">
+            <button className="primary-action" disabled={!transactionPage.count || importBusy} onClick={recategorize} type="button">Recategorize Filtered</button>
+          </div>
         </div>
       </div>
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
@@ -964,7 +974,7 @@ function HelpPage() {
               <h3>Filters</h3>
               <ul>
                 <li>Date range filters default from the oldest transaction to today.</li>
-                <li>Relative range lets you show the last X days, weeks, or months.</li>
+                <li>The Actions card can quickly show the last X days, weeks, or months.</li>
                 <li>Account, Category, Subcategory, WNI, and Tag filters support multiple selections.</li>
                 <li>Unassigned filter options help find uncategorized or untagged transactions.</li>
                 <li>Search looks across relevant transaction text fields.</li>
@@ -2206,13 +2216,15 @@ function buildFilterParams(filters) {
 
 function buildMetrics(summary, transactionPage) {
   const monthly = summary?.monthly || [];
+  const monthCount = monthly.length || 1;
   const income = monthly.reduce((acc, row) => acc + Number(row.income || 0), 0);
   const expense = monthly.reduce((acc, row) => acc + Number(row.expense || 0), 0);
+  const net = income - expense;
   const uncategorized = (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
   return [
-    ["Income", money(income), "positive"],
-    ["Expenses", money(expense), "negative"],
-    ["Net", money(income - expense), income - expense >= 0 ? "positive" : "negative"],
+    ["Income", money(income), "positive", { value: money(income / monthCount), tone: "positive" }],
+    ["Expenses", money(expense), "negative", { value: money(expense / monthCount), tone: "negative" }],
+    ["Net", money(net), "metric-blue", { value: money(net / monthCount), tone: "metric-blue" }],
     ["Transactions", `${transactionPage.count.toLocaleString()} / ${(transactionPage.total_count ?? transactionPage.count).toLocaleString()}`, ""],
     ["Uncategorized", uncategorized.toLocaleString(), ""],
   ];
