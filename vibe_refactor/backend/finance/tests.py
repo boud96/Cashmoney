@@ -64,6 +64,13 @@ class FinanceTestCase(TestCase):
             content_type="text/csv",
         )
 
+    def encoded_csv_file(self, body, encoding):
+        return SimpleUploadedFile(
+            "statement.csv",
+            body.encode(encoding),
+            content_type="text/csv",
+        )
+
     def keyword(self, name, include_terms, **kwargs):
         keyword = Keyword.objects.create(
             name=name,
@@ -400,8 +407,6 @@ class APITests(FinanceTestCase):
         response = self.client.post(
             "/api/csv-mappings/detect-columns/",
             {
-                "delimiter": ";",
-                "date_format": "%d.%m.%Y",
                 "default_currency": "CZK",
                 "csv_file": self.csv_file(
                     "ID;Datum;Popis;Castka\n"
@@ -414,8 +419,55 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["headers"], ["ID", "Datum", "Popis", "Castka"])
         self.assertEqual(payload["loaded"], 1)
+        self.assertEqual(payload["detected_settings"]["delimiter"], ";")
+        self.assertEqual(payload["detected_settings"]["date_format"], "%d.%m.%Y")
+        self.assertEqual(payload["detected_settings"]["decimal_separator"], ",")
         self.assertEqual(payload["sample_rows"][0]["raw"]["Popis"], "McDonalds")
         self.assertEqual(CSVMapping.objects.count(), existing_count)
+
+    def test_csv_mapping_column_detection_detects_utf8_comma_decimal_dot(self):
+        response = self.client.post(
+            "/api/csv-mappings/detect-columns/",
+            {
+                "csv_file": self.csv_file(
+                    "ID,Date,Description,Amount\n"
+                    "api-1,2026-01-02,Salary,1234.56\n"
+                ),
+            },
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["headers"], ["ID", "Date", "Description", "Amount"])
+        self.assertEqual(payload["detected_settings"]["delimiter"], ",")
+        self.assertIn(payload["detected_settings"]["encoding"], ["utf-8-sig", "utf-8"])
+        self.assertEqual(payload["detected_settings"]["header_row"], 0)
+        self.assertEqual(payload["detected_settings"]["date_format"], "%Y-%m-%d")
+        self.assertEqual(payload["detected_settings"]["decimal_separator"], ".")
+
+    def test_csv_mapping_column_detection_detects_encoding_and_header_row(self):
+        response = self.client.post(
+            "/api/csv-mappings/detect-columns/",
+            {
+                "csv_file": self.encoded_csv_file(
+                    "Výpis účtu\n"
+                    "Účet;115618804\n"
+                    "ID;Datum;Popis;Částka;Měna\n"
+                    "api-1;06.01.2025;Kavárna;-1 234,50;CZK\n",
+                    "cp1250",
+                ),
+            },
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["headers"], ["ID", "Datum", "Popis", "Částka", "Měna"])
+        self.assertIn(payload["detected_settings"]["encoding"], ["cp1250", "windows-1250"])
+        self.assertEqual(payload["detected_settings"]["delimiter"], ";")
+        self.assertEqual(payload["detected_settings"]["header_row"], 2)
+        self.assertEqual(payload["detected_settings"]["date_format"], "%d.%m.%Y")
+        self.assertEqual(payload["detected_settings"]["decimal_separator"], ",")
+        self.assertEqual(payload["detected_settings"]["thousands_separator"], " ")
 
     def test_csv_mapping_column_detection_requires_file(self):
         response = self.client.post(
@@ -425,6 +477,15 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(json_body(response)["details"]["field"], "csv_file")
+
+    def test_csv_mapping_column_detection_rejects_empty_csv(self):
+        response = self.client.post(
+            "/api/csv-mappings/detect-columns/",
+            {"csv_file": self.csv_file("")},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(json_body(response)["error"], "CSV file is empty")
 
     def test_transaction_create_update_filters_and_pagination(self):
         response = self.post_json(

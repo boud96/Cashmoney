@@ -57,6 +57,15 @@ const defaultCategorizationFields = [
   "other_note",
   "transaction_type",
 ];
+const defaultParsingSettings = {
+  delimiter: ",",
+  quotechar: '"',
+  encoding: "utf-8-sig",
+  header_row: 0,
+  date_format: "%Y-%m-%d",
+  decimal_separator: ".",
+  thousands_separator: "",
+};
 
 function emptyFilters() {
   return {
@@ -327,38 +336,9 @@ function DashboardPage({
   return (
     <>
       <section className="filter-panel">
-        <div className="filter-bar">
+        <div className="filter-quick-grid">
           <DateInput label="From" name="date_from" onChange={onFilterChange} value={filters.date_from} />
           <DateInput label="To" name="date_to" onChange={onFilterChange} value={filters.date_to} />
-          <MultiSelect label="Account" name="bank_account" onChange={onFilterChange} options={refs.accounts.map((item) => [item.id, item.name])} value={filters.bank_account} />
-          <MultiSelect
-            label="Category"
-            name="category"
-            onChange={onFilterChange}
-            options={[[UNASSIGNED, "Unassigned category"], ...refs.categories.map((item) => [item.id, item.name])]}
-            value={filters.category}
-          />
-          <MultiSelect
-            label="Subcategory"
-            name="subcategory"
-            onChange={onFilterChange}
-            options={[[UNASSIGNED, "Unassigned subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])]}
-            value={filters.subcategory}
-          />
-          <MultiSelect
-            label="WNI"
-            name="want_need_investment"
-            onChange={onFilterChange}
-            options={[...wniOptions, [UNASSIGNED, "Unassigned"]]}
-            value={filters.want_need_investment}
-          />
-          <MultiSelect
-            label="Tag"
-            name="tag"
-            onChange={onFilterChange}
-            options={[[UNASSIGNED, "No tags"], ...refs.tags.map((item) => [item.id, item.name])]}
-            value={filters.tag}
-          />
           <label className="wide-field">
             <span>Search</span>
             <input onChange={(event) => onFilterChange("q", event.target.value)} placeholder="Description" type="search" value={filters.q} />
@@ -373,6 +353,41 @@ function DashboardPage({
           </label>
         </div>
         <RelativeRangeForm setFilters={setFilters} />
+        <div className="filter-checkbox-grid">
+          <CheckboxFilterPanel className="filter-account" label="Account" name="bank_account" onChange={onFilterChange} options={refs.accounts.map((item) => [item.id, item.name])} value={filters.bank_account} />
+          <CheckboxFilterPanel
+            className="filter-category"
+            label="Category"
+            name="category"
+            onChange={onFilterChange}
+            options={[[UNASSIGNED, "Unassigned category"], ...refs.categories.map((item) => [item.id, item.name])]}
+            value={filters.category}
+          />
+          <CheckboxFilterPanel
+            className="filter-subcategory"
+            label="Subcategory"
+            name="subcategory"
+            onChange={onFilterChange}
+            options={[[UNASSIGNED, "Unassigned subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])]}
+            value={filters.subcategory}
+          />
+          <CheckboxFilterPanel
+            className="filter-wni"
+            label="WNI"
+            name="want_need_investment"
+            onChange={onFilterChange}
+            options={[...wniOptions, [UNASSIGNED, "Unassigned"]]}
+            value={filters.want_need_investment}
+          />
+          <CheckboxFilterPanel
+            className="filter-tag"
+            label="Tag"
+            name="tag"
+            onChange={onFilterChange}
+            options={[[UNASSIGNED, "No tags"], ...refs.tags.map((item) => [item.id, item.name])]}
+            value={filters.tag}
+          />
+        </div>
       </section>
 
       <section className="panel recategorize-panel">
@@ -882,15 +897,14 @@ function HelpPage() {
           </p>
           <ol>
             <li>Open Definitions and find CSV Mappings.</li>
-            <li>Fill in the mapping name, delimiter, date format, decimal separator, and default currency.</li>
+            <li>Fill in the mapping name and default currency.</li>
             <li>Choose a sample CSV file from that bank export.</li>
-            <li>Use column detection to populate dropdown options from the actual CSV headers.</li>
+            <li>Use column detection to fill parsing settings and populate dropdown options from the actual CSV headers.</li>
             <li>Select which CSV columns map to transaction fields like date, description, amount, currency, and notes.</li>
             <li>Select categorization fields. These are the text fields Keywords will inspect.</li>
           </ol>
           <p>
-            If one bank exports debit and credit as separate columns, use debit and credit fields.
-            If the bank exports one signed amount column, use the amount field.
+            Advanced parsing settings remain editable if detection guesses a separator, header row, encoding, or date format incorrectly.
           </p>
         </article>
 
@@ -1077,20 +1091,20 @@ function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraf
 
   return (
     <div className="settings-grid">
+      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} onEdit={(item) => editItem("/csv-mappings/", item)} title="CSV Mappings">
+        <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
+      </DefinitionPanel>
       <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} onEdit={(item) => editItem("/bank-accounts/", item)} title="Bank Accounts">
         <AccountForm clearEditing={() => clearEditing("/bank-accounts/")} editingItem={editingItems["/bank-accounts/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} onEdit={(item) => editItem("/csv-mappings/", item)} title="CSV Mappings">
-        <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} reloadAll={reloadAll} setDraft={setMappingDraft} />
-      </DefinitionPanel>
       <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} onEdit={(item) => editItem("/categories/", item)} title="Categories">
-        <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} notify={notify} reloadAll={reloadAll} />
+        <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.categories} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} onEdit={(item) => editItem("/subcategories/", item)} title="Subcategories">
         <SubcategoryForm clearEditing={() => clearEditing("/subcategories/")} editingItem={editingItems["/subcategories/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} onEdit={(item) => editItem("/tags/", item)} title="Tags">
-        <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} notify={notify} reloadAll={reloadAll} />
+        <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.tags} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} onEdit={(item) => editItem("/keywords/", item)} title="Keywords" wide>
         <KeywordForm clearEditing={() => clearEditing("/keywords/")} editingItem={editingItems["/keywords/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
@@ -1172,6 +1186,20 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   async function submit(event) {
     event.preventDefault();
     const data = formObject(event.currentTarget);
+    if (!validateRequiredFields(event.currentTarget, ["name", "account_number", "currency", "owners"], notify)) {
+      return;
+    }
+    const accountConflict = findDuplicate(
+      refs.accounts,
+      "account_number",
+      data.account_number,
+      editingItem?.id,
+    );
+    if (accountConflict) {
+      notify("Account number already exists");
+      event.currentTarget.elements.account_number?.focus();
+      return;
+    }
     data.owners = Number(data.owners || 1);
     try {
       if (isEditing) {
@@ -1192,28 +1220,39 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Account name" required /></FormField>
       <FormField label="Account Number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Account number" required /></FormField>
       <FormField label="Bank"><input defaultValue={editingItem?.bank_name || ""} name="bank_name" placeholder="Bank name" /></FormField>
-      <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} name="currency" placeholder="CZK" /></FormField>
-      <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" type="number" /></FormField>
+      <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" placeholder="CZK" required /></FormField>
+      <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" required type="number" /></FormField>
       <FormField label="Default CSV Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
       <FormActions clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
 
-function MappingForm({ clearEditing, draft, editingItem, notify, reloadAll, setDraft }) {
+function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll, setDraft }) {
   const headers = draft.detected?.headers || [];
   const isEditing = Boolean(editingItem);
+  const [parsingSettings, setParsingSettings] = useState(() => parsingSettingsFromMapping(editingItem));
+  const [manualParsingSettings, setManualParsingSettings] = useState(Boolean(editingItem));
 
   useEffect(() => {
     if (!editingItem) {
+      setParsingSettings(defaultParsingSettings);
+      setManualParsingSettings(false);
       return;
     }
+    setParsingSettings(parsingSettingsFromMapping(editingItem));
+    setManualParsingSettings(true);
     setDraft({
       column_map: sanitizeColumnMap(editingItem.column_map || {}),
       categorization_fields: editingItem.categorization_fields || defaultCategorizationFields,
       detected: null,
     });
   }, [editingItem, setDraft]);
+
+  function updateParsingSetting(field, value) {
+    setParsingSettings((current) => ({ ...current, [field]: value }));
+    setManualParsingSettings(true);
+  }
 
   async function detectColumns(event) {
     event.preventDefault();
@@ -1225,15 +1264,23 @@ function MappingForm({ clearEditing, draft, editingItem, notify, reloadAll, setD
     }
     const formData = new FormData();
     formData.append("csv_file", file);
-    ["delimiter", "quotechar", "encoding", "header_row", "date_format", "decimal_separator", "thousands_separator", "default_currency"].forEach((field) => {
-      formData.append(field, form.elements[field]?.value || "");
-    });
+    formData.append("default_currency", form.elements.default_currency?.value || "CZK");
+    if (manualParsingSettings) {
+      formData.append("manual_settings", "1");
+      Object.entries(parsingSettings).forEach(([field, value]) => {
+        formData.append(field, value ?? "");
+      });
+    }
+    formData.append("sample_size", "5");
     try {
       const response = await fetch("/api/csv-mappings/detect-columns/", { method: "POST", body: formData });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Column detection failed");
       }
+      const nextSettings = { ...defaultParsingSettings, ...(payload.detected_settings || {}) };
+      setParsingSettings(nextSettings);
+      setManualParsingSettings(false);
       setDraft({
         detected: payload,
         column_map: guessColumnMap(payload.headers),
@@ -1248,10 +1295,26 @@ function MappingForm({ clearEditing, draft, editingItem, notify, reloadAll, setD
   async function submit(event) {
     event.preventDefault();
     const data = formObject(event.currentTarget);
+    const duplicateMapping = findDuplicate(refs.mappings, "name", data.name, editingItem?.id);
     data.header_row = Number(data.header_row || 0);
     data.column_map = sanitizeColumnMap(draft.column_map);
     data.categorization_fields = draft.categorization_fields;
     data.fallback_date_formats = [];
+    if (duplicateMapping) {
+      notify("CSV mapping name already exists");
+      event.currentTarget.elements.name?.focus();
+      return;
+    }
+    if (!validateRequiredFields(event.currentTarget, ["default_currency", "delimiter", "quotechar", "encoding", "date_format", "decimal_separator"], notify)) {
+      return;
+    }
+    if (!validateRequiredColumnMap(draft.column_map, notify)) {
+      return;
+    }
+    if (!draft.categorization_fields.length) {
+      notify("Choose at least one categorization field");
+      return;
+    }
     try {
       if (isEditing) {
         await apiPatch(`/csv-mappings/${editingItem.id}/`, data);
@@ -1260,6 +1323,8 @@ function MappingForm({ clearEditing, draft, editingItem, notify, reloadAll, setD
       }
       event.currentTarget.reset();
       clearEditing?.();
+      setParsingSettings(defaultParsingSettings);
+      setManualParsingSettings(false);
       setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, detected: null });
       notify(isEditing ? "CSV mapping saved" : "CSV mapping added");
       await reloadAll();
@@ -1271,52 +1336,68 @@ function MappingForm({ clearEditing, draft, editingItem, notify, reloadAll, setD
   return (
     <form className="compact-form mapping-form" key={editingItem?.id || "new-mapping"} onSubmit={submit}>
       <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Mapping name" required /></FormField>
-      <FormField label="Delimiter"><input defaultValue={editingItem?.delimiter || ","} name="delimiter" placeholder="," /></FormField>
-      <FormField label="Date Format"><input defaultValue={editingItem?.date_format || "%Y-%m-%d"} name="date_format" placeholder="%Y-%m-%d" /></FormField>
-      <FormField label="Default Currency"><input defaultValue={editingItem?.default_currency || "CZK"} name="default_currency" placeholder="CZK" /></FormField>
-      <FormField label="Encoding"><input defaultValue={editingItem?.encoding || "utf-8-sig"} name="encoding" placeholder="utf-8-sig" /></FormField>
-      <FormField label="Header Row"><input defaultValue={editingItem?.header_row ?? "0"} min="0" name="header_row" placeholder="0" type="number" /></FormField>
-      <FormField label="Quote Character"><input defaultValue={editingItem?.quotechar || '"'} name="quotechar" placeholder={'"'} /></FormField>
-      <FormField label="Decimal Separator"><input defaultValue={editingItem?.decimal_separator || "."} name="decimal_separator" placeholder="." /></FormField>
-      <FormField label="Thousands Separator"><input defaultValue={editingItem?.thousands_separator || ""} name="thousands_separator" placeholder="Optional" /></FormField>
+      <FormField label="Default Currency"><input defaultValue={editingItem?.default_currency || "CZK"} maxLength="3" name="default_currency" placeholder="CZK" required /></FormField>
       <label className="mapping-file-field"><span>Sample CSV</span><input accept=".csv,text/csv" name="sample_csv" type="file" /></label>
-      <button className="link-button" onClick={detectColumns} type="button">Detect Columns</button>
+      <button className="link-button mapping-detect-button" onClick={detectColumns} type="button">Detect Columns</button>
+      <details className="advanced-settings" open={isEditing || Boolean(draft.detected)}>
+        <summary>Advanced parsing settings</summary>
+        <div className="advanced-settings-grid">
+          <FormField label="Delimiter"><input maxLength="1" name="delimiter" onChange={(event) => updateParsingSetting("delimiter", event.target.value)} placeholder="," required value={parsingSettings.delimiter} /></FormField>
+          <FormField label="Date Format"><input name="date_format" onChange={(event) => updateParsingSetting("date_format", event.target.value)} placeholder="%Y-%m-%d" required value={parsingSettings.date_format} /></FormField>
+          <FormField label="Encoding"><input name="encoding" onChange={(event) => updateParsingSetting("encoding", event.target.value)} placeholder="utf-8-sig" required value={parsingSettings.encoding} /></FormField>
+          <FormField label="Header Row"><input min="0" name="header_row" onChange={(event) => updateParsingSetting("header_row", event.target.value)} placeholder="0" required type="number" value={parsingSettings.header_row} /></FormField>
+          <FormField label="Quote Character"><input maxLength="1" name="quotechar" onChange={(event) => updateParsingSetting("quotechar", event.target.value)} placeholder={'"'} required value={parsingSettings.quotechar} /></FormField>
+          <FormField label="Decimal Separator"><input maxLength="1" name="decimal_separator" onChange={(event) => updateParsingSetting("decimal_separator", event.target.value)} placeholder="." required value={parsingSettings.decimal_separator} /></FormField>
+          <FormField label="Thousands Separator"><input name="thousands_separator" onChange={(event) => updateParsingSetting("thousands_separator", event.target.value)} placeholder="Optional" value={parsingSettings.thousands_separator} /></FormField>
+        </div>
+      </details>
+      {draft.detected?.warnings?.length ? (
+        <div className="mapping-warnings">
+          {draft.detected.warnings.map((warning) => <div key={warning}>{warning}</div>)}
+        </div>
+      ) : null}
       <div className="mapping-column-map">
         {mappingFields.map(([key, label]) => (
-          <label className="mapping-column-field" key={key}>
-            <span>{label}</span>
-            <select
-              multiple={key === "description"}
-              onChange={(event) => {
-                const selected = Array.from(event.target.selectedOptions).map((option) => option.value).filter(Boolean);
-                setDraft((current) => ({
+          key === "description" ? (
+            <DefinitionCheckboxField
+              key={key}
+              label={label}
+              onChange={(next) => setDraft((current) => ({ ...current, column_map: { ...current.column_map, [key]: next } }))}
+              options={headers.map((header) => [header, header])}
+              placeholder="No columns mapped"
+              value={coerceArray(draft.column_map[key])}
+            />
+          ) : (
+            <label className="mapping-column-field" key={key}>
+              <span>{label}</span>
+              <select
+                required={["transaction_date", "amount"].includes(key)}
+                onChange={(event) => setDraft((current) => ({
                   ...current,
-                  column_map: { ...current.column_map, [key]: event.target.multiple ? selected : selected[0] || "" },
-                }));
-              }}
-              value={key === "description" ? coerceArray(draft.column_map[key]) : draft.column_map[key] || ""}
-            >
-              <option value="">Not mapped</option>
-              {headers.map((header) => <option key={header} value={header}>{header}</option>)}
-            </select>
-          </label>
+                  column_map: { ...current.column_map, [key]: event.target.value || "" },
+                }))}
+                value={draft.column_map[key] || ""}
+              >
+                <option value="">Not mapped</option>
+                {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+              </select>
+            </label>
+          )
         ))}
       </div>
-      <label className="mapping-categorization-field">
-        <span>Categorization Fields</span>
-        <select
-          multiple
-          onChange={(event) => setDraft((current) => ({ ...current, categorization_fields: Array.from(event.target.selectedOptions).map((option) => option.value) }))}
-          value={draft.categorization_fields}
-        >
-          {mappingFields.filter(([key]) => !["original_id", "transaction_date", "posted_date", "amount", "currency"].includes(key)).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
-          ))}
-        </select>
-      </label>
+      <DefinitionCheckboxField
+        className="mapping-categorization-field"
+        label="Categorization Fields"
+        onChange={(next) => setDraft((current) => ({ ...current, categorization_fields: next }))}
+        options={mappingFields.filter(([key]) => !["original_id", "transaction_date", "posted_date", "amount", "currency"].includes(key))}
+        placeholder="No categorization fields selected"
+        value={draft.categorization_fields}
+      />
       {draft.detected && <MappingSample detected={draft.detected} />}
       <FormActions clearEditing={() => {
         clearEditing?.();
+        setParsingSettings(defaultParsingSettings);
+        setManualParsingSettings(false);
         setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, detected: null });
       }} isEditing={isEditing} />
     </form>
@@ -1342,15 +1423,21 @@ function MappingSample({ detected }) {
   );
 }
 
-function SimpleForm({ clearEditing, editingItem, endpoint, fields, notify, reloadAll }) {
+function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], notify, reloadAll }) {
   const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
+    const data = formObject(event.currentTarget);
+    if (findDuplicate(items, "name", data.name, editingItem?.id)) {
+      notify("Name already exists");
+      event.currentTarget.elements.name?.focus();
+      return;
+    }
     try {
       if (isEditing) {
-        await apiPatch(`${endpoint}${editingItem.id}/`, formObject(event.currentTarget));
+        await apiPatch(`${endpoint}${editingItem.id}/`, data);
       } else {
-        await apiPost(endpoint, formObject(event.currentTarget));
+        await apiPost(endpoint, data);
       }
       event.currentTarget.reset();
       clearEditing?.();
@@ -1376,11 +1463,20 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
   const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
+    const data = formObject(event.currentTarget);
+    if (!validateRequiredFields(event.currentTarget, ["category_id", "name"], notify)) {
+      return;
+    }
+    if (findDuplicateSubcategory(refs.subcategories, data.category_id, data.name, editingItem?.id)) {
+      notify("Subcategory already exists in this category");
+      event.currentTarget.elements.name?.focus();
+      return;
+    }
     try {
       if (isEditing) {
-        await apiPatch(`/subcategories/${editingItem.id}/`, formObject(event.currentTarget));
+        await apiPatch(`/subcategories/${editingItem.id}/`, data);
       } else {
-        await apiPost("/subcategories/", formObject(event.currentTarget));
+        await apiPost("/subcategories/", data);
       }
       event.currentTarget.reset();
       clearEditing?.();
@@ -1452,16 +1548,65 @@ function ColorInput({ initialValue = "", label = "Color", name }) {
   );
 }
 
+function DefinitionCheckboxField({ className = "", label, onChange, options, placeholder = "None selected", value }) {
+  const selectedValues = value || [];
+  const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
+
+  function toggleOption(optionValue) {
+    const next = selectedSet.has(optionValue)
+      ? selectedValues.filter((item) => item !== optionValue)
+      : [...selectedValues, optionValue];
+    onChange(next);
+  }
+
+  return (
+    <div className={`definition-checkbox-field ${className}`.trim()}>
+      <div className="definition-checkbox-header">
+        <span>{label}</span>
+        <div className="prototype-filter-actions">
+          <span className="filter-count">{selectedValues.length ? `${selectedValues.length} selected` : placeholder}</span>
+          {selectedValues.length > 0 && (
+            <button className="filter-clear inline-clear" onClick={() => onChange([])} type="button">Clear</button>
+          )}
+        </div>
+      </div>
+      <div className="definition-checkbox-list">
+        {options.length ? options.map(([optionValue, text]) => (
+          <label className="checkbox-filter-row" key={optionValue} title={text}>
+            <input
+              checked={selectedSet.has(optionValue)}
+              onChange={() => toggleOption(optionValue)}
+              type="checkbox"
+            />
+            <span>{text}</span>
+          </label>
+        )) : <div className="filter-no-matches">No options</div>}
+      </div>
+    </div>
+  );
+}
+
 function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   const isEditing = Boolean(editingItem);
+  const [tagIds, setTagIds] = useState(() => (editingItem?.tags || []).map((item) => item.id));
+
+  useEffect(() => {
+    setTagIds((editingItem?.tags || []).map((item) => item.id));
+  }, [editingItem]);
+
   async function submit(event) {
     event.preventDefault();
     const data = formObject(event.currentTarget);
     data.include_terms = lines(data.include_terms);
     data.exclude_terms = lines(data.exclude_terms);
+    if (!data.include_terms.length) {
+      notify("Add at least one include term");
+      event.currentTarget.elements.include_terms?.focus();
+      return;
+    }
     data.priority = Number(data.priority || 0);
     data.is_ignored = Boolean(event.currentTarget.elements.is_ignored.checked);
-    data.tag_ids = Array.from(event.currentTarget.elements.tag_ids.selectedOptions).map((option) => option.value);
+    data.tag_ids = tagIds;
     try {
       if (isEditing) {
         await apiPatch(`/keywords/${editingItem.id}/`, data);
@@ -1483,7 +1628,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       <FormField label="Exclude Terms"><textarea defaultValue={(editingItem?.exclude_terms || []).join("\n")} name="exclude_terms" placeholder="One term per line" rows="3" /></FormField>
       <FormField label="Subcategory"><Select blank="No subcategory" defaultValue={editingItem?.subcategory?.id || ""} name="subcategory_id" options={refs.subcategories.map((item) => [item.id, subLabel(item)])} /></FormField>
       <FormField label="Want / Need / Investment"><Select blank="No WNI" defaultValue={editingItem?.want_need_investment || ""} name="want_need_investment" options={wniOptions} /></FormField>
-      <FormField label="Tags"><select defaultValue={(editingItem?.tags || []).map((item) => item.id)} multiple name="tag_ids">{refs.tags.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
+      <DefinitionCheckboxField label="Tags" onChange={setTagIds} options={refs.tags.map((item) => [item.id, item.name])} placeholder="No tags selected" value={tagIds} />
       <FormField label="Priority"><input defaultValue={editingItem?.priority ?? "0"} name="priority" type="number" /></FormField>
       <label className="check-row"><input defaultChecked={Boolean(editingItem?.is_ignored)} name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
       <FormActions clearEditing={clearEditing} isEditing={isEditing} />
@@ -1655,6 +1800,58 @@ function RelativeRangeForm({ setFilters }) {
 
 function DateInput({ label, name, onChange, value }) {
   return <label><span>{label}</span><input onChange={(event) => onChange(name, event.target.value)} type="date" value={value} /></label>;
+}
+
+function CheckboxFilterPanel({ className = "", label, name, onChange, options, value }) {
+  const [query, setQuery] = useState("");
+  const selectedValues = value || [];
+  const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
+  const filteredOptions = useMemo(() => {
+    const normalizedQuery = normalizeName(query);
+    if (!normalizedQuery) {
+      return options;
+    }
+    return options.filter(([, text]) => normalizeName(text).includes(normalizedQuery));
+  }, [options, query]);
+
+  function toggleOption(optionValue) {
+    const next = selectedSet.has(optionValue)
+      ? selectedValues.filter((item) => item !== optionValue)
+      : [...selectedValues, optionValue];
+    onChange(name, next);
+  }
+
+  return (
+    <div className={`checkbox-filter-panel prototype-filter ${className}`.trim()}>
+      <div className="prototype-filter-header">
+        <span className="filter-label">{label}</span>
+        <span className="filter-count">{selectedValues.length ? `${selectedValues.length} selected` : "All"}</span>
+      </div>
+      <div className="prototype-filter-tools">
+        <input
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={`Search ${label.toLowerCase()}`}
+          type="search"
+          value={query}
+        />
+        {selectedValues.length > 0 && (
+          <button className="filter-clear" onClick={() => onChange(name, [])} type="button">Clear</button>
+        )}
+      </div>
+      <div className="checkbox-filter-list">
+        {filteredOptions.length ? filteredOptions.map(([optionValue, text]) => (
+          <label className="checkbox-filter-row" key={optionValue} title={text}>
+            <input
+              checked={selectedSet.has(optionValue)}
+              onChange={() => toggleOption(optionValue)}
+              type="checkbox"
+            />
+            <span>{text}</span>
+          </label>
+        )) : <div className="filter-no-matches">No matches</div>}
+      </div>
+    </div>
+  );
 }
 
 function MultiSelect({ label, name, onChange, options, value }) {
@@ -2157,6 +2354,64 @@ function completeMonthlyRows(rows) {
   return completed;
 }
 
+function findDuplicate(items, field, value, editingId = null) {
+  const normalizedValue = normalizeComparable(value);
+  if (!normalizedValue) {
+    return null;
+  }
+  return items.find((item) => item.id !== editingId && normalizeComparable(item[field]) === normalizedValue) || null;
+}
+
+function findDuplicateSubcategory(items, categoryId, name, editingId = null) {
+  const normalizedName = normalizeComparable(name);
+  if (!categoryId || !normalizedName) {
+    return null;
+  }
+  return items.find((item) => (
+    item.id !== editingId
+    && String(item.category?.id || "") === String(categoryId)
+    && normalizeComparable(item.name) === normalizedName
+  )) || null;
+}
+
+function validateRequiredFields(form, names, notify) {
+  for (const name of names) {
+    const field = form.elements[name];
+    const value = String(field?.value ?? "").trim();
+    if (!value) {
+      notify(`${fieldLabel(name)} is required`);
+      field?.focus();
+      return false;
+    }
+  }
+  return true;
+}
+
+function validateRequiredColumnMap(columnMap, notify) {
+  const requiredFields = [
+    ["transaction_date", "Transaction Date"],
+    ["amount", "Amount"],
+  ];
+  for (const [key, label] of requiredFields) {
+    if (!coerceArray(columnMap[key]).some(Boolean)) {
+      notify(`${label} column is required`);
+      return false;
+    }
+  }
+  return true;
+}
+
+function fieldLabel(name) {
+  return String(name || "")
+    .replace(/_id$/, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function normalizeComparable(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function formObject(form) {
   const data = {};
   new FormData(form).forEach((value, key) => {
@@ -2195,6 +2450,21 @@ function guessColumnMap(headers) {
 function sanitizeColumnMap(columnMap) {
   const visibleKeys = new Set(mappingFields.map(([key]) => key));
   return Object.fromEntries(Object.entries(columnMap || {}).filter(([key]) => visibleKeys.has(key)));
+}
+
+function parsingSettingsFromMapping(mapping) {
+  if (!mapping) {
+    return defaultParsingSettings;
+  }
+  return {
+    delimiter: mapping.delimiter || defaultParsingSettings.delimiter,
+    quotechar: mapping.quotechar || defaultParsingSettings.quotechar,
+    encoding: mapping.encoding || defaultParsingSettings.encoding,
+    header_row: mapping.header_row ?? defaultParsingSettings.header_row,
+    date_format: mapping.date_format || defaultParsingSettings.date_format,
+    decimal_separator: mapping.decimal_separator || defaultParsingSettings.decimal_separator,
+    thousands_separator: mapping.thousands_separator || defaultParsingSettings.thousands_separator,
+  };
 }
 
 function normalizeName(value) {

@@ -407,6 +407,7 @@ class CSVMappingColumnDetectionView(JsonView):
         if not csv_file:
             raise APIValidationError("Missing required field", {"field": "csv_file"})
 
+        use_manual_settings = parse_bool(request.POST.get("manual_settings"), default=False)
         csv_mapping = CSVMapping(
             name="Column detection",
             delimiter=clean_csv_char(request.POST.get("delimiter"), "delimiter", ","),
@@ -443,7 +444,14 @@ class CSVMappingColumnDetectionView(JsonView):
             clean_int(request.POST.get("sample_size"), "sample_size", default=5, minimum=1),
             20,
         )
-        return json_response(detect_csv_columns(csv_mapping, csv_file, sample_size))
+        return json_response(
+            detect_csv_columns(
+                csv_mapping,
+                csv_file,
+                sample_size,
+                autodetect_settings=not use_manual_settings,
+            )
+        )
 
 
 class CSVMappingDetailView(JsonView):

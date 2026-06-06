@@ -17,6 +17,10 @@ from .serializers import (
     transaction_display_amount,
 )
 
+ENCODING_CANDIDATES = ["utf-8-sig", "utf-8", "cp1250", "windows-1250", "latin-1"]
+DELIMITER_CANDIDATES = [",", ";", "\t", "|"]
+DATE_FORMAT_CANDIDATES = ["%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y"]
+
 
 def normalize_text(value):
     return re.sub(r"\s+", "", str(value or "")).casefold()
@@ -42,7 +46,10 @@ def read_csv_rows_with_headers(csv_mapping, file_obj):
         text = raw
     else:
         text = raw.decode(csv_mapping.encoding)
+    return read_csv_rows_from_text(csv_mapping, text)
 
+
+def read_csv_rows_from_text(csv_mapping, text):
     text = text.replace("\ufeff", "")
     lines = text.splitlines()
     if not lines:
@@ -79,9 +86,28 @@ def read_csv_rows_with_headers(csv_mapping, file_obj):
     return rows, headers
 
 
-def detect_csv_columns(csv_mapping, file_obj, sample_size=5):
-    rows, headers = read_csv_rows_with_headers(csv_mapping, file_obj)
+def detect_csv_columns(csv_mapping, file_obj, sample_size=5, autodetect_settings=False):
+    warnings = []
+    detected_settings = csv_mapping_settings(csv_mapping)
+    if autodetect_settings:
+        raw = file_obj.read()
+        text, detected_settings, warnings = detect_csv_settings(
+            raw,
+            default_currency=csv_mapping.default_currency,
+        )
+        csv_mapping.delimiter = detected_settings["delimiter"]
+        csv_mapping.quotechar = detected_settings["quotechar"]
+        csv_mapping.encoding = detected_settings["encoding"]
+        csv_mapping.header_row = detected_settings["header_row"]
+        csv_mapping.date_format = detected_settings["date_format"]
+        csv_mapping.decimal_separator = detected_settings["decimal_separator"]
+        csv_mapping.thousands_separator = detected_settings["thousands_separator"]
+        rows, headers = read_csv_rows_from_text(csv_mapping, text)
+    else:
+        rows, headers = read_csv_rows_with_headers(csv_mapping, file_obj)
+
     return {
+        "detected_settings": detected_settings,
         "headers": headers,
         "loaded": len(rows),
         "sample_size": min(sample_size, len(rows)),
@@ -92,7 +118,257 @@ def detect_csv_columns(csv_mapping, file_obj, sample_size=5):
             }
             for line_number, row in rows[:sample_size]
         ],
+        "warnings": warnings,
     }
+
+
+def csv_mapping_settings(csv_mapping):
+    return {
+        "delimiter": csv_mapping.delimiter,
+        "quotechar": csv_mapping.quotechar,
+        "encoding": csv_mapping.encoding,
+        "header_row": csv_mapping.header_row,
+        "date_format": csv_mapping.date_format,
+        "decimal_separator": csv_mapping.decimal_separator,
+        "thousands_separator": csv_mapping.thousands_separator,
+    }
+
+
+def detect_csv_settings(raw, default_currency="CZK"):
+    text, encoding = decode_csv_text(raw)
+    text = text.replace("\ufeff", "")
+    if not text.strip():
+        raise ValueError("CSV file is empty")
+
+    delimiter, quotechar = detect_csv_dialect(text)
+    header_row = detect_header_row(text, delimiter, quotechar)
+    probe_mapping = type(
+        "CSVMappingProbe",
+        (),
+        {
+            "delimiter": delimiter,
+            "quotechar": quotechar,
+            "encoding": encoding,
+            "header_row": header_row,
+            "date_format": "%Y-%m-%d",
+            "decimal_separator": ".",
+            "thousands_separator": "",
+            "default_currency": default_currency,
+        },
+    )()
+    rows, headers = read_csv_rows_from_text(probe_mapping, text)
+    values = [value for _, row in rows[:50] for value in row.values()]
+    date_format, date_warning = detect_date_format(values)
+    decimal_separator, thousands_separator, number_warning = detect_number_format(values)
+    warnings = [warning for warning in [date_warning, number_warning] if warning]
+
+    return text, {
+        "delimiter": delimiter,
+        "quotechar": quotechar or '"',
+        "encoding": encoding,
+        "header_row": header_row,
+        "date_format": date_format,
+        "decimal_separator": decimal_separator,
+        "thousands_separator": thousands_separator,
+    }, warnings
+
+
+def decode_csv_text(raw):
+    if isinstance(raw, str):
+        return raw, "utf-8"
+
+    for encoding in ENCODING_CANDIDATES:
+        try:
+            return raw.decode(encoding), encoding
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("latin-1"), "latin-1"
+
+
+def detect_csv_dialect(text):
+    sample = "\n".join(line for line in text.splitlines()[:30] if line.strip())
+    fallback_delimiter = score_delimiter(text)[0]
+    try:
+        dialect = csv.Sniffer().sniff(sample, delimiters="".join(DELIMITER_CANDIDATES))
+        delimiter = dialect.delimiter if dialect.delimiter in DELIMITER_CANDIDATES else fallback_delimiter
+        quotechar = dialect.quotechar if dialect.quotechar else '"'
+    except csv.Error:
+        delimiter = fallback_delimiter
+        quotechar = '"'
+    return delimiter, quotechar
+
+
+def score_delimiter(text):
+    best = (",", -1)
+    lines = [line for line in text.splitlines()[:40] if line.strip()]
+    for delimiter in DELIMITER_CANDIDATES:
+        counts = []
+        for line in lines:
+            try:
+                cells = next(csv.reader([line], delimiter=delimiter, quotechar='"'))
+            except csv.Error:
+                continue
+            counts.append(len(cells))
+        multi_counts = [count for count in counts if count > 1]
+        if not multi_counts:
+            score = 0
+        else:
+            mode_count = max(set(multi_counts), key=multi_counts.count)
+            score = (
+                len(multi_counts) * 10
+                + multi_counts.count(mode_count) * 4
+                + mode_count
+                - (max(multi_counts) - min(multi_counts))
+            )
+        if score > best[1]:
+            best = (delimiter, score)
+    return best
+
+
+def detect_header_row(text, delimiter, quotechar):
+    parsed_rows = []
+    for line in text.splitlines()[:20]:
+        try:
+            parsed_rows.append(next(csv.reader([line], delimiter=delimiter, quotechar=quotechar)))
+        except csv.Error:
+            parsed_rows.append([line])
+
+    best_index = 0
+    best_score = -1
+    for index, row in enumerate(parsed_rows):
+        cells = [str(cell).strip() for cell in row if str(cell).strip()]
+        if len(cells) < 2:
+            continue
+        next_row = next(
+            (
+                candidate
+                for candidate in parsed_rows[index + 1 :]
+                if len([cell for cell in candidate if str(cell).strip()]) >= 2
+            ),
+            [],
+        )
+        score = len(cells)
+        if len(next_row) == len(row):
+            score += 5
+        if len(set(normalize_text(cell) for cell in cells)) == len(cells):
+            score += 2
+        score += sum(2 for cell in cells if looks_like_header_cell(cell))
+        score -= sum(3 for cell in cells if looks_like_data_cell(cell))
+        score += sum(1 for cell in next_row if looks_like_data_cell(cell))
+        if score > best_score:
+            best_index = index
+            best_score = score
+    return best_index
+
+
+def looks_like_header_cell(value):
+    normalized = normalize_text(value)
+    known_terms = [
+        "date",
+        "datum",
+        "amount",
+        "castka",
+        "popis",
+        "description",
+        "mena",
+        "currency",
+        "counterparty",
+        "protistrana",
+        "typ",
+    ]
+    return bool(re.search(r"[^\W\d_]", str(value), flags=re.UNICODE)) and not looks_like_data_cell(value) or any(
+        term in normalized for term in known_terms
+    )
+
+
+def looks_like_data_cell(value):
+    text = str(value or "").strip()
+    return is_date_like(text) or is_number_like(text)
+
+
+def is_date_like(value):
+    text = str(value or "").strip()
+    if not text:
+        return False
+    if re.fullmatch(r"\d{1,2}[./-]\d{1,2}[./-]\d{2,4}", text):
+        return True
+    if re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", text):
+        return True
+    return False
+
+
+def is_number_like(value):
+    text = re.sub(r"[^\d,.\-\s()]", "", str(value or "").strip())
+    return bool(re.fullmatch(r"\(?-?\s*\d[\d,.\s]*\)?", text))
+
+
+def detect_date_format(values):
+    scores = defaultdict(int)
+    for value in values:
+        text = str(value or "").strip()
+        if not text or len(text) > 24:
+            continue
+        for date_format in DATE_FORMAT_CANDIDATES:
+            try:
+                datetime.strptime(text, date_format)
+            except ValueError:
+                continue
+            scores[date_format] += 1
+
+    if not scores:
+        return "%Y-%m-%d", "Could not detect date format; using %Y-%m-%d."
+    return max(DATE_FORMAT_CANDIDATES, key=lambda item: scores[item]), ""
+
+
+def detect_number_format(values):
+    decimal_scores = defaultdict(int)
+    thousands_scores = defaultdict(int)
+    for value in values:
+        text = str(value or "").replace("\xa0", " ").strip()
+        if not text or is_date_like(text):
+            continue
+        cleaned = re.sub(r"[^\d,.\-\s()]", "", text)
+        if not re.search(r"\d", cleaned):
+            continue
+        comma = cleaned.rfind(",")
+        dot = cleaned.rfind(".")
+        if comma == -1 and dot == -1:
+            if re.search(r"\d\s+\d{3}(\D|$)", cleaned):
+                thousands_scores[" "] += 1
+            continue
+
+        decimal = None
+        if comma != -1 and dot != -1:
+            decimal = "," if comma > dot else "."
+            thousands_scores["." if decimal == "," else ","] += 2
+        else:
+            separator = "," if comma != -1 else "."
+            parts = cleaned.split(separator)
+            tail = re.sub(r"\D", "", parts[-1])
+            if len(tail) in {1, 2}:
+                decimal = separator
+            elif all(len(re.sub(r"\D", "", part)) == 3 for part in parts[1:]):
+                thousands_scores[separator] += 1
+
+        if decimal:
+            decimal_scores[decimal] += 1
+            integer_part = cleaned[: cleaned.rfind(decimal)]
+            if re.search(r"\d\s+\d{3}(\D|$)", integer_part):
+                thousands_scores[" "] += 2
+            other_separator = "." if decimal == "," else ","
+            if other_separator in integer_part:
+                thousands_scores[other_separator] += 1
+
+    if not decimal_scores:
+        return ".", "", "Could not detect decimal separator; using dot."
+
+    decimal_separator = "," if decimal_scores[","] > decimal_scores["."] else "."
+    thousands_separator = ""
+    if thousands_scores:
+        thousands_separator = max([" ", ".", ","], key=lambda item: thousands_scores[item])
+        if thousands_separator == decimal_separator or thousands_scores[thousands_separator] == 0:
+            thousands_separator = ""
+    return decimal_separator, thousands_separator, ""
 
 
 @dataclass
