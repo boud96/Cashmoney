@@ -38,8 +38,6 @@ const mappingFields = [
   ["posted_date", "Posted Date"],
   ["description", "Description"],
   ["amount", "Amount"],
-  ["debit_amount", "Debit Amount"],
-  ["credit_amount", "Credit Amount"],
   ["currency", "Currency"],
   ["counterparty_name", "Counterparty Name"],
   ["counterparty_account_number", "Counterparty Account"],
@@ -1063,31 +1061,45 @@ function HelpScreenshot({ label, note }) {
 }
 
 function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraft }) {
+  const [editingItems, setEditingItems] = useState({});
+
+  function editItem(endpoint, item) {
+    setEditingItems((current) => ({ ...current, [endpoint]: item }));
+  }
+
+  function clearEditing(endpoint) {
+    setEditingItems((current) => {
+      const next = { ...current };
+      delete next[endpoint];
+      return next;
+    });
+  }
+
   return (
     <div className="settings-grid">
-      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} title="Bank Accounts">
-        <AccountForm notify={notify} refs={refs} reloadAll={reloadAll} />
+      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} onEdit={(item) => editItem("/bank-accounts/", item)} title="Bank Accounts">
+        <AccountForm clearEditing={() => clearEditing("/bank-accounts/")} editingItem={editingItems["/bank-accounts/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} title="CSV Mappings">
-        <MappingForm draft={mappingDraft} notify={notify} reloadAll={reloadAll} setDraft={setMappingDraft} />
+      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} onEdit={(item) => editItem("/csv-mappings/", item)} title="CSV Mappings">
+        <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} title="Categories">
-        <SimpleForm endpoint="/categories/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} notify={notify} reloadAll={reloadAll} />
+      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} onEdit={(item) => editItem("/categories/", item)} title="Categories">
+        <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} title="Subcategories">
-        <SubcategoryForm notify={notify} refs={refs} reloadAll={reloadAll} />
+      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} onEdit={(item) => editItem("/subcategories/", item)} title="Subcategories">
+        <SubcategoryForm clearEditing={() => clearEditing("/subcategories/")} editingItem={editingItems["/subcategories/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} title="Tags">
-        <SimpleForm endpoint="/tags/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} notify={notify} reloadAll={reloadAll} />
+      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} onEdit={(item) => editItem("/tags/", item)} title="Tags">
+        <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} title="Keywords" wide>
-        <KeywordForm notify={notify} refs={refs} reloadAll={reloadAll} />
+      <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} onEdit={(item) => editItem("/keywords/", item)} title="Keywords" wide>
+        <KeywordForm clearEditing={() => clearEditing("/keywords/")} editingItem={editingItems["/keywords/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
     </div>
   );
 }
 
-function DefinitionPanel({ children, endpoint, formatter, helpText, items, title, wide = false }) {
+function DefinitionPanel({ children, endpoint, formatter, helpText, items, onEdit, title, wide = false }) {
   return (
     <section className={`panel ${wide ? "wide-panel" : ""}`}>
       <div className="panel-header">
@@ -1106,6 +1118,7 @@ function DefinitionPanel({ children, endpoint, formatter, helpText, items, title
               </div>
               <div className="item-actions">
                 {item.color && <span className="swatch" style={{ background: item.color }} />}
+                <button className="edit-button" onClick={() => onEdit(item)} type="button">Edit</button>
                 <DeleteButton endpoint={`${endpoint}${item.id}/`} name={itemTitle} />
               </div>
             </div>
@@ -1136,35 +1149,71 @@ function DeleteButton({ endpoint, name }) {
   return <button className="delete-button" onClick={remove} type="button">Delete</button>;
 }
 
-function AccountForm({ notify, refs, reloadAll }) {
+function FormField({ children, className = "", label }) {
+  return (
+    <label className={`form-field ${className}`.trim()}>
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function FormActions({ clearEditing, isEditing }) {
+  return (
+    <div className="form-actions">
+      <button type="submit">{isEditing ? "Save" : "Add"}</button>
+      {isEditing && <button className="link-button" onClick={clearEditing} type="button">Cancel</button>}
+    </div>
+  );
+}
+
+function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
+  const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
     const data = formObject(event.currentTarget);
     data.owners = Number(data.owners || 1);
     try {
-      await apiPost("/bank-accounts/", data);
+      if (isEditing) {
+        await apiPatch(`/bank-accounts/${editingItem.id}/`, data);
+      } else {
+        await apiPost("/bank-accounts/", data);
+      }
       event.currentTarget.reset();
-      notify("Account added");
+      clearEditing?.();
+      notify(isEditing ? "Account saved" : "Account added");
       await reloadAll();
     } catch (error) {
       notify(error.message);
     }
   }
   return (
-    <form className="compact-form" onSubmit={submit}>
-      <input name="name" placeholder="Name" required />
-      <input name="account_number" placeholder="Account number" required />
-      <input name="bank_name" placeholder="Bank" />
-      <input defaultValue="CZK" name="currency" placeholder="Currency" />
-      <input defaultValue="1" min="1" name="owners" type="number" />
-      <Select blank="No default mapping" name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} />
-      <button type="submit">Add</button>
+    <form className="compact-form" key={editingItem?.id || "new-account"} onSubmit={submit}>
+      <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Account name" required /></FormField>
+      <FormField label="Account Number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Account number" required /></FormField>
+      <FormField label="Bank"><input defaultValue={editingItem?.bank_name || ""} name="bank_name" placeholder="Bank name" /></FormField>
+      <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} name="currency" placeholder="CZK" /></FormField>
+      <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" type="number" /></FormField>
+      <FormField label="Default CSV Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
+      <FormActions clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
 
-function MappingForm({ draft, notify, reloadAll, setDraft }) {
+function MappingForm({ clearEditing, draft, editingItem, notify, reloadAll, setDraft }) {
   const headers = draft.detected?.headers || [];
+  const isEditing = Boolean(editingItem);
+
+  useEffect(() => {
+    if (!editingItem) {
+      return;
+    }
+    setDraft({
+      column_map: sanitizeColumnMap(editingItem.column_map || {}),
+      categorization_fields: editingItem.categorization_fields || defaultCategorizationFields,
+      detected: null,
+    });
+  }, [editingItem, setDraft]);
 
   async function detectColumns(event) {
     event.preventDefault();
@@ -1200,14 +1249,19 @@ function MappingForm({ draft, notify, reloadAll, setDraft }) {
     event.preventDefault();
     const data = formObject(event.currentTarget);
     data.header_row = Number(data.header_row || 0);
-    data.column_map = draft.column_map;
+    data.column_map = sanitizeColumnMap(draft.column_map);
     data.categorization_fields = draft.categorization_fields;
     data.fallback_date_formats = [];
     try {
-      await apiPost("/csv-mappings/", data);
+      if (isEditing) {
+        await apiPatch(`/csv-mappings/${editingItem.id}/`, data);
+      } else {
+        await apiPost("/csv-mappings/", data);
+      }
       event.currentTarget.reset();
+      clearEditing?.();
       setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, detected: null });
-      notify("CSV mapping added");
+      notify(isEditing ? "CSV mapping saved" : "CSV mapping added");
       await reloadAll();
     } catch (error) {
       notify(error.message);
@@ -1215,16 +1269,16 @@ function MappingForm({ draft, notify, reloadAll, setDraft }) {
   }
 
   return (
-    <form className="compact-form mapping-form" onSubmit={submit}>
-      <input name="name" placeholder="Name" required />
-      <input defaultValue="," name="delimiter" placeholder="Delimiter" />
-      <input defaultValue="%Y-%m-%d" name="date_format" placeholder="Date format" />
-      <input defaultValue="CZK" name="default_currency" placeholder="Currency" />
-      <input defaultValue="utf-8-sig" name="encoding" placeholder="Encoding" />
-      <input defaultValue="0" min="0" name="header_row" placeholder="Header row" type="number" />
-      <input defaultValue={'"'} name="quotechar" placeholder="Quote" />
-      <input defaultValue="." name="decimal_separator" placeholder="Decimal" />
-      <input name="thousands_separator" placeholder="Thousands" />
+    <form className="compact-form mapping-form" key={editingItem?.id || "new-mapping"} onSubmit={submit}>
+      <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Mapping name" required /></FormField>
+      <FormField label="Delimiter"><input defaultValue={editingItem?.delimiter || ","} name="delimiter" placeholder="," /></FormField>
+      <FormField label="Date Format"><input defaultValue={editingItem?.date_format || "%Y-%m-%d"} name="date_format" placeholder="%Y-%m-%d" /></FormField>
+      <FormField label="Default Currency"><input defaultValue={editingItem?.default_currency || "CZK"} name="default_currency" placeholder="CZK" /></FormField>
+      <FormField label="Encoding"><input defaultValue={editingItem?.encoding || "utf-8-sig"} name="encoding" placeholder="utf-8-sig" /></FormField>
+      <FormField label="Header Row"><input defaultValue={editingItem?.header_row ?? "0"} min="0" name="header_row" placeholder="0" type="number" /></FormField>
+      <FormField label="Quote Character"><input defaultValue={editingItem?.quotechar || '"'} name="quotechar" placeholder={'"'} /></FormField>
+      <FormField label="Decimal Separator"><input defaultValue={editingItem?.decimal_separator || "."} name="decimal_separator" placeholder="." /></FormField>
+      <FormField label="Thousands Separator"><input defaultValue={editingItem?.thousands_separator || ""} name="thousands_separator" placeholder="Optional" /></FormField>
       <label className="mapping-file-field"><span>Sample CSV</span><input accept=".csv,text/csv" name="sample_csv" type="file" /></label>
       <button className="link-button" onClick={detectColumns} type="button">Detect Columns</button>
       <div className="mapping-column-map">
@@ -1255,13 +1309,16 @@ function MappingForm({ draft, notify, reloadAll, setDraft }) {
           onChange={(event) => setDraft((current) => ({ ...current, categorization_fields: Array.from(event.target.selectedOptions).map((option) => option.value) }))}
           value={draft.categorization_fields}
         >
-          {mappingFields.filter(([key]) => !["original_id", "transaction_date", "posted_date", "amount", "debit_amount", "credit_amount", "currency"].includes(key)).map(([key, label]) => (
+          {mappingFields.filter(([key]) => !["original_id", "transaction_date", "posted_date", "amount", "currency"].includes(key)).map(([key, label]) => (
             <option key={key} value={key}>{label}</option>
           ))}
         </select>
       </label>
       {draft.detected && <MappingSample detected={draft.detected} />}
-      <button type="submit">Add</button>
+      <FormActions clearEditing={() => {
+        clearEditing?.();
+        setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, detected: null });
+      }} isEditing={isEditing} />
     </form>
   );
 }
@@ -1285,56 +1342,72 @@ function MappingSample({ detected }) {
   );
 }
 
-function SimpleForm({ endpoint, fields, notify, reloadAll }) {
+function SimpleForm({ clearEditing, editingItem, endpoint, fields, notify, reloadAll }) {
+  const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
     try {
-      await apiPost(endpoint, formObject(event.currentTarget));
+      if (isEditing) {
+        await apiPatch(`${endpoint}${editingItem.id}/`, formObject(event.currentTarget));
+      } else {
+        await apiPost(endpoint, formObject(event.currentTarget));
+      }
       event.currentTarget.reset();
-      notify("Record added");
+      clearEditing?.();
+      notify(isEditing ? "Record saved" : "Record added");
       await reloadAll();
     } catch (error) {
       notify(error.message);
     }
   }
   return (
-    <form className="compact-form" onSubmit={submit}>
+    <form className="compact-form" key={editingItem?.id || `${endpoint}-new`} onSubmit={submit}>
       {fields.map(([name, placeholder, required]) => (
         name === "color"
-          ? <ColorInput key={name} name={name} />
-          : <input key={name} name={name} placeholder={placeholder} required={required} />
+          ? <ColorInput initialValue={editingItem?.[name] || ""} key={name} label={placeholder} name={name} />
+          : <FormField key={name} label={placeholder}><input defaultValue={editingItem?.[name] || ""} name={name} placeholder={placeholder} required={required} /></FormField>
       ))}
-      <button type="submit">Add</button>
+      <FormActions clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
 
-function SubcategoryForm({ notify, refs, reloadAll }) {
+function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
+  const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
     try {
-      await apiPost("/subcategories/", formObject(event.currentTarget));
+      if (isEditing) {
+        await apiPatch(`/subcategories/${editingItem.id}/`, formObject(event.currentTarget));
+      } else {
+        await apiPost("/subcategories/", formObject(event.currentTarget));
+      }
       event.currentTarget.reset();
-      notify("Subcategory added");
+      clearEditing?.();
+      notify(isEditing ? "Subcategory saved" : "Subcategory added");
       await reloadAll();
     } catch (error) {
       notify(error.message);
     }
   }
   return (
-    <form className="compact-form" onSubmit={submit}>
-      <Select name="category_id" options={refs.categories.map((item) => [item.id, item.name])} required />
-      <input name="name" placeholder="Name" required />
-      <ColorInput name="color" />
-      <button type="submit">Add</button>
+    <form className="compact-form" key={editingItem?.id || "new-subcategory"} onSubmit={submit}>
+      <FormField label="Category"><Select defaultValue={editingItem?.category?.id || ""} name="category_id" options={refs.categories.map((item) => [item.id, item.name])} required /></FormField>
+      <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Subcategory name" required /></FormField>
+      <ColorInput initialValue={editingItem?.color || ""} label="Color" name="color" />
+      <FormActions clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
 
-function ColorInput({ name }) {
-  const [value, setValue] = useState("");
+function ColorInput({ initialValue = "", label = "Color", name }) {
+  const [value, setValue] = useState(initialValue || "");
   const wrapperRef = useRef(null);
   const pickerValue = normalizeHexColor(value) || "#2f6f9f";
+
+  useEffect(() => {
+    setValue(initialValue || "");
+  }, [initialValue]);
 
   useEffect(() => {
     const form = wrapperRef.current?.closest("form");
@@ -1353,31 +1426,34 @@ function ColorInput({ name }) {
   }
 
   return (
-    <div className="color-input" ref={wrapperRef}>
-      <input name={name} type="hidden" value={value} />
-      <input
-        aria-label="Choose color"
-        className="color-input-picker"
-        onChange={(event) => updateColor(event.target.value)}
-        type="color"
-        value={pickerValue}
-      />
-      <input
-        className="color-input-text"
-        onChange={(event) => updateColor(event.target.value)}
-        placeholder="Auto color"
-        value={value}
-      />
-      {value && (
-        <button className="color-input-clear" onClick={() => setValue("")} title="Use auto color" type="button">
-          Clear
-        </button>
-      )}
-    </div>
+    <FormField label={label}>
+      <div className="color-input" ref={wrapperRef}>
+        <input name={name} type="hidden" value={value} />
+        <input
+          aria-label="Choose color"
+          className="color-input-picker"
+          onChange={(event) => updateColor(event.target.value)}
+          type="color"
+          value={pickerValue}
+        />
+        <input
+          className="color-input-text"
+          onChange={(event) => updateColor(event.target.value)}
+          placeholder="Auto color"
+          value={value}
+        />
+        {value && (
+          <button className="color-input-clear" onClick={() => setValue("")} title="Use auto color" type="button">
+            Clear
+          </button>
+        )}
+      </div>
+    </FormField>
   );
 }
 
-function KeywordForm({ notify, refs, reloadAll }) {
+function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
+  const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
     const data = formObject(event.currentTarget);
@@ -1387,25 +1463,30 @@ function KeywordForm({ notify, refs, reloadAll }) {
     data.is_ignored = Boolean(event.currentTarget.elements.is_ignored.checked);
     data.tag_ids = Array.from(event.currentTarget.elements.tag_ids.selectedOptions).map((option) => option.value);
     try {
-      await apiPost("/keywords/", data);
+      if (isEditing) {
+        await apiPatch(`/keywords/${editingItem.id}/`, data);
+      } else {
+        await apiPost("/keywords/", data);
+      }
       event.currentTarget.reset();
-      notify("Keyword added");
+      clearEditing?.();
+      notify(isEditing ? "Keyword saved" : "Keyword added");
       await reloadAll();
     } catch (error) {
       notify(error.message);
     }
   }
   return (
-    <form className="compact-form keyword-form" onSubmit={submit}>
-      <input name="name" placeholder="Name" required />
-      <textarea name="include_terms" placeholder="Include terms, one per line" required rows="3" />
-      <textarea name="exclude_terms" placeholder="Exclude terms, one per line" rows="3" />
-      <Select blank="No subcategory" name="subcategory_id" options={refs.subcategories.map((item) => [item.id, subLabel(item)])} />
-      <Select blank="No WNI" name="want_need_investment" options={wniOptions} />
-      <select multiple name="tag_ids">{refs.tags.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-      <input defaultValue="0" name="priority" type="number" />
-      <label className="check-row"><input name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
-      <button type="submit">Add</button>
+    <form className="compact-form keyword-form" key={editingItem?.id || "new-keyword"} onSubmit={submit}>
+      <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Keyword name" required /></FormField>
+      <FormField label="Include Terms"><textarea defaultValue={(editingItem?.include_terms || []).join("\n")} name="include_terms" placeholder="One term per line" required rows="3" /></FormField>
+      <FormField label="Exclude Terms"><textarea defaultValue={(editingItem?.exclude_terms || []).join("\n")} name="exclude_terms" placeholder="One term per line" rows="3" /></FormField>
+      <FormField label="Subcategory"><Select blank="No subcategory" defaultValue={editingItem?.subcategory?.id || ""} name="subcategory_id" options={refs.subcategories.map((item) => [item.id, subLabel(item)])} /></FormField>
+      <FormField label="Want / Need / Investment"><Select blank="No WNI" defaultValue={editingItem?.want_need_investment || ""} name="want_need_investment" options={wniOptions} /></FormField>
+      <FormField label="Tags"><select defaultValue={(editingItem?.tags || []).map((item) => item.id)} multiple name="tag_ids">{refs.tags.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></FormField>
+      <FormField label="Priority"><input defaultValue={editingItem?.priority ?? "0"} name="priority" type="number" /></FormField>
+      <label className="check-row"><input defaultChecked={Boolean(editingItem?.is_ignored)} name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
+      <FormActions clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
@@ -1703,9 +1784,9 @@ function MultiSelect({ label, name, onChange, options, value }) {
   );
 }
 
-function Select({ blank, name, options, required = false }) {
+function Select({ blank, defaultValue = "", name, options, required = false }) {
   return (
-    <select name={name} required={required}>
+    <select defaultValue={defaultValue} name={name} required={required}>
       {blank && <option value="">{blank}</option>}
       {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
     </select>
@@ -2109,6 +2190,11 @@ function guessColumnMap(headers) {
     const match = normalized.find(([, name]) => (aliases[key] || []).some((alias) => name.includes(alias)));
     return [key, match?.[0] || ""];
   }));
+}
+
+function sanitizeColumnMap(columnMap) {
+  const visibleKeys = new Set(mappingFields.map(([key]) => key));
+  return Object.fromEntries(Object.entries(columnMap || {}).filter(([key]) => visibleKeys.has(key)));
 }
 
 function normalizeName(value) {
