@@ -10,7 +10,12 @@ from django.db import IntegrityError, transaction
 
 from .constants import DEFAULT_CATEGORIZATION_FIELDS
 from .models import BankAccount, CSVImport, Keyword, Transaction
-from .serializers import model_ref, serialize_tag, serialize_transaction
+from .serializers import (
+    model_ref,
+    serialize_tag,
+    serialize_transaction,
+    transaction_display_amount,
+)
 
 
 def normalize_text(value):
@@ -661,7 +666,7 @@ def recategorize_transactions(queryset):
     return stats
 
 
-def build_dashboard_summary(queryset):
+def build_dashboard_summary(queryset, split_by_owners=False):
     summary = {
         "monthly": [],
         "income_categories": [],
@@ -674,9 +679,11 @@ def build_dashboard_summary(queryset):
     expense_categories = {}
     wni = defaultdict(Decimal)
 
-    for transaction_obj in queryset.select_related("subcategory", "subcategory__category"):
+    for transaction_obj in queryset.select_related(
+        "bank_account", "subcategory", "subcategory__category"
+    ):
         month_key = transaction_obj.transaction_date.strftime("%Y-%m")
-        amount = transaction_obj.amount
+        amount = transaction_display_amount(transaction_obj, split_by_owners)
         category = transaction_obj.subcategory.category if transaction_obj.subcategory else None
         if amount >= 0:
             monthly[month_key]["income"] += amount

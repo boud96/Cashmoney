@@ -685,6 +685,36 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(payload["want_need_investment"][0]["name"], "want")
 
+    def test_dashboard_split_by_owners_adjusts_summary_and_transaction_amounts(self):
+        self.account.owners = 2
+        self.account.save(update_fields=["owners"])
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Shared lunch",
+            amount=Decimal("-90.00"),
+            subcategory=self.subcategory,
+            want_need_investment=WantNeedInvestment.NEED,
+        )
+
+        summary_response = self.client.get(
+            "/api/dashboard/summary/", {"split_by_owners": "true"}
+        )
+        transactions_response = self.client.get(
+            "/api/transactions/", {"split_by_owners": "true", "limit": "1"}
+        )
+        transaction_obj.refresh_from_db()
+
+        summary = json_body(summary_response)
+        transactions = json_body(transactions_response)
+        self.assertEqual(summary_response.status_code, 200)
+        self.assertEqual(transactions_response.status_code, 200)
+        self.assertEqual(summary["monthly"][0]["expense"], 45.0)
+        self.assertEqual(summary["expense_categories"][0]["amount"], 45.0)
+        self.assertEqual(summary["want_need_investment"][0]["amount"], 45.0)
+        self.assertEqual(transactions["results"][0]["amount"], -45.0)
+        self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
+
     def test_maintenance_summary_returns_counts(self):
         csv_import = CSVImport.objects.create(
             bank_account=self.account,

@@ -771,6 +771,9 @@ def filtered_transactions(request):
 class TransactionCollectionView(JsonView):
     def get(self, request):
         queryset = filtered_transactions(request)
+        split_by_owners = parse_bool(
+            request.GET.get("split_by_owners"), default=False
+        )
         limit = min(clean_int(request.GET.get("limit"), "limit", default=500, minimum=1), 1000)
         offset = clean_int(request.GET.get("offset"), "offset", default=0, minimum=0)
         count = queryset.count()
@@ -782,7 +785,10 @@ class TransactionCollectionView(JsonView):
                 "offset": offset,
                 "next_offset": offset + limit if offset + limit < count else None,
                 "previous_offset": max(offset - limit, 0) if offset else None,
-                "results": [serialize_transaction(transaction) for transaction in items],
+                "results": [
+                    serialize_transaction(transaction, split_by_owners)
+                    for transaction in items
+                ],
             }
         )
 
@@ -1000,7 +1006,12 @@ class KeywordPreviewView(JsonView):
 
 class DashboardSummaryView(JsonView):
     def get(self, request):
-        return json_response(build_dashboard_summary(filtered_transactions(request)))
+        split_by_owners = parse_bool(
+            request.GET.get("split_by_owners"), default=False
+        )
+        return json_response(
+            build_dashboard_summary(filtered_transactions(request), split_by_owners)
+        )
 
 
 def maintenance_counts():

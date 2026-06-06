@@ -19,6 +19,15 @@ def model_ref(obj):
     return {"id": str(obj.id), "name": str(obj)}
 
 
+def transaction_display_amount(transaction, split_by_owners=False):
+    amount = transaction.amount
+    if not split_by_owners:
+        return amount
+    owners = getattr(transaction.bank_account, "owners", 1) or 1
+    owners = max(int(owners), 1)
+    return amount / Decimal(owners)
+
+
 def serialize_bank_account(account):
     return {
         "id": str(account.id),
@@ -107,7 +116,7 @@ def serialize_keyword(keyword):
     }
 
 
-def serialize_transaction(transaction):
+def serialize_transaction(transaction, split_by_owners=False):
     category = transaction.subcategory.category if transaction.subcategory else None
     return {
         "id": str(transaction.id),
@@ -115,7 +124,7 @@ def serialize_transaction(transaction):
         "transaction_date": iso(transaction.transaction_date),
         "posted_date": iso(transaction.posted_date),
         "description": transaction.description,
-        "amount": money(transaction.amount),
+        "amount": money(transaction_display_amount(transaction, split_by_owners)),
         "currency": transaction.currency,
         "direction": transaction.direction,
         "bank_account": model_ref(transaction.bank_account),
