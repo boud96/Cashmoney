@@ -517,7 +517,9 @@ class APITests(FinanceTestCase):
         )
 
         self.assertEqual(json_body(hidden)["count"], 0)
+        self.assertEqual(json_body(hidden)["total_count"], 1)
         self.assertEqual(json_body(visible)["count"], 1)
+        self.assertEqual(json_body(visible)["total_count"], 1)
         self.assertEqual(json_body(visible)["limit"], 1)
 
     def test_transaction_filters_support_multi_select_and_unassigned_values(self):

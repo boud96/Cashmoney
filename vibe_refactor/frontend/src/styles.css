@@ -663,7 +663,7 @@ textarea:focus {
 
 .metrics-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -675,6 +675,17 @@ textarea:focus {
   margin-top: 8px;
   font-size: 24px;
   font-weight: 760;
+}
+
+.dashboard-action-card {
+  display: grid;
+  align-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-action-card .primary-action {
+  width: 100%;
+  min-height: 38px;
 }
 
 .positive,
@@ -712,8 +723,12 @@ textarea:focus {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+  margin-bottom: 18px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
 }
 
 .dashboard-charts {

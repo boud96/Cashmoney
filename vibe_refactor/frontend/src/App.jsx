@@ -97,7 +97,7 @@ export default function App() {
   const [filters, setFilters] = useState(emptyFilters);
   const [filterDefaults, setFilterDefaults] = useState({ from: "", to: "" });
   const [summary, setSummary] = useState(null);
-  const [transactionPage, setTransactionPage] = useState({ count: 0, results: [] });
+  const [transactionPage, setTransactionPage] = useState({ count: 0, total_count: 0, results: [] });
   const [recategorizeResult, setRecategorizeResult] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [importReport, setImportReport] = useState(null);
@@ -390,21 +390,6 @@ function DashboardPage({
         </div>
       </section>
 
-      <section className="panel recategorize-panel">
-        <div className="panel-header">
-          <h2>Recategorization</h2>
-          <span className="muted">{transactionPage.count.toLocaleString()} filtered transactions</span>
-        </div>
-        <div className="recategorize-body">
-          <div className="recategorize-scope">
-            <span>Filtered Scope</span>
-            <strong>{transactionPage.count.toLocaleString()} transactions</strong>
-          </div>
-          <button className="primary-action" disabled={!transactionPage.count || importBusy} onClick={recategorize} type="button">Recategorize Filtered</button>
-        </div>
-        {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
-      </section>
-
       <div className="metrics-grid">
         {metrics.map(([label, value, tone]) => (
           <div className="metric" key={label}>
@@ -412,7 +397,12 @@ function DashboardPage({
             <div className={`metric-value ${tone}`}>{value}</div>
           </div>
         ))}
+        <div className="metric dashboard-action-card">
+          <div className="metric-label">Actions</div>
+          <button className="primary-action" disabled={!transactionPage.count || importBusy} onClick={recategorize} type="button">Recategorize Filtered</button>
+        </div>
       </div>
+      {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
 
       <div className="dashboard-charts">
         <ChartPanel className="chart-panel-wide" title="Monthly Flow"><MonthlyChart rows={summary?.monthly || []} /></ChartPanel>
@@ -2223,7 +2213,7 @@ function buildMetrics(summary, transactionPage) {
     ["Income", money(income), "positive"],
     ["Expenses", money(expense), "negative"],
     ["Net", money(income - expense), income - expense >= 0 ? "positive" : "negative"],
-    ["Transactions", transactionPage.count.toLocaleString(), ""],
+    ["Transactions", `${transactionPage.count.toLocaleString()} / ${(transactionPage.total_count ?? transactionPage.count).toLocaleString()}`, ""],
     ["Uncategorized", uncategorized.toLocaleString(), ""],
   ];
 }

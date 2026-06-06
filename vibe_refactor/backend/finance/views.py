@@ -789,6 +789,7 @@ class TransactionCollectionView(JsonView):
         return json_response(
             {
                 "count": count,
+                "total_count": Transaction.objects.count(),
                 "limit": limit,
                 "offset": offset,
                 "next_offset": offset + limit if offset + limit < count else None,
