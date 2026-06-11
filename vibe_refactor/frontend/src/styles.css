@@ -1,4 +1,46 @@
 :root {
+  color-scheme: dark;
+  --bg: #0e1117;
+  --surface: #0e1117;
+  --surface-2: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --field-bg: #161b22;
+  --sidebar-bg: #0e1117;
+  --subtle-bg: #161b22;
+  --soft-hover: #21262d;
+  --chip-text: #dbe7f0;
+  --chip-hover: #30363d;
+  --tag-more-bg: #21262d;
+  --tag-more-border: #30363d;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --toast-bg: #161b22;
+  --floating-shadow: 0 18px 50px rgba(0, 0, 0, 0.38);
+  --on-accent: #08111d;
+  --accent-text: #08111d;
+  --danger-text: #170708;
+  --blue: #58a6ff;
+  --action: #58a6ff;
+  --green: #3fb950;
+  --orange: #d29922;
+  --red: #ff7b72;
+  --violet: #a371f7;
+  --warning: #d29922;
+  --wni-want: #a371f7;
+  --wni-need: #58a6ff;
+  --wni-investment: #d29922;
+  --wni-uncategorized: #8b949e;
+  --net-overlay: rgba(230, 237, 243, 0.26);
+  --warning-soft-bg: rgba(210, 153, 34, 0.12);
+  --warning-soft-border: rgba(210, 153, 34, 0.28);
+  --warning-soft-text: #f0c36d;
+  --focus-ring: rgba(88, 166, 255, 0.24);
+  --shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+html[data-theme="light"] {
   color-scheme: light;
   --bg: #f5f7f8;
   --surface: #ffffff;
@@ -18,6 +60,8 @@
   --toast-bg: #10212a;
   --floating-shadow: 0 18px 50px rgba(29, 45, 53, 0.16);
   --on-accent: #ffffff;
+  --accent-text: #ffffff;
+  --danger-text: #ffffff;
   --blue: #2f6f9f;
   --action: #2f6f9f;
   --green: #16a34a;
@@ -29,9 +73,12 @@
   --wni-need: #2563eb;
   --wni-investment: #f59e0b;
   --wni-uncategorized: #64748b;
+  --net-overlay: rgba(0, 0, 0, 0.22);
+  --warning-soft-bg: rgba(196, 137, 39, 0.08);
+  --warning-soft-border: rgba(196, 137, 39, 0.28);
+  --warning-soft-text: #8a5a10;
   --focus-ring: rgba(47, 111, 159, 0.16);
   --shadow: 0 14px 40px rgba(29, 45, 53, 0.08);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 * {
@@ -91,7 +138,7 @@ button {
   display: grid;
   place-items: center;
   border-radius: 8px;
-  color: white;
+  color: var(--accent-text);
   background: linear-gradient(135deg, var(--action), var(--green));
   font-weight: 760;
 }
@@ -197,6 +244,7 @@ h2 {
 .topbar-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -205,7 +253,7 @@ h2 {
 .compact-form button {
   border: 1px solid var(--action);
   background: var(--action);
-  color: white;
+  color: var(--accent-text);
   border-radius: 8px;
   padding: 9px 13px;
   font-weight: 700;
@@ -216,6 +264,108 @@ h2 {
 .compact-form button.link-button {
   background: var(--surface);
   color: var(--action);
+}
+
+.accent-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.accent-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.54);
+}
+
+.accent-modal {
+  width: min(480px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+  padding: 16px;
+}
+
+.accent-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.icon-button:hover,
+.icon-button:focus {
+  border-color: var(--action);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.accent-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.accent-preset {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--field-bg);
+  color: var(--text);
+  display: grid;
+  gap: 8px;
+  padding: 10px 8px;
+  place-items: center;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.accent-preset:hover,
+.accent-preset:focus,
+.accent-preset.is-selected {
+  border-color: var(--preset-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--preset-color) 28%, transparent);
+  outline: none;
+}
+
+.accent-preset.is-selected {
+  background: color-mix(in srgb, var(--preset-color) 14%, var(--field-bg));
+}
+
+.accent-preset-swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 8px;
+  background: var(--preset-color);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
 }
 
 .primary-action:disabled,
@@ -471,7 +621,7 @@ textarea:focus {
   border-radius: 4px;
   display: grid;
   place-items: center;
-  color: white;
+  color: var(--accent-text);
   font-size: 12px;
   font-weight: 800;
 }
@@ -598,7 +748,7 @@ textarea:focus {
 .chip-toggle.is-selected {
   border-color: var(--action);
   background: var(--action);
-  color: white;
+  color: var(--accent-text);
 }
 
 .inline-clear {
@@ -828,7 +978,7 @@ textarea:focus {
   border-radius: 8px;
   background: var(--toast-bg);
   box-shadow: var(--floating-shadow);
-  color: white;
+  color: var(--text);
   font-size: 12px;
   font-weight: 650;
   line-height: 1.45;
@@ -1288,10 +1438,10 @@ textarea:focus {
 .mapping-warnings {
   display: grid;
   gap: 5px;
-  border: 1px solid rgba(196, 137, 39, 0.28);
+  border: 1px solid var(--warning-soft-border);
   border-radius: 8px;
-  background: rgba(196, 137, 39, 0.08);
-  color: #8a5a10;
+  background: var(--warning-soft-bg);
+  color: var(--warning-soft-text);
   font-size: 12px;
   font-weight: 700;
   padding: 10px 12px;
@@ -1524,7 +1674,7 @@ td {
 .danger-button {
   border: 1px solid var(--red);
   background: var(--red);
-  color: white;
+  color: var(--danger-text);
   border-radius: 8px;
   padding: 9px 13px;
   font-weight: 760;
@@ -1633,7 +1783,7 @@ td {
   bottom: 22px;
   max-width: min(420px, calc(100vw - 44px));
   background: var(--toast-bg);
-  color: white;
+  color: var(--text);
   border-radius: 8px;
   padding: 11px 13px;
   box-shadow: var(--shadow);

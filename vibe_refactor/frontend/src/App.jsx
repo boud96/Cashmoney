@@ -19,6 +19,26 @@ const pages = {
   maintenance: ["Maintenance", "Database snapshot and destructive cleanup tools."],
   help: ["Help", "Usage guide for importing, categorizing, reviewing, and maintaining your finance data."],
 };
+export const THEME_STORAGE_KEY = "cashmoney-theme";
+export const ACCENT_STORAGE_KEY = "cashmoney-accent";
+const accentPresets = [
+  ["Blue", "#58a6ff"],
+  ["Indigo", "#6366f1"],
+  ["Violet", "#a371f7"],
+  ["Fuchsia", "#d946ef"],
+  ["Pink", "#ec4899"],
+  ["Rose", "#f43f5e"],
+  ["Red", "#ef4444"],
+  ["Orange", "#f97316"],
+  ["Amber", "#f59e0b"],
+  ["Yellow", "#eab308"],
+  ["Lime", "#84cc16"],
+  ["Green", "#22c55e"],
+  ["Emerald", "#10b981"],
+  ["Teal", "#14b8a6"],
+  ["Cyan", "#06b6d4"],
+  ["Slate", "#64748b"],
+];
 const wniOptions = [
   ["want", "Want"],
   ["need", "Need"],
@@ -67,6 +87,63 @@ const defaultParsingSettings = {
   thousands_separator: "",
 };
 
+export function normalizeTheme(value) {
+  return value === "light" ? "light" : "dark";
+}
+
+export function getStoredTheme() {
+  if (typeof window === "undefined") {
+    return "dark";
+  }
+  return normalizeTheme(window.localStorage.getItem(THEME_STORAGE_KEY));
+}
+
+export function applyTheme(theme) {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const normalizedTheme = normalizeTheme(theme);
+  if (normalizedTheme === "light") {
+    document.documentElement.setAttribute("data-theme", "light");
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+  window.localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
+}
+
+export function getStoredAccent() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  return normalizeHexColor(window.localStorage.getItem(ACCENT_STORAGE_KEY));
+}
+
+export function defaultAccentForTheme(theme) {
+  return normalizeTheme(theme) === "light" ? "#2f6f9f" : "#58a6ff";
+}
+
+export function applyAccent(color) {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const normalizedColor = normalizeHexColor(color);
+  const rootStyle = document.documentElement.style;
+  if (!normalizedColor) {
+    rootStyle.removeProperty("--action");
+    rootStyle.removeProperty("--accent-text");
+    rootStyle.removeProperty("--on-accent");
+    rootStyle.removeProperty("--focus-ring");
+    window.localStorage.removeItem(ACCENT_STORAGE_KEY);
+    return;
+  }
+  const textColor = readableTextColor(normalizedColor);
+  rootStyle.setProperty("--action", normalizedColor);
+  rootStyle.setProperty("--accent-text", textColor);
+  rootStyle.setProperty("--on-accent", textColor);
+  rootStyle.setProperty("--focus-ring", hexToRgba(normalizedColor, 0.24));
+  window.localStorage.setItem(ACCENT_STORAGE_KEY, normalizedColor);
+}
+
 function emptyFilters() {
   return {
     date_from: "",
@@ -84,6 +161,9 @@ function emptyFilters() {
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
+  const [theme, setTheme] = useState(getStoredTheme);
+  const [accent, setAccent] = useState(getStoredAccent);
+  const [isAccentPickerOpen, setIsAccentPickerOpen] = useState(false);
   const [status, setStatus] = useState("Checking backend");
   const [toast, setToast] = useState("");
   const [refs, setRefs] = useState({
@@ -180,9 +260,25 @@ export default function App() {
   }, [loadAll]);
 
   useEffect(() => {
-    document.documentElement.removeAttribute("data-theme");
-    window.localStorage.removeItem("cashmoney-theme");
-  }, []);
+    applyTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    applyAccent(accent);
+  }, [accent]);
+
+  useEffect(() => {
+    if (!isAccentPickerOpen) {
+      return undefined;
+    }
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setIsAccentPickerOpen(false);
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isAccentPickerOpen]);
 
   useEffect(() => {
     if (filterDefaults.to || filterDefaults.from) {
@@ -199,6 +295,20 @@ export default function App() {
   const updateFilter = (name, value) => {
     setRecategorizeResult(null);
     setFilters((current) => ({ ...current, [name]: value }));
+  };
+
+  const toggleTheme = () => {
+    setTheme((current) => {
+      const nextTheme = current === "dark" ? "light" : "dark";
+      applyTheme(nextTheme);
+      return nextTheme;
+    });
+  };
+
+  const updateAccent = (color) => {
+    setAccent(color);
+    applyAccent(color);
+    setIsAccentPickerOpen(false);
   };
 
   const updateTransaction = async (transaction, patch) => {
@@ -248,6 +358,18 @@ export default function App() {
             <p>{kicker}</p>
           </div>
           <div className="topbar-actions">
+            <button className="link-button accent-picker-trigger" onClick={() => setIsAccentPickerOpen(true)} title="Choose accent color" type="button">
+              <span className="accent-swatch" style={{ background: accent || defaultAccentForTheme(theme) }} />
+              <span>Accent</span>
+            </button>
+            <button
+              aria-pressed={theme === "light"}
+              className="link-button theme-toggle"
+              onClick={toggleTheme}
+              type="button"
+            >
+              {theme === "dark" ? "Light mode" : "Dark mode"}
+            </button>
             <a className="link-button" href="/admin/" rel="noreferrer" target="_blank">Admin</a>
             <button className="primary-action" onClick={loadAll} type="button">Refresh</button>
           </div>
@@ -293,6 +415,33 @@ export default function App() {
         )}
         {activePage === "help" && <HelpPage />}
       </main>
+      {isAccentPickerOpen && (
+        <div className="modal-backdrop" onMouseDown={() => setIsAccentPickerOpen(false)} role="presentation">
+          <div aria-labelledby="accent-modal-title" aria-modal="true" className="accent-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <div className="accent-modal-header">
+              <h2 id="accent-modal-title">Accent</h2>
+              <button className="icon-button" onClick={() => setIsAccentPickerOpen(false)} type="button" aria-label="Close accent picker">x</button>
+            </div>
+            <div className="accent-preset-grid">
+              {accentPresets.map(([name, color]) => {
+                const isSelected = normalizeHexColor(accent || defaultAccentForTheme(theme)).toLowerCase() === color.toLowerCase();
+                return (
+                  <button
+                    className={`accent-preset ${isSelected ? "is-selected" : ""}`}
+                    key={color}
+                    onClick={() => updateAccent(color)}
+                    style={{ "--preset-color": color }}
+                    type="button"
+                  >
+                    <span className="accent-preset-swatch" />
+                    <span>{name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       <div className={`toast ${toast ? "is-visible" : ""}`}>{toast}</div>
     </div>
   );
@@ -1499,7 +1648,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
 function ColorInput({ initialValue = "", label = "Color", name }) {
   const [value, setValue] = useState(initialValue || "");
   const wrapperRef = useRef(null);
-  const pickerValue = normalizeHexColor(value) || "#2f6f9f";
+  const pickerValue = normalizeHexColor(value) || "#58a6ff";
 
   useEffect(() => {
     setValue(initialValue || "");
@@ -1648,7 +1797,7 @@ function MonthlyChart({ rows }) {
   const expenses = monthlyRows.map((row) => -row.expense);
   const net = monthlyRows.map((row) => row.net);
   const barWidth = monthlyRows.map(() => 0.78);
-  const netColors = monthlyRows.map(() => "rgba(0, 0, 0, 0.22)");
+  const netColors = monthlyRows.map(() => cssVar("--net-overlay", "rgba(230, 237, 243, 0.26)"));
   return (
     <Plot
       config={{ displaylogo: false, responsive: true }}
@@ -1738,7 +1887,7 @@ function TopExpenseChart({ rows }) {
     <Plot
       config={{ displaylogo: false, responsive: true }}
       data={[{
-        marker: { color: cssVar("--blue", "#2f6f9f") },
+        marker: { color: cssVar("--blue", "#58a6ff") },
         orientation: "h",
         text: topRows.map((row) => money(row.amount)),
         textposition: "auto",
@@ -2232,33 +2381,33 @@ function buildMetrics(summary, transactionPage) {
 
 function baseLayout(extra = {}) {
   const axisDefaults = {
-    color: cssVar("--muted", "#667481"),
-    gridcolor: cssVar("--border", "#d8e0e5"),
-    linecolor: cssVar("--border", "#d8e0e5"),
-    tickcolor: cssVar("--border", "#d8e0e5"),
-    zerolinecolor: cssVar("--border", "#d8e0e5"),
+    color: cssVar("--muted", "#8b949e"),
+    gridcolor: cssVar("--border", "#30363d"),
+    linecolor: cssVar("--border", "#30363d"),
+    tickcolor: cssVar("--border", "#30363d"),
+    zerolinecolor: cssVar("--border", "#30363d"),
   };
   const xaxis = { ...axisDefaults, ...(extra.xaxis || {}) };
   const yaxis = { ...axisDefaults, ...(extra.yaxis || {}) };
   return {
     autosize: true,
     colorway: [
-      cssVar("--blue", "#2f6f9f"),
-      cssVar("--orange", "#c96e26"),
-      cssVar("--green", "#2f8f65"),
-      cssVar("--violet", "#7655a6"),
-      cssVar("--warning", "#b1842f"),
-      cssVar("--red", "#b34545"),
+      cssVar("--blue", "#58a6ff"),
+      cssVar("--orange", "#d29922"),
+      cssVar("--green", "#3fb950"),
+      cssVar("--violet", "#a371f7"),
+      cssVar("--warning", "#d29922"),
+      cssVar("--red", "#ff7b72"),
     ],
-    font: { color: cssVar("--text", "#17212b"), family: "Inter, Segoe UI, sans-serif" },
+    font: { color: cssVar("--text", "#e6edf3"), family: "Inter, Segoe UI, sans-serif" },
     height: 285,
     hoverlabel: {
-      bgcolor: cssVar("--surface", "#ffffff"),
-      bordercolor: cssVar("--border", "#d8e0e5"),
-      font: { color: cssVar("--text", "#17212b") },
+      bgcolor: cssVar("--surface", "#0e1117"),
+      bordercolor: cssVar("--border", "#30363d"),
+      font: { color: cssVar("--text", "#e6edf3") },
     },
     legend: {
-      font: { color: cssVar("--text", "#17212b") },
+      font: { color: cssVar("--text", "#e6edf3") },
     },
     margin: { t: 24, r: 20, b: 42, l: 54 },
     paper_bgcolor: "rgba(255,255,255,0)",
@@ -2278,10 +2427,10 @@ function cssVar(name, fallback) {
 
 function wniColor(value) {
   const colors = {
-    investment: cssVar("--wni-investment", "#059669"),
-    need: cssVar("--wni-need", "#2563eb"),
-    uncategorized: cssVar("--wni-uncategorized", "#64748b"),
-    want: cssVar("--wni-want", "#f59e0b"),
+    investment: cssVar("--wni-investment", "#d29922"),
+    need: cssVar("--wni-need", "#58a6ff"),
+    uncategorized: cssVar("--wni-uncategorized", "#8b949e"),
+    want: cssVar("--wni-want", "#a371f7"),
   };
   return colors[String(value || "uncategorized").toLowerCase()] || colors.uncategorized;
 }
@@ -2561,7 +2710,15 @@ function readableTextColor(hex) {
   const green = parseInt(value.slice(2, 4), 16);
   const blue = parseInt(value.slice(4, 6), 16);
   const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
-  return luminance > 0.62 ? "#17212b" : "#ffffff";
+  return luminance > 0.62 ? "#08111d" : "#ffffff";
+}
+
+function hexToRgba(hex, alpha) {
+  const value = hex.replace("#", "");
+  const red = parseInt(value.slice(0, 2), 16);
+  const green = parseInt(value.slice(2, 4), 16);
+  const blue = parseInt(value.slice(4, 6), 16);
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
 function titleCase(value) {
