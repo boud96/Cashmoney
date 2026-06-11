@@ -326,13 +326,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">C</div>
-          <div>
-            <div className="brand-name">Cashmoney</div>
-            <div className="brand-subtitle">Local finance desk</div>
-          </div>
-        </div>
+        <SidebarAsciiPlay />
         <nav className="nav-tabs" aria-label="Primary">
           {Object.entries(pages).map(([key, [label]]) => (
             <button
@@ -345,10 +339,6 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="backend-status">
-          <span className={`status-dot ${status === "Backend online" ? "ok" : status === "Backend offline" ? "bad" : ""}`} />
-          <span>{status}</span>
-        </div>
       </aside>
 
       <main className="main">
@@ -445,6 +435,47 @@ export default function App() {
       <div className={`toast ${toast ? "is-visible" : ""}`}>{toast}</div>
     </div>
   );
+}
+
+function SidebarAsciiPlay() {
+  const [frame, setFrame] = useState(0);
+  const [size, setSize] = useState({ columns: 34, rows: 64 });
+  const asciiRef = useRef(null);
+
+  useEffect(() => {
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      return undefined;
+    }
+    const timer = window.setInterval(() => setFrame((current) => (current + 1) % 10000), 120);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const element = asciiRef.current;
+    if (!element) {
+      return undefined;
+    }
+    function updateSize() {
+      const width = element.clientWidth;
+      const height = element.clientHeight;
+      setSize({
+        columns: Math.max(24, Math.floor(width / 5.1)),
+        rows: Math.max(24, Math.floor(height / 10.6)),
+      });
+    }
+    updateSize();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateSize);
+      return () => window.removeEventListener("resize", updateSize);
+    }
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const content = useMemo(() => buildSidebarAsciiFrame(frame, size), [frame, size]);
+  return <pre aria-hidden="true" className="sidebar-ascii-play" ref={asciiRef}>{content}</pre>;
 }
 
 function DashboardPage({
@@ -2503,6 +2534,48 @@ function completeMonthlyRows(rows) {
   }
 
   return completed;
+}
+
+function buildSidebarAsciiFrame(frame, size) {
+  const width = size.columns;
+  const height = size.rows;
+  const rows = Array.from({ length: height }, () => Array.from({ length: width }, () => " "));
+  const patterns = [
+    " _0011$ ",
+    ".+Cashmoney+.  ",
+  ];
+
+  function write(row, col, text) {
+    if (row < 0 || row >= height) {
+      return;
+    }
+    String(text).split("").forEach((char, index) => {
+      const x = col + index;
+      if (x >= 0 && x < width) {
+        rows[row][x] = char;
+      }
+    });
+  }
+
+  const time = frame * 0.12;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const centeredX = x - width / 2;
+      const centeredY = y - height / 2;
+      const offset = Math.sin(centeredX * centeredY * 0.017 + centeredY * 0.033 + time) * 8;
+      const patternIndex = Math.abs(Math.floor(x * 0.18) + Math.floor(y * 0.18)) % patterns.length;
+      const pattern = patterns[patternIndex];
+      const charIndex = Math.floor(Math.abs(centeredX + centeredY + offset)) % pattern.length;
+      rows[y][x] = pattern[charIndex];
+    }
+  }
+
+  const label = "Cashmoney";
+  const labelRow = 7;
+  const labelCol = Math.max(0, Math.floor((width - label.length) / 2));
+  write(labelRow, labelCol, label);
+
+  return rows.map((row) => row.join("")).join("\n");
 }
 
 function findDuplicate(items, field, value, editingId = null) {

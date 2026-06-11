@@ -124,48 +124,45 @@ button {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  isolation: isolate;
+  overflow: hidden;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-mark {
-  width: 38px;
-  height: 38px;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  color: var(--accent-text);
-  background: linear-gradient(135deg, var(--action), var(--green));
-  font-weight: 760;
-}
-
-.brand-name {
-  font-weight: 760;
-  font-size: 18px;
-}
-
-.brand-subtitle,
 .muted,
 .muted-cell {
   color: var(--muted);
 }
 
-.brand-subtitle {
-  font-size: 12px;
+.sidebar-ascii-play {
+  position: absolute;
+  inset: 14px -8px 0 8px;
+  z-index: 0;
+  margin: 0;
+  color: color-mix(in srgb, var(--action) 82%, var(--text));
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.2;
+  opacity: 0.66;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  white-space: pre;
 }
 
 .nav-tabs {
   display: grid;
   gap: 8px;
+  margin-top: 18px;
+  position: relative;
+  z-index: 1;
 }
 
 .nav-tab {
   border: 1px solid transparent;
-  background: transparent;
+  background: color-mix(in srgb, var(--sidebar-bg) 82%, transparent);
+  backdrop-filter: blur(2px);
   border-radius: 8px;
   color: var(--muted);
   padding: 10px 12px;
@@ -178,33 +175,6 @@ button {
   color: var(--text);
   background: var(--surface-2);
   border-color: var(--border);
-}
-
-.backend-status {
-  margin-top: auto;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-}
-
-.status-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--warning);
-}
-
-.status-dot.ok {
-  background: var(--green);
-}
-
-.status-dot.bad {
-  background: var(--red);
 }
 
 .main {
@@ -1812,13 +1782,13 @@ td {
     flex-wrap: wrap;
   }
 
+  .sidebar-ascii-play {
+    display: none;
+  }
+
   .nav-tabs {
     display: flex;
     flex-wrap: wrap;
-  }
-
-  .backend-status {
-    margin-left: auto;
     margin-top: 0;
   }
 
