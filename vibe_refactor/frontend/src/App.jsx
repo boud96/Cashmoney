@@ -191,6 +191,7 @@ export default function App() {
   const [transactionPage, setTransactionPage] = useState({ count: 0, total_count: 0, results: [] });
   const [recategorizeResult, setRecategorizeResult] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
+  const [refreshingApp, setRefreshingApp] = useState(false);
   const [importReport, setImportReport] = useState(null);
   const [maintenanceSummary, setMaintenanceSummary] = useState(null);
   const [mappingDraft, setMappingDraft] = useState({
@@ -231,6 +232,7 @@ export default function App() {
   }, []);
 
   const loadAll = useCallback(async () => {
+    setRefreshingApp(true);
     try {
       await apiGet("/health/");
       setStatus("Backend online");
@@ -238,6 +240,8 @@ export default function App() {
     } catch (error) {
       setStatus("Backend offline");
       notify(error.message);
+    } finally {
+      setRefreshingApp(false);
     }
   }, [loadFilterDefaults, loadReferenceData, notify]);
 
@@ -390,7 +394,7 @@ export default function App() {
               {hideAmounts ? "Show amounts" : "Hide amounts"}
             </button>
             <a className="link-button" href="/admin/" rel="noreferrer" target="_blank">Admin</a>
-            <button className="primary-action" onClick={loadAll} type="button">Refresh</button>
+            <LoadingButton busy={refreshingApp} busyLabel="Refreshing" className="primary-action" onClick={loadAll} type="button">Refresh</LoadingButton>
           </div>
         </header>
 
@@ -576,6 +580,7 @@ function DashboardPage({
     () => buildMetrics(summary, transactionPage, hideAmounts),
     [hideAmounts, summary, transactionPage],
   );
+  const [recategorizing, setRecategorizing] = useState(false);
 
   async function recategorize() {
     if (!transactionPage.count) {
@@ -585,6 +590,7 @@ function DashboardPage({
     if (!window.confirm(`Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?`)) {
       return;
     }
+    setRecategorizing(true);
     try {
       const result = await apiPost("/transactions/recategorize/", {}, filterParams);
       setRecategorizeResult(result);
@@ -592,6 +598,8 @@ function DashboardPage({
       await reloadDashboard();
     } catch (error) {
       notify(error.message);
+    } finally {
+      setRecategorizing(false);
     }
   }
 
@@ -670,7 +678,16 @@ function DashboardPage({
             <RelativeRangeForm setFilters={setFilters} />
           </div>
           <div className="dashboard-action-section">
-            <button className="primary-action" disabled={!transactionPage.count || importBusy} onClick={recategorize} type="button">Recategorize Filtered</button>
+            <LoadingButton
+              busy={recategorizing}
+              busyLabel="Recategorizing"
+              className="primary-action"
+              disabled={!transactionPage.count || importBusy}
+              onClick={recategorize}
+              type="button"
+            >
+              Recategorize Filtered
+            </LoadingButton>
           </div>
         </div>
       </div>
@@ -829,10 +846,13 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
 }
 
 function ImportPage({ importReport, notify, refs, reloadAll, setImportReport }) {
+  const [importing, setImporting] = useState(false);
+
   async function submitImport(event) {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
+    setImporting(true);
     try {
       const response = await fetch("/api/imports/", { method: "POST", body: formData });
       const payload = await response.json();
@@ -845,15 +865,20 @@ function ImportPage({ importReport, notify, refs, reloadAll, setImportReport }) 
       await reloadAll();
     } catch (error) {
       notify(error.message);
+    } finally {
+      setImporting(false);
     }
   }
 
   return (
     <section className="panel import-layout">
       <form className="stack-form" onSubmit={submitImport}>
-        <label><span>CSV file</span><input accept=".csv,text/csv" name="csv_file" required type="file" /></label>
-        <label><span>Bank account</span><Select name="bank_account_id" options={refs.accounts.map((item) => [item.id, item.name])} required /></label>
-        <button className="primary-action" type="submit">Import CSV</button>
+        <fieldset disabled={importing}>
+          <label><span>CSV file</span><input accept=".csv,text/csv" name="csv_file" required type="file" /></label>
+          <label><span>Bank account</span><Select name="bank_account_id" options={refs.accounts.map((item) => [item.id, item.name])} required /></label>
+          <LoadingButton busy={importing} busyLabel="Importing" className="primary-action" type="submit">Import CSV</LoadingButton>
+          {importing && <div className="inline-status"><Spinner /> Reading and importing CSV</div>}
+        </fieldset>
       </form>
       <div className="import-report">
         {importReport && (
@@ -873,9 +898,10 @@ function ImportPage({ importReport, notify, refs, reloadAll, setImportReport }) 
 }
 
 function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance, summary }) {
-  const [deleting, setDeleting] = useState(false);
+  const [deleting, setDeleting] = useState("");
   const [restoreFile, setRestoreFile] = useState(null);
   const [safeBusy, setSafeBusy] = useState("");
+  const [refreshingCounts, setRefreshingCounts] = useState(false);
   const counts = summary || {};
   const snapshot = [
     ["Transactions", counts.transactions],
@@ -937,7 +963,7 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
     if (!window.confirm(`${action.title}?\n\n${action.description}`)) {
       return;
     }
-    setDeleting(true);
+    setDeleting(action.phrase);
     try {
       await apiDelete(action.endpoint, { confirmation: action.phrase });
       notify(`${action.title} completed`);
@@ -945,7 +971,16 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
     } catch (error) {
       notify(error.message);
     } finally {
-      setDeleting(false);
+      setDeleting("");
+    }
+  }
+
+  async function refreshCounts() {
+    setRefreshingCounts(true);
+    try {
+      await reloadMaintenance();
+    } finally {
+      setRefreshingCounts(false);
     }
   }
 
@@ -1025,7 +1060,7 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
       <section className="panel maintenance-snapshot">
         <div className="panel-header">
           <h2>Database Snapshot</h2>
-          <button className="link-button" onClick={reloadMaintenance} type="button">Refresh Counts</button>
+          <LoadingButton busy={refreshingCounts} busyLabel="Refreshing" className="link-button" onClick={refreshCounts} type="button">Refresh Counts</LoadingButton>
         </div>
         <div className="maintenance-counts">
           {snapshot.map(([label, value]) => (
@@ -1045,18 +1080,32 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
               <h3>Export database backup</h3>
               <p>Download a SQLite backup of the current local database.</p>
             </div>
-            <button className="primary-action" disabled={Boolean(safeBusy)} onClick={exportBackup} type="button">
+            <LoadingButton
+              busy={safeBusy === "backup"}
+              busyLabel="Exporting"
+              className="primary-action"
+              disabled={Boolean(safeBusy)}
+              onClick={exportBackup}
+              type="button"
+            >
               Export Backup
-            </button>
+            </LoadingButton>
           </article>
           <article className="maintenance-tool-card">
             <div>
               <h3>Recreate sample data</h3>
               <p>Reset only the sample dataset and create the demo records again.</p>
             </div>
-            <button className="link-button" disabled={Boolean(safeBusy)} onClick={recreateSampleData} type="button">
+            <LoadingButton
+              busy={safeBusy === "samples"}
+              busyLabel="Recreating"
+              className="link-button"
+              disabled={Boolean(safeBusy)}
+              onClick={recreateSampleData}
+              type="button"
+            >
               Recreate Samples
-            </button>
+            </LoadingButton>
           </article>
           <article className="maintenance-tool-card restore-card">
             <div>
@@ -1072,13 +1121,15 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
                   type="file"
                 />
               </label>
-              <button
+              <LoadingButton
+                busy={safeBusy === "restore"}
+                busyLabel="Restoring"
                 className="danger-button"
                 disabled={Boolean(safeBusy) || !restoreFile}
                 type="submit"
               >
                 Restore Database
-              </button>
+              </LoadingButton>
             </form>
           </article>
         </div>
@@ -1097,9 +1148,16 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
                 <p>{action.description}</p>
                 <div className="danger-count">{formatCount(action.count)} affected</div>
               </div>
-              <button className="danger-button" disabled={deleting} onClick={() => deleteMaintenanceData(action)} type="button">
+              <LoadingButton
+                busy={deleting === action.phrase}
+                busyLabel="Deleting"
+                className="danger-button"
+                disabled={Boolean(deleting)}
+                onClick={() => deleteMaintenanceData(action)}
+                type="button"
+              >
                 {action.title}
-              </button>
+              </LoadingButton>
             </article>
           ))}
         </div>
@@ -1382,6 +1440,7 @@ function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraf
 }
 
 function SettingsForm({ notify, refs, reloadAll, settings }) {
+  const [saving, setSaving] = useState(false);
   const [ignoreInternalAccounts, setIgnoreInternalAccounts] = useState(
     settings?.ignore_internal_account_references ?? true,
   );
@@ -1396,6 +1455,7 @@ function SettingsForm({ notify, refs, reloadAll, settings }) {
 
   async function submit(event) {
     event.preventDefault();
+    setSaving(true);
     try {
       await apiPatch("/settings/", {
         ignore_internal_account_references: ignoreInternalAccounts,
@@ -1405,6 +1465,8 @@ function SettingsForm({ notify, refs, reloadAll, settings }) {
       await reloadAll();
     } catch (error) {
       notify(error.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -1427,7 +1489,7 @@ function SettingsForm({ notify, refs, reloadAll, settings }) {
           value={internalTransferSubcategoryId}
         />
       </FormField>
-      <button type="submit">Save</button>
+      <LoadingButton busy={saving} busyLabel="Saving" type="submit">Save</LoadingButton>
     </form>
   );
 }
@@ -1472,10 +1534,12 @@ function HelpTooltip({ text }) {
 }
 
 function DeleteButton({ endpoint, name, notify, onDeleted, reloadAll }) {
+  const [deleting, setDeleting] = useState(false);
   async function remove() {
     if (!window.confirm(`Delete ${name}?`)) {
       return;
     }
+    setDeleting(true);
     try {
       await apiDelete(endpoint);
       onDeleted?.();
@@ -1483,9 +1547,11 @@ function DeleteButton({ endpoint, name, notify, onDeleted, reloadAll }) {
       await reloadAll?.();
     } catch (error) {
       notify?.(error.message);
+    } finally {
+      setDeleting(false);
     }
   }
-  return <button className="delete-button" onClick={remove} type="button">Delete</button>;
+  return <LoadingButton busy={deleting} busyLabel="Deleting" className="delete-button" onClick={remove} type="button">Delete</LoadingButton>;
 }
 
 function FormField({ children, className = "", label }) {
@@ -1497,17 +1563,18 @@ function FormField({ children, className = "", label }) {
   );
 }
 
-function FormActions({ clearEditing, isEditing }) {
+function FormActions({ busy = false, clearEditing, isEditing }) {
   return (
     <div className="form-actions">
-      <button type="submit">{isEditing ? "Save" : "Add"}</button>
-      {isEditing && <button className="link-button" onClick={clearEditing} type="button">Cancel</button>}
+      <LoadingButton busy={busy} busyLabel={isEditing ? "Saving" : "Adding"} type="submit">{isEditing ? "Save" : "Add"}</LoadingButton>
+      {isEditing && <button className="link-button" disabled={busy} onClick={clearEditing} type="button">Cancel</button>}
     </div>
   );
 }
 
 function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   const isEditing = Boolean(editingItem);
+  const [saving, setSaving] = useState(false);
   async function submit(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1527,6 +1594,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       return;
     }
     data.owners = Number(data.owners || 1);
+    setSaving(true);
     try {
       if (isEditing) {
         await apiPatch(`/bank-accounts/${editingItem.id}/`, data);
@@ -1539,6 +1607,8 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       await reloadAll();
     } catch (error) {
       notify(error.message);
+    } finally {
+      setSaving(false);
     }
   }
   return (
@@ -1549,7 +1619,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" placeholder="CZK" required /></FormField>
       <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" required type="number" /></FormField>
       <FormField label="Default CSV Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
-      <FormActions clearEditing={clearEditing} isEditing={isEditing} />
+      <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
@@ -1562,6 +1632,8 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
   const isEditing = Boolean(editingItem);
   const [parsingSettings, setParsingSettings] = useState(() => parsingSettingsFromMapping(editingItem));
   const [manualParsingSettings, setManualParsingSettings] = useState(Boolean(editingItem));
+  const [detecting, setDetecting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!editingItem) {
@@ -1601,6 +1673,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       });
     }
     formData.append("sample_size", "5");
+    setDetecting(true);
     try {
       const response = await fetch("/api/csv-mappings/detect-columns/", { method: "POST", body: formData });
       const payload = await response.json();
@@ -1618,6 +1691,8 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       notify(`Detected ${payload.headers.length} columns`);
     } catch (error) {
       notify(error.message);
+    } finally {
+      setDetecting(false);
     }
   }
 
@@ -1645,6 +1720,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       notify("Choose at least one categorization field");
       return;
     }
+    setSaving(true);
     try {
       if (isEditing) {
         await apiPatch(`/csv-mappings/${editingItem.id}/`, data);
@@ -1660,6 +1736,8 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       await reloadAll();
     } catch (error) {
       notify(error.message);
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -1668,7 +1746,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Mapping name" required /></FormField>
       <FormField label="Default Currency"><input defaultValue={editingItem?.default_currency || "CZK"} maxLength="3" name="default_currency" placeholder="CZK" required /></FormField>
       <label className="mapping-file-field"><span>Sample CSV</span><input accept=".csv,text/csv" name="sample_csv" type="file" /></label>
-      <button className="link-button mapping-detect-button" onClick={detectColumns} type="button">Detect Columns</button>
+      <LoadingButton busy={detecting} busyLabel="Detecting" className="link-button mapping-detect-button" disabled={saving} onClick={detectColumns} type="button">Detect Columns</LoadingButton>
       <details className="advanced-settings" open={isEditing || Boolean(draft.detected)}>
         <summary>Advanced parsing settings</summary>
         <div className="advanced-settings-grid">
@@ -1724,7 +1802,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
         value={draft.categorization_fields}
       />
       {draft.detected && <MappingSample detected={draft.detected} />}
-      <FormActions clearEditing={() => {
+      <FormActions busy={saving} clearEditing={() => {
         clearEditing?.();
         setParsingSettings(defaultParsingSettings);
         setManualParsingSettings(false);
@@ -1755,6 +1833,7 @@ function MappingSample({ detected }) {
 
 function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], notify, reloadAll }) {
   const isEditing = Boolean(editingItem);
+  const [saving, setSaving] = useState(false);
   async function submit(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1764,6 +1843,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], n
       form.elements.name?.focus();
       return;
     }
+    setSaving(true);
     try {
       if (isEditing) {
         await apiPatch(`${endpoint}${editingItem.id}/`, data);
@@ -1776,6 +1856,8 @@ function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], n
       await reloadAll();
     } catch (error) {
       notify(error.message);
+    } finally {
+      setSaving(false);
     }
   }
   return (
@@ -1785,13 +1867,14 @@ function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], n
           ? <ColorInput initialValue={editingItem?.[name] || ""} key={name} label={placeholder} name={name} />
           : <FormField key={name} label={placeholder}><input defaultValue={editingItem?.[name] || ""} name={name} placeholder={placeholder} required={required} /></FormField>
       ))}
-      <FormActions clearEditing={clearEditing} isEditing={isEditing} />
+      <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
 
 function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   const isEditing = Boolean(editingItem);
+  const [saving, setSaving] = useState(false);
   async function submit(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1804,6 +1887,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
       form.elements.name?.focus();
       return;
     }
+    setSaving(true);
     try {
       if (isEditing) {
         await apiPatch(`/subcategories/${editingItem.id}/`, data);
@@ -1816,6 +1900,8 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
       await reloadAll();
     } catch (error) {
       notify(error.message);
+    } finally {
+      setSaving(false);
     }
   }
   return (
@@ -1823,7 +1909,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
       <FormField label="Category"><Select defaultValue={editingItem?.category?.id || ""} name="category_id" options={refs.categories.map((item) => [item.id, item.name])} required /></FormField>
       <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Subcategory name" required /></FormField>
       <ColorInput initialValue={editingItem?.color || ""} label="Color" name="color" />
-      <FormActions clearEditing={clearEditing} isEditing={isEditing} />
+      <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
@@ -1921,6 +2007,7 @@ function DefinitionCheckboxField({ className = "", label, onChange, options, pla
 function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   const isEditing = Boolean(editingItem);
   const [tagIds, setTagIds] = useState(() => (editingItem?.tags || []).map((item) => item.id));
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setTagIds((editingItem?.tags || []).map((item) => item.id));
@@ -1940,6 +2027,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
     data.priority = Number(data.priority || 0);
     data.is_ignored = Boolean(form.elements.is_ignored.checked);
     data.tag_ids = tagIds;
+    setSaving(true);
     try {
       if (isEditing) {
         await apiPatch(`/keywords/${editingItem.id}/`, data);
@@ -1952,6 +2040,8 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       await reloadAll();
     } catch (error) {
       notify(error.message);
+    } finally {
+      setSaving(false);
     }
   }
   return (
@@ -1964,7 +2054,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       <DefinitionCheckboxField label="Tags" onChange={setTagIds} options={refs.tags.map((item) => [item.id, item.name])} placeholder="No tags selected" value={tagIds} />
       <FormField label="Priority"><input defaultValue={editingItem?.priority ?? "0"} name="priority" type="number" /></FormField>
       <label className="check-row"><input defaultChecked={Boolean(editingItem?.is_ignored)} name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
-      <FormActions clearEditing={clearEditing} isEditing={isEditing} />
+      <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
 }
@@ -2342,6 +2432,19 @@ function Select({ blank, defaultValue = "", name, onChange, options, required = 
   );
 }
 
+function LoadingButton({ busy = false, busyLabel = "Working", children, className = "", disabled = false, ...props }) {
+  return (
+    <button {...props} className={`${className} ${busy ? "is-loading" : ""}`.trim()} disabled={disabled || busy}>
+      {busy && <Spinner />}
+      <span>{busy ? busyLabel : children}</span>
+    </button>
+  );
+}
+
+function Spinner() {
+  return <span aria-hidden="true" className="loading-spinner" />;
+}
+
 function Metric({ label, tone = "", value }) {
   return <div className="metric"><div className="metric-label">{label}</div><div className={`metric-value ${tone}`}>{value}</div></div>;
 }
@@ -2508,7 +2611,7 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
           </div>
           <div className="tag-popover-actions">
             <button className="link-button" disabled={saving} onClick={() => setIsOpen(false)} type="button">Cancel</button>
-            <button className="primary-action" disabled={saving} onClick={applyTags} type="button">Apply</button>
+            <LoadingButton busy={saving} busyLabel="Applying" className="primary-action" onClick={applyTags} type="button">Apply</LoadingButton>
           </div>
         </div>
       )}
