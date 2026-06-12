@@ -756,7 +756,7 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
       cellEditorParams: { values: subcategoryOptions },
       editable: true,
       field: "subcategory_id",
-      headerName: "Subcategory",
+      headerName: "Subcategory ✎",
       cellRenderer: (params) => {
         const subcategory = subcategoryLookup.get(params.value);
         return <ColorCell color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
@@ -765,7 +765,7 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
         const subcategory = subcategoryLookup.get(params.value);
         return subcategory?.name || "Unassigned";
       },
-      cellClass: (params) => (!params.value ? "muted-cell" : ""),
+      cellClass: (params) => `editable-cell ${!params.value ? "muted-cell" : ""}`,
       width: 170,
     },
     {
@@ -773,15 +773,15 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
       cellEditorParams: { values: ["", "want", "need", "investment"] },
       editable: true,
       field: "want_need_investment",
-      headerName: "WNI",
+      headerName: "WNI ✎",
       cellRenderer: (params) => <WniCell value={params.value} />,
       valueFormatter: (params) => (params.value ? titleCase(params.value) : "Unassigned"),
-      cellClass: (params) => (!params.value ? "muted-cell" : ""),
+      cellClass: (params) => `editable-cell ${!params.value ? "muted-cell" : ""}`,
       width: 135,
     },
     {
       field: "tags",
-      headerName: "Tags",
+      headerName: "Tags ✎",
       cellRenderer: (params) => (
         <EditableTagCell
           allTags={refs.tags}
@@ -797,7 +797,7 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
     },
     {
       field: "is_ignored",
-      headerName: "Ignored",
+      headerName: "Ignored ✎",
       cellRenderer: (params) => (
         <input
           checked={Boolean(params.value)}
@@ -837,6 +837,8 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
       <AgGridReact
         columnDefs={columnDefs}
         defaultColDef={{ resizable: true, sortable: true }}
+        enableCellTextSelection
+        ensureDomOrder
         onCellValueChanged={onCellValueChanged}
         rowData={rowData}
         rowHeight={48}
@@ -2461,16 +2463,16 @@ function ColorPill({ color, label, muted = false }) {
 
 function ColorCell({ color, label, muted = false }) {
   if (muted) {
-    return <span className="color-cell color-cell-muted">{label}</span>;
+    return <span className="color-cell color-cell-muted"><span className="color-cell-label">{label}</span></span>;
   }
-  return <span className="color-cell" style={colorPillStyle(color)}>{label}</span>;
+  return <span className="color-cell" style={colorPillStyle(color)}><span className="color-cell-label">{label}</span></span>;
 }
 
 function WniCell({ value }) {
   if (!value) {
-    return <span className="color-cell color-cell-muted">Unassigned</span>;
+    return <span className="color-cell color-cell-muted"><span className="color-cell-label">Unassigned</span></span>;
   }
-  return <span className="color-cell" style={colorPillStyle(wniColor(value))}>{titleCase(value)}</span>;
+  return <span className="color-cell" style={colorPillStyle(wniColor(value))}><span className="color-cell-label">{titleCase(value)}</span></span>;
 }
 
 function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {

@@ -471,6 +471,11 @@ textarea:focus {
   box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
+select option {
+  background: var(--field-bg);
+  color: var(--text);
+}
+
 .filter-multiselect {
   position: relative;
   display: grid;
@@ -1058,6 +1063,7 @@ textarea:focus {
 
 .transaction-grid .ag-cell-value {
   min-width: 0;
+  user-select: text;
 }
 
 .ag-theme-quartz {
@@ -1141,6 +1147,7 @@ textarea:focus {
 .transaction-grid .ag-header-group-cell {
   color: var(--text);
   border-color: var(--border);
+  user-select: text;
 }
 
 .transaction-grid .ag-cell.amount-income {
@@ -1153,8 +1160,21 @@ textarea:focus {
   font-weight: 700;
 }
 
+.transaction-grid .ag-cell.editable-cell {
+  cursor: pointer;
+}
+
 .transaction-grid .ag-cell:has(.color-cell) {
+  align-items: stretch;
   padding: 0;
+}
+
+.transaction-grid .ag-cell:has(.color-cell) .ag-cell-wrapper,
+.transaction-grid .ag-cell:has(.color-cell) .ag-cell-value {
+  align-self: stretch;
+  display: flex;
+  min-height: 100%;
+  width: 100%;
 }
 
 .color-cell {
@@ -1169,6 +1189,13 @@ textarea:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
   width: 100%;
+}
+
+.color-cell-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .color-cell-muted {
@@ -1186,6 +1213,28 @@ textarea:focus {
   background: var(--surface);
   color: var(--text);
   border-color: var(--border);
+}
+
+.ag-theme-quartz .ag-popup-editor,
+.ag-theme-quartz .ag-select-list,
+.ag-theme-quartz .ag-list {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.ag-theme-quartz .ag-list-item,
+.ag-theme-quartz .ag-select-list-item {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.ag-theme-quartz .ag-list-item:hover,
+.ag-theme-quartz .ag-list-item.ag-active-item,
+.ag-theme-quartz .ag-select-list-item:hover,
+.ag-theme-quartz .ag-select-list-item.ag-active-item {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .pill {
