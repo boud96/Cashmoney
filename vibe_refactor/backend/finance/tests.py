@@ -15,6 +15,7 @@ from .models import (
     CSVImport,
     CSVMapping,
     Category,
+    FinanceSettings,
     Keyword,
     Subcategory,
     Tag,
@@ -149,13 +150,23 @@ class SampleDataCommandTests(TestCase):
 
     def sample_counts(self):
         return {
-            "accounts": BankAccount.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-            "mappings": CSVMapping.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-            "categories": Category.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-            "subcategories": Subcategory.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
+            "accounts": BankAccount.objects.filter(
+                name__startswith=SAMPLE_PREFIX
+            ).count(),
+            "mappings": CSVMapping.objects.filter(
+                name__startswith=SAMPLE_PREFIX
+            ).count(),
+            "categories": Category.objects.filter(
+                name__startswith=SAMPLE_PREFIX
+            ).count(),
+            "subcategories": Subcategory.objects.filter(
+                name__startswith=SAMPLE_PREFIX
+            ).count(),
             "tags": Tag.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
             "keywords": Keyword.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-            "imports": CSVImport.objects.filter(source_filename=SAMPLE_IMPORT_SOURCE).count(),
+            "imports": CSVImport.objects.filter(
+                source_filename=SAMPLE_IMPORT_SOURCE
+            ).count(),
             "transactions": Transaction.objects.filter(
                 import_batch__source_filename=SAMPLE_IMPORT_SOURCE
             ).count(),
@@ -223,7 +234,9 @@ class SampleDataCommandTests(TestCase):
         self.seed("--if-empty", "--skip-admin")
         self.assertEqual(self.sample_counts()["transactions"], 0)
 
-    def test_reset_sample_reseeds_cleanly_and_delete_helper_preserves_non_sample_data(self):
+    def test_reset_sample_reseeds_cleanly_and_delete_helper_preserves_non_sample_data(
+        self,
+    ):
         self.seed("--skip-admin")
         self.seed("--reset-sample", "--skip-admin")
         self.assertEqual(self.sample_counts()["transactions"], 20)
@@ -279,15 +292,15 @@ class CSVImportServiceTests(FinanceTestCase):
             )
         )
 
-        self.assertEqual(preview["headers"], ["ID", "Date", "Description", "Amount", "Currency"])
+        self.assertEqual(
+            preview["headers"], ["ID", "Date", "Description", "Amount", "Currency"]
+        )
         self.assertEqual(preview["loaded"], 1)
         self.assertEqual(preview["summary"]["duplicates"], 1)
         self.assertEqual(preview["rows"][0]["categorization"]["status"], "matched")
 
     def test_dry_run_does_not_create_transactions(self):
-        _csv_import, preview = CSVImportService(
-            self.mapping, self.account
-        ).import_file(
+        _csv_import, preview = CSVImportService(self.mapping, self.account).import_file(
             self.csv_file(
                 "ID,Date,Description,Amount,Currency\n"
                 "tx-1,2026-01-02,Unknown,-12.50,CZK\n"
@@ -356,6 +369,56 @@ class CategorizationTests(FinanceTestCase):
         self.assertEqual(wni_only.want_need_investment, WantNeedInvestment.INVESTMENT)
         self.assertTrue(own_transfer.is_ignored)
 
+    def test_internal_account_reference_ignore_setting(self):
+        BankAccount.objects.create(name="Savings", account_number="456-789/0100")
+
+        categorizer = CategorizationService()
+        other_account = categorizer.apply(
+            "Transfer to 4567890100",
+            {"bank_account": self.account},
+        )
+        other_account_without_bank_code = categorizer.apply(
+            "Transfer",
+            {
+                "bank_account": self.account,
+                "counterparty_account_number": "456789",
+            },
+        )
+        text_without_bank_code = categorizer.apply(
+            "Transfer to 456789",
+            {"bank_account": self.account},
+        )
+        current_account = categorizer.apply(
+            "Statement mentions 123/0100",
+            {"bank_account": self.account},
+        )
+
+        self.assertTrue(other_account.is_ignored)
+        self.assertTrue(other_account_without_bank_code.is_ignored)
+        self.assertTrue(text_without_bank_code.is_ignored)
+        self.assertFalse(current_account.is_ignored)
+
+        settings_obj = FinanceSettings.load()
+        settings_obj.ignore_internal_account_references = False
+        settings_obj.save()
+        disabled = CategorizationService().apply(
+            "Transfer to 4567890100",
+            {"bank_account": self.account},
+        )
+
+        self.assertFalse(disabled.is_ignored)
+        self.assertIsNone(disabled.subcategory)
+
+        settings_obj.internal_transfer_subcategory = self.subcategory
+        settings_obj.save()
+        categorized = CategorizationService().apply(
+            "Transfer to 4567890100",
+            {"bank_account": self.account},
+        )
+
+        self.assertFalse(categorized.is_ignored)
+        self.assertEqual(categorized.subcategory, self.subcategory)
+
 
 @override_settings(ALLOWED_HOSTS=["testserver", "127.0.0.1", "localhost"])
 class APITests(FinanceTestCase):
@@ -401,7 +464,31 @@ class APITests(FinanceTestCase):
         self.assertEqual(invalid.status_code, 400)
         self.assertEqual(json_body(invalid)["error"], "Invalid color")
 
-    def test_csv_mapping_column_detection_returns_headers_without_creating_mapping(self):
+    def test_settings_api_defaults_to_internal_account_reference_ignore(self):
+        default_response = self.client.get("/api/settings/")
+        self.assertEqual(default_response.status_code, 200)
+        self.assertTrue(
+            json_body(default_response)["ignore_internal_account_references"]
+        )
+        self.assertIsNone(json_body(default_response)["internal_transfer_subcategory"])
+
+        updated = self.patch_json(
+            "/api/settings/",
+            {
+                "ignore_internal_account_references": False,
+                "internal_transfer_subcategory_id": str(self.subcategory.id),
+            },
+        )
+        self.assertEqual(updated.status_code, 200)
+        payload = json_body(updated)
+        self.assertFalse(payload["ignore_internal_account_references"])
+        self.assertEqual(
+            payload["internal_transfer_subcategory"]["id"], str(self.subcategory.id)
+        )
+
+    def test_csv_mapping_column_detection_returns_headers_without_creating_mapping(
+        self,
+    ):
         existing_count = CSVMapping.objects.count()
 
         response = self.client.post(
@@ -409,8 +496,7 @@ class APITests(FinanceTestCase):
             {
                 "default_currency": "CZK",
                 "csv_file": self.csv_file(
-                    "ID;Datum;Popis;Castka\n"
-                    "api-1;02.01.2026;McDonalds;-12,50\n"
+                    "ID;Datum;Popis;Castka\n" "api-1;02.01.2026;McDonalds;-12,50\n"
                 ),
             },
         )
@@ -430,8 +516,7 @@ class APITests(FinanceTestCase):
             "/api/csv-mappings/detect-columns/",
             {
                 "csv_file": self.csv_file(
-                    "ID,Date,Description,Amount\n"
-                    "api-1,2026-01-02,Salary,1234.56\n"
+                    "ID,Date,Description,Amount\n" "api-1,2026-01-02,Salary,1234.56\n"
                 ),
             },
         )
@@ -462,7 +547,9 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["headers"], ["ID", "Datum", "Popis", "Částka", "Měna"])
-        self.assertIn(payload["detected_settings"]["encoding"], ["cp1250", "windows-1250"])
+        self.assertIn(
+            payload["detected_settings"]["encoding"], ["cp1250", "windows-1250"]
+        )
         self.assertEqual(payload["detected_settings"]["delimiter"], ";")
         self.assertEqual(payload["detected_settings"]["header_row"], 2)
         self.assertEqual(payload["detected_settings"]["date_format"], "%d.%m.%Y")
@@ -868,7 +955,9 @@ class APITests(FinanceTestCase):
         )
         self.assertFalse(get_user_model().objects.exists())
 
-    def test_maintenance_delete_transactions_removes_imports_and_preserves_definitions(self):
+    def test_maintenance_delete_transactions_removes_imports_and_preserves_definitions(
+        self,
+    ):
         csv_import = CSVImport.objects.create(
             bank_account=self.account,
             csv_mapping=self.mapping,
@@ -994,7 +1083,9 @@ class MaintenanceRestoreTests(TransactionTestCase):
             default_csv_mapping=self.mapping,
         )
 
-    def test_database_restore_replaces_current_database_and_saves_pre_restore_backup(self):
+    def test_database_restore_replaces_current_database_and_saves_pre_restore_backup(
+        self,
+    ):
         restored_transaction = Transaction.objects.create(
             bank_account=self.account,
             transaction_date="2026-01-02",
@@ -1028,5 +1119,9 @@ class MaintenanceRestoreTests(TransactionTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(payload["restored"])
         self.assertTrue(payload["pre_restore_backup"].endswith(".sqlite3"))
-        self.assertTrue(Transaction.objects.filter(description="Restored transaction").exists())
-        self.assertFalse(Transaction.objects.filter(description="Current transaction").exists())
+        self.assertTrue(
+            Transaction.objects.filter(description="Restored transaction").exists()
+        )
+        self.assertFalse(
+            Transaction.objects.filter(description="Current transaction").exists()
+        )

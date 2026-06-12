@@ -157,3 +157,15 @@ def serialize_csv_import(csv_import):
         "created_at": iso(csv_import.created_at),
         "updated_at": iso(csv_import.updated_at),
     }
+
+
+def serialize_finance_settings(settings):
+    return {
+        "id": str(settings.id),
+        "ignore_internal_account_references": settings.ignore_internal_account_references,
+        "internal_transfer_subcategory": model_ref(
+            settings.internal_transfer_subcategory
+        ),
+        "created_at": iso(settings.created_at),
+        "updated_at": iso(settings.updated_at),
+    }

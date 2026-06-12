@@ -5,13 +5,20 @@ from . import views
 
 urlpatterns = [
     path("health/", views.HealthView.as_view(), name="health"),
-    path("bank-accounts/", views.BankAccountCollectionView.as_view(), name="bank-accounts"),
+    path("settings/", views.FinanceSettingsView.as_view(), name="finance-settings"),
+    path(
+        "bank-accounts/",
+        views.BankAccountCollectionView.as_view(),
+        name="bank-accounts",
+    ),
     path(
         "bank-accounts/<uuid:pk>/",
         views.BankAccountDetailView.as_view(),
         name="bank-account-detail",
     ),
-    path("csv-mappings/", views.CSVMappingCollectionView.as_view(), name="csv-mappings"),
+    path(
+        "csv-mappings/", views.CSVMappingCollectionView.as_view(), name="csv-mappings"
+    ),
     path(
         "csv-mappings/detect-columns/",
         views.CSVMappingColumnDetectionView.as_view(),
@@ -28,7 +35,11 @@ urlpatterns = [
         views.CategoryDetailView.as_view(),
         name="category-detail",
     ),
-    path("subcategories/", views.SubcategoryCollectionView.as_view(), name="subcategories"),
+    path(
+        "subcategories/",
+        views.SubcategoryCollectionView.as_view(),
+        name="subcategories",
+    ),
     path(
         "subcategories/<uuid:pk>/",
         views.SubcategoryDetailView.as_view(),
@@ -37,9 +48,15 @@ urlpatterns = [
     path("tags/", views.TagCollectionView.as_view(), name="tags"),
     path("tags/<uuid:pk>/", views.TagDetailView.as_view(), name="tag-detail"),
     path("keywords/", views.KeywordCollectionView.as_view(), name="keywords"),
-    path("keywords/preview/", views.KeywordPreviewView.as_view(), name="keyword-preview"),
-    path("keywords/<uuid:pk>/", views.KeywordDetailView.as_view(), name="keyword-detail"),
-    path("transactions/", views.TransactionCollectionView.as_view(), name="transactions"),
+    path(
+        "keywords/preview/", views.KeywordPreviewView.as_view(), name="keyword-preview"
+    ),
+    path(
+        "keywords/<uuid:pk>/", views.KeywordDetailView.as_view(), name="keyword-detail"
+    ),
+    path(
+        "transactions/", views.TransactionCollectionView.as_view(), name="transactions"
+    ),
     path(
         "transactions/filter-metadata/",
         views.TransactionFilterMetadataView.as_view(),
@@ -56,8 +73,14 @@ urlpatterns = [
         name="recategorize-transactions",
     ),
     path("imports/preview/", views.ImportPreviewView.as_view(), name="import-preview"),
-    path("imports/", views.ImportTransactionsView.as_view(), name="import-transactions"),
-    path("dashboard/summary/", views.DashboardSummaryView.as_view(), name="dashboard-summary"),
+    path(
+        "imports/", views.ImportTransactionsView.as_view(), name="import-transactions"
+    ),
+    path(
+        "dashboard/summary/",
+        views.DashboardSummaryView.as_view(),
+        name="dashboard-summary",
+    ),
     path(
         "maintenance/summary/",
         views.MaintenanceSummaryView.as_view(),

@@ -173,6 +173,7 @@ export default function App() {
     subcategories: [],
     tags: [],
     keywords: [],
+    settings: null,
   });
   const [filters, setFilters] = useState(emptyFilters);
   const [filterDefaults, setFilterDefaults] = useState({ from: "", to: "" });
@@ -195,15 +196,16 @@ export default function App() {
   }, []);
 
   const loadReferenceData = useCallback(async () => {
-    const [accounts, mappings, categories, subcategories, tags, keywords] = await Promise.all([
+    const [accounts, mappings, categories, subcategories, tags, keywords, settings] = await Promise.all([
       apiGet("/bank-accounts/"),
       apiGet("/csv-mappings/"),
       apiGet("/categories/"),
       apiGet("/subcategories/"),
       apiGet("/tags/"),
       apiGet("/keywords/"),
+      apiGet("/settings/"),
     ]);
-    setRefs({ accounts, mappings, categories, subcategories, tags, keywords });
+    setRefs({ accounts, mappings, categories, subcategories, tags, keywords, settings });
   }, []);
 
   const loadFilterDefaults = useCallback(async () => {
@@ -438,44 +440,87 @@ export default function App() {
 }
 
 function SidebarAsciiPlay() {
-  const [frame, setFrame] = useState(0);
-  const [size, setSize] = useState({ columns: 34, rows: 64 });
-  const asciiRef = useRef(null);
+  const canvasRef = useRef(null);
 
   useEffect(() => {
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) {
+    const canvas = canvasRef.current;
+    if (!canvas) {
       return undefined;
     }
-    const timer = window.setInterval(() => setFrame((current) => (current + 1) % 10000), 120);
-    return () => window.clearInterval(timer);
-  }, []);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return undefined;
+    }
 
-  useEffect(() => {
-    const element = asciiRef.current;
-    if (!element) {
-      return undefined;
-    }
+    let animationFrame = 0;
+    let lastDraw = 0;
+    let columns = 34;
+    let rows = 64;
+    let characterHeight = 10.6;
+
     function updateSize() {
-      const width = element.clientWidth;
-      const height = element.clientHeight;
-      setSize({
-        columns: Math.max(24, Math.floor(width / 5.1)),
-        rows: Math.max(24, Math.floor(height / 10.6)),
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const pixelRatio = window.devicePixelRatio || 1;
+      const styles = window.getComputedStyle(canvas);
+      const font = styles.font || `${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
+      context.font = font;
+      const characterWidth = context.measureText("M").width || 5.1;
+      const parsedLineHeight = Number.parseFloat(styles.lineHeight);
+      const parsedFontSize = Number.parseFloat(styles.fontSize);
+      characterHeight = parsedLineHeight || parsedFontSize * 1.2 || 10.6;
+      columns = Math.max(24, Math.ceil(width / characterWidth));
+      rows = Math.max(24, Math.ceil(height / characterHeight));
+      canvas.width = Math.ceil(width * pixelRatio);
+      canvas.height = Math.ceil(height * pixelRatio);
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+      context.font = font;
+      context.textBaseline = "top";
+      context.fillStyle = styles.color;
+    }
+
+    function renderFrame(timestamp) {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      context.clearRect(0, 0, width, height);
+      const content = buildSidebarAsciiFrame(timestamp / 120, { columns, rows });
+      content.split("\n").forEach((line, index) => {
+        context.fillText(line, 0, index * characterHeight);
       });
     }
+
+    function draw(timestamp) {
+      animationFrame = window.requestAnimationFrame(draw);
+      if (timestamp - lastDraw < 33) {
+        return;
+      }
+      lastDraw = timestamp;
+      renderFrame(timestamp);
+    }
+
     updateSize();
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      renderFrame(0);
+      return undefined;
+    }
+    animationFrame = window.requestAnimationFrame(draw);
     if (typeof ResizeObserver === "undefined") {
       window.addEventListener("resize", updateSize);
-      return () => window.removeEventListener("resize", updateSize);
+      return () => {
+        window.cancelAnimationFrame(animationFrame);
+        window.removeEventListener("resize", updateSize);
+      };
     }
     const observer = new ResizeObserver(updateSize);
-    observer.observe(element);
-    return () => observer.disconnect();
+    observer.observe(canvas);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+    };
   }, []);
 
-  const content = useMemo(() => buildSidebarAsciiFrame(frame, size), [frame, size]);
-  return <pre aria-hidden="true" className="sidebar-ascii-play" ref={asciiRef}>{content}</pre>;
+  return <canvas aria-hidden="true" className="sidebar-ascii-play" ref={canvasRef} />;
 }
 
 function DashboardPage({
@@ -1271,6 +1316,12 @@ function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraf
 
   return (
     <div className="settings-grid">
+      <section className="panel">
+        <div className="panel-header">
+          <h2>App Settings</h2>
+        </div>
+        <SettingsForm notify={notify} refs={refs} reloadAll={reloadAll} settings={refs.settings} />
+      </section>
       <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} title="CSV Mappings">
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
@@ -1290,6 +1341,57 @@ function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraf
         <KeywordForm clearEditing={() => clearEditing("/keywords/")} editingItem={editingItems["/keywords/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
     </div>
+  );
+}
+
+function SettingsForm({ notify, refs, reloadAll, settings }) {
+  const [ignoreInternalAccounts, setIgnoreInternalAccounts] = useState(
+    settings?.ignore_internal_account_references ?? true,
+  );
+  const [internalTransferSubcategoryId, setInternalTransferSubcategoryId] = useState(
+    settings?.internal_transfer_subcategory?.id || "",
+  );
+
+  useEffect(() => {
+    setIgnoreInternalAccounts(settings?.ignore_internal_account_references ?? true);
+    setInternalTransferSubcategoryId(settings?.internal_transfer_subcategory?.id || "");
+  }, [settings]);
+
+  async function submit(event) {
+    event.preventDefault();
+    try {
+      await apiPatch("/settings/", {
+        ignore_internal_account_references: ignoreInternalAccounts,
+        internal_transfer_subcategory_id: internalTransferSubcategoryId,
+      });
+      notify("Settings saved");
+      await reloadAll();
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+
+  return (
+    <form className="compact-form" onSubmit={submit}>
+      <label className="check-row">
+        <input
+          checked={ignoreInternalAccounts}
+          onChange={(event) => setIgnoreInternalAccounts(event.target.checked)}
+          type="checkbox"
+        />
+        <span>Ignore transactions that mention another configured bank account</span>
+      </label>
+      <FormField label="Internal Transfer Subcategory">
+        <Select
+          blank="No automatic subcategory"
+          name="internal_transfer_subcategory_id"
+          onChange={(event) => setInternalTransferSubcategoryId(event.target.value)}
+          options={refs.subcategories.map((item) => [item.id, subLabel(item)])}
+          value={internalTransferSubcategoryId}
+        />
+      </FormField>
+      <button type="submit">Save</button>
+    </form>
   );
 }
 
@@ -2175,9 +2277,10 @@ function MultiSelect({ label, name, onChange, options, value }) {
   );
 }
 
-function Select({ blank, defaultValue = "", name, options, required = false }) {
+function Select({ blank, defaultValue = "", name, onChange, options, required = false, value }) {
+  const controlledProps = value === undefined ? { defaultValue } : { value };
   return (
-    <select defaultValue={defaultValue} name={name} required={required}>
+    <select {...controlledProps} name={name} onChange={onChange} required={required}>
       {blank && <option value="">{blank}</option>}
       {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
     </select>

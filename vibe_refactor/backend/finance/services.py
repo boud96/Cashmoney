@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 from django.db import IntegrityError, transaction
 
 from .constants import DEFAULT_CATEGORIZATION_FIELDS
-from .models import BankAccount, CSVImport, Keyword, Transaction
+from .models import BankAccount, CSVImport, FinanceSettings, Keyword, Transaction
 from .serializers import (
     model_ref,
     serialize_tag,
@@ -27,7 +27,16 @@ def normalize_text(value):
 
 
 def clean_account_number(value):
-    return normalize_text(value).replace("/", "")
+    return re.sub(r"[^0-9a-z]+", "", str(value or "").casefold())
+
+
+def clean_account_number_variants(value):
+    raw_value = str(value or "")
+    variants = {clean_account_number(raw_value)}
+    if "/" in raw_value:
+        account_without_bank_code = raw_value.rsplit("/", 1)[0]
+        variants.add(clean_account_number(account_without_bank_code))
+    return {variant for variant in variants if variant}
 
 
 def coerce_list(value):
@@ -67,17 +76,13 @@ def read_csv_rows_from_text(csv_mapping, text):
     if not reader.fieldnames:
         raise ValueError("CSV header row is missing")
 
-    headers = [
-        str(header).replace("\xa0", " ").strip() for header in reader.fieldnames
-    ]
+    headers = [str(header).replace("\xa0", " ").strip() for header in reader.fieldnames]
 
     rows = []
     for index, row in enumerate(reader, start=csv_mapping.header_row + 2):
         cleaned = {
             str(key).replace("\xa0", " ").strip(): (
-                value.replace("\xa0", " ").strip()
-                if isinstance(value, str)
-                else value
+                value.replace("\xa0", " ").strip() if isinstance(value, str) else value
             )
             for key, value in row.items()
             if key is not None
@@ -159,18 +164,24 @@ def detect_csv_settings(raw, default_currency="CZK"):
     rows, headers = read_csv_rows_from_text(probe_mapping, text)
     values = [value for _, row in rows[:50] for value in row.values()]
     date_format, date_warning = detect_date_format(values)
-    decimal_separator, thousands_separator, number_warning = detect_number_format(values)
+    decimal_separator, thousands_separator, number_warning = detect_number_format(
+        values
+    )
     warnings = [warning for warning in [date_warning, number_warning] if warning]
 
-    return text, {
-        "delimiter": delimiter,
-        "quotechar": quotechar or '"',
-        "encoding": encoding,
-        "header_row": header_row,
-        "date_format": date_format,
-        "decimal_separator": decimal_separator,
-        "thousands_separator": thousands_separator,
-    }, warnings
+    return (
+        text,
+        {
+            "delimiter": delimiter,
+            "quotechar": quotechar or '"',
+            "encoding": encoding,
+            "header_row": header_row,
+            "date_format": date_format,
+            "decimal_separator": decimal_separator,
+            "thousands_separator": thousands_separator,
+        },
+        warnings,
+    )
 
 
 def decode_csv_text(raw):
@@ -190,7 +201,11 @@ def detect_csv_dialect(text):
     fallback_delimiter = score_delimiter(text)[0]
     try:
         dialect = csv.Sniffer().sniff(sample, delimiters="".join(DELIMITER_CANDIDATES))
-        delimiter = dialect.delimiter if dialect.delimiter in DELIMITER_CANDIDATES else fallback_delimiter
+        delimiter = (
+            dialect.delimiter
+            if dialect.delimiter in DELIMITER_CANDIDATES
+            else fallback_delimiter
+        )
         quotechar = dialect.quotechar if dialect.quotechar else '"'
     except csv.Error:
         delimiter = fallback_delimiter
@@ -229,7 +244,9 @@ def detect_header_row(text, delimiter, quotechar):
     parsed_rows = []
     for line in text.splitlines()[:20]:
         try:
-            parsed_rows.append(next(csv.reader([line], delimiter=delimiter, quotechar=quotechar)))
+            parsed_rows.append(
+                next(csv.reader([line], delimiter=delimiter, quotechar=quotechar))
+            )
         except csv.Error:
             parsed_rows.append([line])
 
@@ -276,8 +293,10 @@ def looks_like_header_cell(value):
         "protistrana",
         "typ",
     ]
-    return bool(re.search(r"[^\W\d_]", str(value), flags=re.UNICODE)) and not looks_like_data_cell(value) or any(
-        term in normalized for term in known_terms
+    return (
+        bool(re.search(r"[^\W\d_]", str(value), flags=re.UNICODE))
+        and not looks_like_data_cell(value)
+        or any(term in normalized for term in known_terms)
     )
 
 
@@ -365,8 +384,13 @@ def detect_number_format(values):
     decimal_separator = "," if decimal_scores[","] > decimal_scores["."] else "."
     thousands_separator = ""
     if thousands_scores:
-        thousands_separator = max([" ", ".", ","], key=lambda item: thousands_scores[item])
-        if thousands_separator == decimal_separator or thousands_scores[thousands_separator] == 0:
+        thousands_separator = max(
+            [" ", ".", ","], key=lambda item: thousands_scores[item]
+        )
+        if (
+            thousands_separator == decimal_separator
+            or thousands_scores[thousands_separator] == 0
+        ):
             thousands_separator = ""
     return decimal_separator, thousands_separator, ""
 
@@ -415,6 +439,7 @@ def serialize_categorization_result(result):
 
 class CategorizationService:
     def __init__(self):
+        self.settings = FinanceSettings.load()
         self.keywords = list(
             Keyword.objects.filter(is_active=True)
             .select_related("subcategory", "subcategory__category")
@@ -426,16 +451,25 @@ class CategorizationService:
             self.prepared_keywords.append(
                 {
                     "keyword": keyword,
-                    "include": [normalize_text(term) for term in keyword.include_terms if term],
-                    "exclude": [normalize_text(term) for term in keyword.exclude_terms if term],
+                    "include": [
+                        normalize_text(term) for term in keyword.include_terms if term
+                    ],
+                    "exclude": [
+                        normalize_text(term) for term in keyword.exclude_terms if term
+                    ],
                 }
             )
 
-        self.own_account_numbers = {
-            clean_account_number(value)
-            for value in BankAccount.objects.values_list("account_number", flat=True)
-            if value
-        }
+        self.own_account_numbers = [
+            {
+                "id": account_id,
+                "numbers": clean_account_number_variants(account_number),
+            }
+            for account_id, account_number in BankAccount.objects.values_list(
+                "id", "account_number"
+            )
+            if account_number
+        ]
 
     def build_categorization_text(self, transaction_data, csv_mapping=None):
         if csv_mapping:
@@ -458,10 +492,13 @@ class CategorizationService:
         result = CategorizationResult()
         transaction_data = transaction_data or {}
 
-        counterparty_account = transaction_data.get("counterparty_account_number")
-        if counterparty_account:
-            if clean_account_number(counterparty_account) in self.own_account_numbers:
-                result.is_ignored = True
+        if self.has_internal_account_reference(categorization_text, transaction_data):
+            if (
+                self.settings.ignore_internal_account_references
+                or self.settings.internal_transfer_subcategory_id
+            ):
+                result.is_ignored = self.settings.ignore_internal_account_references
+                result.subcategory = self.settings.internal_transfer_subcategory
                 return result
 
         normalized_text = normalize_text(categorization_text)
@@ -484,7 +521,9 @@ class CategorizationService:
             return result
 
         highest_priority = matched[0].priority
-        top_matches = [keyword for keyword in matched if keyword.priority == highest_priority]
+        top_matches = [
+            keyword for keyword in matched if keyword.priority == highest_priority
+        ]
         signatures = {
             (
                 keyword.subcategory_id,
@@ -509,6 +548,35 @@ class CategorizationService:
         )
         result.matched_keyword_ids = [str(keyword.id) for keyword in top_matches]
         return result
+
+    def has_internal_account_reference(self, categorization_text, transaction_data):
+        current_account = transaction_data.get("bank_account")
+        current_account_id = getattr(current_account, "id", None)
+        current_account_number = transaction_data.get("bank_account_account_number")
+        if current_account and getattr(current_account, "account_number", None):
+            current_account_number = current_account.account_number
+        current_account_numbers = clean_account_number_variants(current_account_number)
+
+        account_numbers = set()
+        for account in self.own_account_numbers:
+            if current_account_id and account["id"] == current_account_id:
+                continue
+            account_numbers.update(account["numbers"])
+        if not current_account_id:
+            account_numbers.difference_update(current_account_numbers)
+        if not account_numbers:
+            return False
+
+        counterparty_accounts = clean_account_number_variants(
+            transaction_data.get("counterparty_account_number")
+        )
+        if counterparty_accounts.intersection(account_numbers):
+            return True
+
+        normalized_text = clean_account_number(categorization_text)
+        return any(
+            account_number in normalized_text for account_number in account_numbers
+        )
 
 
 class CSVRowExtractor:
@@ -886,6 +954,12 @@ def recategorize_transactions(queryset):
             continue
 
         data = {
+            "bank_account": transaction_obj.bank_account,
+            "bank_account_account_number": (
+                transaction_obj.bank_account.account_number
+                if transaction_obj.bank_account
+                else ""
+            ),
             "description": transaction_obj.description,
             "counterparty_name": transaction_obj.counterparty_name,
             "counterparty_account_number": transaction_obj.counterparty_account_number,
@@ -960,31 +1034,47 @@ def build_dashboard_summary(queryset, split_by_owners=False):
     ):
         month_key = transaction_obj.transaction_date.strftime("%Y-%m")
         amount = transaction_display_amount(transaction_obj, split_by_owners)
-        category = transaction_obj.subcategory.category if transaction_obj.subcategory else None
+        category = (
+            transaction_obj.subcategory.category
+            if transaction_obj.subcategory
+            else None
+        )
         if amount >= 0:
             monthly[month_key]["income"] += amount
             category_name = category.name if category else "Uncategorized"
-            subcategory_name = transaction_obj.subcategory.name if transaction_obj.subcategory else "Other"
+            subcategory_name = (
+                transaction_obj.subcategory.name
+                if transaction_obj.subcategory
+                else "Other"
+            )
             _add_category_amount(
                 income_categories,
                 category_name,
                 subcategory_name,
                 amount,
                 category.color if category else "",
-                transaction_obj.subcategory.color if transaction_obj.subcategory else "",
+                transaction_obj.subcategory.color
+                if transaction_obj.subcategory
+                else "",
             )
         else:
             absolute_amount = abs(amount)
             monthly[month_key]["expense"] += absolute_amount
             category_name = category.name if category else "Uncategorized"
-            subcategory_name = transaction_obj.subcategory.name if transaction_obj.subcategory else "Other"
+            subcategory_name = (
+                transaction_obj.subcategory.name
+                if transaction_obj.subcategory
+                else "Other"
+            )
             _add_category_amount(
                 expense_categories,
                 category_name,
                 subcategory_name,
                 absolute_amount,
                 category.color if category else "",
-                transaction_obj.subcategory.color if transaction_obj.subcategory else "",
+                transaction_obj.subcategory.color
+                if transaction_obj.subcategory
+                else "",
             )
 
         if amount < 0:

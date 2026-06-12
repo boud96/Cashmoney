@@ -27,6 +27,7 @@ from .models import (
     CSVImport,
     CSVMapping,
     Category,
+    FinanceSettings,
     HEX_COLOR_VALIDATOR,
     Keyword,
     Subcategory,
@@ -44,6 +45,7 @@ from .serializers import (
     serialize_category,
     serialize_csv_import,
     serialize_csv_mapping,
+    serialize_finance_settings,
     serialize_keyword,
     serialize_subcategory,
     serialize_tag,
@@ -68,6 +70,7 @@ REQUIRED_BACKUP_TABLES = {
     "finance_bankaccount",
     "finance_category",
     "finance_csvmapping",
+    "finance_financesettings",
     "finance_keyword",
     "finance_subcategory",
     "finance_tag",
@@ -177,7 +180,9 @@ def clean_int(value, field_name, default=0, minimum=None):
     try:
         parsed = int(value)
     except (TypeError, ValueError) as exc:
-        raise APIValidationError("Invalid integer value", {"field": field_name}) from exc
+        raise APIValidationError(
+            "Invalid integer value", {"field": field_name}
+        ) from exc
     if minimum is not None and parsed < minimum:
         raise APIValidationError(
             "Integer value is too small", {"field": field_name, "minimum": minimum}
@@ -244,7 +249,11 @@ def id_list(value):
 
 
 def filter_values(params, field_name):
-    raw_values = params.getlist(field_name) if hasattr(params, "getlist") else [params.get(field_name)]
+    raw_values = (
+        params.getlist(field_name)
+        if hasattr(params, "getlist")
+        else [params.get(field_name)]
+    )
     values = []
     for raw_value in raw_values:
         if raw_value in (None, ""):
@@ -325,6 +334,27 @@ class HealthView(JsonView):
         return json_response({"status": "ok"})
 
 
+class FinanceSettingsView(JsonView):
+    def get(self, request):
+        return json_response(serialize_finance_settings(FinanceSettings.load()))
+
+    def patch(self, request):
+        data = parse_json_body(request)
+        settings_obj = FinanceSettings.load()
+        if "ignore_internal_account_references" in data:
+            settings_obj.ignore_internal_account_references = parse_bool(
+                data["ignore_internal_account_references"]
+            )
+        if "internal_transfer_subcategory_id" in data:
+            settings_obj.internal_transfer_subcategory = optional_object(
+                Subcategory,
+                data.get("internal_transfer_subcategory_id"),
+                "internal_transfer_subcategory_id",
+            )
+        settings_obj.save()
+        return json_response(serialize_finance_settings(settings_obj))
+
+
 class BankAccountCollectionView(JsonView):
     def get(self, request):
         accounts = BankAccount.objects.select_related("default_csv_mapping").all()
@@ -353,9 +383,13 @@ class BankAccountDetailView(JsonView):
         data = parse_json_body(request)
         for field in ["name", "account_number", "bank_name"]:
             if field in data:
-                setattr(account, field, clean_text(data[field], field, field != "bank_name"))
+                setattr(
+                    account, field, clean_text(data[field], field, field != "bank_name")
+                )
         if "currency" in data:
-            account.currency = clean_text(data["currency"], "currency", required=True)[:3].upper()
+            account.currency = clean_text(data["currency"], "currency", required=True)[
+                :3
+            ].upper()
         if "owners" in data:
             account.owners = clean_int(data["owners"], "owners", minimum=1)
         if "default_csv_mapping_id" in data:
@@ -383,20 +417,34 @@ class CSVMappingCollectionView(JsonView):
             description=clean_text(data.get("description"), "description"),
             delimiter=clean_csv_char(data.get("delimiter"), "delimiter", ","),
             quotechar=clean_csv_char(data.get("quotechar"), "quotechar", '"'),
-            encoding=clean_text(data.get("encoding", "utf-8-sig"), "encoding", required=True),
-            header_row=clean_int(data.get("header_row"), "header_row", default=0, minimum=0),
-            date_format=clean_text(data.get("date_format", "%Y-%m-%d"), "date_format", required=True),
-            fallback_date_formats=clean_list(data.get("fallback_date_formats"), "fallback_date_formats"),
-            decimal_separator=clean_csv_char(data.get("decimal_separator"), "decimal_separator", "."),
+            encoding=clean_text(
+                data.get("encoding", "utf-8-sig"), "encoding", required=True
+            ),
+            header_row=clean_int(
+                data.get("header_row"), "header_row", default=0, minimum=0
+            ),
+            date_format=clean_text(
+                data.get("date_format", "%Y-%m-%d"), "date_format", required=True
+            ),
+            fallback_date_formats=clean_list(
+                data.get("fallback_date_formats"), "fallback_date_formats"
+            ),
+            decimal_separator=clean_csv_char(
+                data.get("decimal_separator"), "decimal_separator", "."
+            ),
             thousands_separator=clean_csv_char(
                 data.get("thousands_separator"),
                 "thousands_separator",
                 "",
                 allow_blank=True,
             ),
-            default_currency=clean_text(data.get("default_currency", "CZK"), "default_currency", required=True)[:3].upper(),
+            default_currency=clean_text(
+                data.get("default_currency", "CZK"), "default_currency", required=True
+            )[:3].upper(),
             column_map=clean_dict(data.get("column_map"), "column_map"),
-            categorization_fields=clean_list(data.get("categorization_fields"), "categorization_fields"),
+            categorization_fields=clean_list(
+                data.get("categorization_fields"), "categorization_fields"
+            ),
         )
         return json_response(serialize_csv_mapping(mapping), status=201)
 
@@ -407,7 +455,9 @@ class CSVMappingColumnDetectionView(JsonView):
         if not csv_file:
             raise APIValidationError("Missing required field", {"field": "csv_file"})
 
-        use_manual_settings = parse_bool(request.POST.get("manual_settings"), default=False)
+        use_manual_settings = parse_bool(
+            request.POST.get("manual_settings"), default=False
+        )
         csv_mapping = CSVMapping(
             name="Column detection",
             delimiter=clean_csv_char(request.POST.get("delimiter"), "delimiter", ","),
@@ -441,7 +491,9 @@ class CSVMappingColumnDetectionView(JsonView):
             )[:3].upper(),
         )
         sample_size = min(
-            clean_int(request.POST.get("sample_size"), "sample_size", default=5, minimum=1),
+            clean_int(
+                request.POST.get("sample_size"), "sample_size", default=5, minimum=1
+            ),
             20,
         )
         return json_response(
@@ -486,7 +538,11 @@ class CSVMappingDetailView(JsonView):
                         "quotechar": '"',
                         "decimal_separator": ".",
                     }
-                    setattr(mapping, field, clean_csv_char(data[field], field, defaults[field]))
+                    setattr(
+                        mapping,
+                        field,
+                        clean_csv_char(data[field], field, defaults[field]),
+                    )
                 elif field == "thousands_separator":
                     setattr(
                         mapping,
@@ -494,7 +550,9 @@ class CSVMappingDetailView(JsonView):
                         clean_csv_char(data[field], field, "", allow_blank=True),
                     )
                 else:
-                    setattr(mapping, field, clean_text(data[field], field, field == "name"))
+                    setattr(
+                        mapping, field, clean_text(data[field], field, field == "name")
+                    )
         mapping.save()
         return json_response(serialize_csv_mapping(mapping))
 
@@ -528,7 +586,9 @@ class CategoryDetailView(JsonView):
                 setattr(
                     category,
                     field,
-                    clean_color(data[field]) if field == "color" else clean_text(data[field], field, field == "name"),
+                    clean_color(data[field])
+                    if field == "color"
+                    else clean_text(data[field], field, field == "name"),
                 )
         category.save()
         return json_response(serialize_category(category))
@@ -550,7 +610,9 @@ class SubcategoryCollectionView(JsonView):
 
     def post(self, request):
         data = parse_json_body(request)
-        category = optional_object(Category, require_field(data, "category_id"), "category_id")
+        category = optional_object(
+            Category, require_field(data, "category_id"), "category_id"
+        )
         subcategory = Subcategory.objects.create(
             category=category,
             name=clean_text(require_field(data, "name"), "name", required=True),
@@ -565,13 +627,17 @@ class SubcategoryDetailView(JsonView):
         subcategory = get_object_or_404(Subcategory, id=pk)
         data = parse_json_body(request)
         if "category_id" in data:
-            subcategory.category = optional_object(Category, data["category_id"], "category_id")
+            subcategory.category = optional_object(
+                Category, data["category_id"], "category_id"
+            )
         for field in ["name", "description", "color"]:
             if field in data:
                 setattr(
                     subcategory,
                     field,
-                    clean_color(data[field]) if field == "color" else clean_text(data[field], field, field == "name"),
+                    clean_color(data[field])
+                    if field == "color"
+                    else clean_text(data[field], field, field == "name"),
                 )
         subcategory.save()
         return json_response(serialize_subcategory(subcategory))
@@ -604,7 +670,9 @@ class TagDetailView(JsonView):
                 setattr(
                     tag,
                     field,
-                    clean_color(data[field]) if field == "color" else clean_text(data[field], field, field == "name"),
+                    clean_color(data[field])
+                    if field == "color"
+                    else clean_text(data[field], field, field == "name"),
                 )
         tag.save()
         return json_response(serialize_tag(tag))
@@ -627,9 +695,13 @@ class KeywordCollectionView(JsonView):
         data = parse_json_body(request)
         keyword = Keyword.objects.create(
             name=clean_text(require_field(data, "name"), "name", required=True),
-            include_terms=clean_list(require_field(data, "include_terms"), "include_terms"),
+            include_terms=clean_list(
+                require_field(data, "include_terms"), "include_terms"
+            ),
             exclude_terms=clean_list(data.get("exclude_terms"), "exclude_terms"),
-            subcategory=optional_object(Subcategory, data.get("subcategory_id"), "subcategory_id"),
+            subcategory=optional_object(
+                Subcategory, data.get("subcategory_id"), "subcategory_id"
+            ),
             want_need_investment=clean_choice(
                 data.get("want_need_investment"),
                 "want_need_investment",
@@ -671,9 +743,13 @@ class KeywordDetailView(JsonView):
                 elif field == "priority":
                     setattr(keyword, field, clean_int(data[field], field))
                 else:
-                    setattr(keyword, field, clean_text(data[field], field, required=True))
+                    setattr(
+                        keyword, field, clean_text(data[field], field, required=True)
+                    )
         if "subcategory_id" in data:
-            keyword.subcategory = optional_object(Subcategory, data["subcategory_id"], "subcategory_id")
+            keyword.subcategory = optional_object(
+                Subcategory, data["subcategory_id"], "subcategory_id"
+            )
         keyword.save()
         if "tag_ids" in data:
             set_tags(keyword, data["tag_ids"])
@@ -705,7 +781,9 @@ def filtered_transactions(request):
             transaction_date__lte=parse_date_value(params["date_to"], "date_to")
         )
     if params.get("direction"):
-        clean_choice(params["direction"], "direction", Direction.CHOICES, allow_blank=False)
+        clean_choice(
+            params["direction"], "direction", Direction.CHOICES, allow_blank=False
+        )
         queryset = queryset.filter(direction=params["direction"])
     wni_values, include_unassigned_wni = split_unassigned_filter(
         params, "want_need_investment"
@@ -779,10 +857,10 @@ def filtered_transactions(request):
 class TransactionCollectionView(JsonView):
     def get(self, request):
         queryset = filtered_transactions(request)
-        split_by_owners = parse_bool(
-            request.GET.get("split_by_owners"), default=False
+        split_by_owners = parse_bool(request.GET.get("split_by_owners"), default=False)
+        limit = min(
+            clean_int(request.GET.get("limit"), "limit", default=500, minimum=1), 1000
         )
-        limit = min(clean_int(request.GET.get("limit"), "limit", default=500, minimum=1), 1000)
         offset = clean_int(request.GET.get("offset"), "offset", default=0, minimum=0)
         count = queryset.count()
         items = queryset[offset : offset + limit]
@@ -805,26 +883,38 @@ class TransactionCollectionView(JsonView):
         data = parse_json_body(request)
         transaction_obj = Transaction.objects.create(
             original_id=clean_text(data.get("original_id"), "original_id"),
-            bank_account=optional_object(BankAccount, data.get("bank_account_id"), "bank_account_id"),
+            bank_account=optional_object(
+                BankAccount, data.get("bank_account_id"), "bank_account_id"
+            ),
             transaction_date=parse_date_value(
                 require_field(data, "transaction_date"), "transaction_date"
             ),
             posted_date=parse_date_value(data.get("posted_date"), "posted_date"),
             description=clean_text(data.get("description"), "description"),
             amount=parse_decimal(require_field(data, "amount")),
-            currency=clean_text(data.get("currency", "CZK"), "currency", required=True)[:3].upper(),
+            currency=clean_text(data.get("currency", "CZK"), "currency", required=True)[
+                :3
+            ].upper(),
             counterparty_account_number=clean_text(
                 data.get("counterparty_account_number"), "counterparty_account_number"
             ),
-            counterparty_name=clean_text(data.get("counterparty_name"), "counterparty_name"),
-            transaction_type=clean_text(data.get("transaction_type"), "transaction_type"),
+            counterparty_name=clean_text(
+                data.get("counterparty_name"), "counterparty_name"
+            ),
+            transaction_type=clean_text(
+                data.get("transaction_type"), "transaction_type"
+            ),
             variable_symbol=clean_text(data.get("variable_symbol"), "variable_symbol"),
             specific_symbol=clean_text(data.get("specific_symbol"), "specific_symbol"),
             constant_symbol=clean_text(data.get("constant_symbol"), "constant_symbol"),
-            counterparty_note=clean_text(data.get("counterparty_note"), "counterparty_note"),
+            counterparty_note=clean_text(
+                data.get("counterparty_note"), "counterparty_note"
+            ),
             my_note=clean_text(data.get("my_note"), "my_note"),
             other_note=clean_text(data.get("other_note"), "other_note"),
-            subcategory=optional_object(Subcategory, data.get("subcategory_id"), "subcategory_id"),
+            subcategory=optional_object(
+                Subcategory, data.get("subcategory_id"), "subcategory_id"
+            ),
             want_need_investment=clean_choice(
                 data.get("want_need_investment"),
                 "want_need_investment",
@@ -893,7 +983,11 @@ class TransactionDetailView(JsonView):
                 elif field == "is_ignored":
                     setattr(transaction, field, parse_bool(data[field]))
                 elif field == "currency":
-                    setattr(transaction, field, clean_text(data[field], field, required=True)[:3].upper())
+                    setattr(
+                        transaction,
+                        field,
+                        clean_text(data[field], field, required=True)[:3].upper(),
+                    )
                 else:
                     setattr(transaction, field, clean_text(data[field], field))
         if "amount" in data:
@@ -990,7 +1084,9 @@ class KeywordPreviewView(JsonView):
         data = parse_json_body(request)
         categorizer = CategorizationService()
         transaction_data = clean_dict(data.get("transaction_data"), "transaction_data")
-        csv_mapping = optional_object(CSVMapping, data.get("csv_mapping_id"), "csv_mapping_id")
+        csv_mapping = optional_object(
+            CSVMapping, data.get("csv_mapping_id"), "csv_mapping_id"
+        )
 
         if data.get("text"):
             categorization_text = clean_text(data["text"], "text", required=True)
@@ -1015,9 +1111,7 @@ class KeywordPreviewView(JsonView):
 
 class DashboardSummaryView(JsonView):
     def get(self, request):
-        split_by_owners = parse_bool(
-            request.GET.get("split_by_owners"), default=False
-        )
+        split_by_owners = parse_bool(request.GET.get("split_by_owners"), default=False)
         return json_response(
             build_dashboard_summary(filtered_transactions(request), split_by_owners)
         )

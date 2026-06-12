@@ -49,6 +49,43 @@ class TimestampedModel(models.Model):
         abstract = True
 
 
+class FinanceSettings(TimestampedModel):
+    singleton_key = models.PositiveSmallIntegerField(
+        default=1, unique=True, editable=False
+    )
+    ignore_internal_account_references = models.BooleanField(
+        default=True,
+        help_text=(
+            "Automatically ignore transactions whose categorization text mentions "
+            "another configured bank account number."
+        ),
+    )
+    internal_transfer_subcategory = models.ForeignKey(
+        "Subcategory",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text=(
+            "Optional subcategory assigned when a transaction mentions another "
+            "configured bank account number."
+        ),
+    )
+
+    class Meta:
+        verbose_name_plural = "finance settings"
+
+    def __str__(self):
+        return "Finance settings"
+
+    @classmethod
+    def load(cls):
+        settings, _created = cls.objects.select_related(
+            "internal_transfer_subcategory"
+        ).get_or_create(singleton_key=1)
+        return settings
+
+
 class CSVMapping(TimestampedModel):
     name = models.CharField(max_length=128, unique=True)
     description = models.TextField(blank=True)
@@ -281,7 +318,9 @@ class Transaction(TimestampedModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.transaction_date} {self.amount} {self.currency} {self.description}"
+        return (
+            f"{self.transaction_date} {self.amount} {self.currency} {self.description}"
+        )
 
 
 class TransactionTag(TimestampedModel):

@@ -28,7 +28,7 @@ if exist "%ROOT%frontend\package.json" (
 )
 
 start "Vibe Refactor Backend" /min cmd /c ""%PY%" "%BACKEND%\manage.py" runserver 127.0.0.1:8000 --noreload"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(20); do { try { Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8000/api/health/' | Out-Null; exit 0 } catch { Start-Sleep -Milliseconds 500 } } while ((Get-Date) -lt $deadline); exit 1"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline=(Get-Date).AddSeconds(20); do { $client=New-Object Net.Sockets.TcpClient; try { $client.Connect('127.0.0.1', 8000); exit 0 } catch { Start-Sleep -Milliseconds 500 } finally { $client.Close() } } while ((Get-Date) -lt $deadline); exit 1"
 
 if exist "%ELECTRON_CMD%" (
     start "Cashmoney" "%ELECTRON_CMD%" "%ROOT%desktop"

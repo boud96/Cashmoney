@@ -5,6 +5,7 @@ from .models import (
     CSVImport,
     CSVMapping,
     Category,
+    FinanceSettings,
     Keyword,
     Subcategory,
     Tag,
@@ -125,3 +126,12 @@ class CSVImportAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("status", "bank_account", "csv_mapping")
+
+
+@admin.register(FinanceSettings)
+class FinanceSettingsAdmin(admin.ModelAdmin):
+    list_display = (
+        "ignore_internal_account_references",
+        "internal_transfer_subcategory",
+        "updated_at",
+    )
