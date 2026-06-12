@@ -476,12 +476,12 @@ function SidebarAsciiPlay() {
       context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
       context.font = font;
       context.textBaseline = "top";
-      context.fillStyle = styles.color;
     }
 
     function renderFrame(timestamp) {
       const width = canvas.clientWidth;
       const height = canvas.clientHeight;
+      context.fillStyle = window.getComputedStyle(canvas).color;
       context.clearRect(0, 0, width, height);
       const content = buildSidebarAsciiFrame(timestamp / 120, { columns, rows });
       content.split("\n").forEach((line, index) => {
@@ -502,7 +502,12 @@ function SidebarAsciiPlay() {
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) {
       renderFrame(0);
-      return undefined;
+      const observer = new MutationObserver(() => renderFrame(0));
+      observer.observe(document.documentElement, {
+        attributeFilter: ["class", "data-theme", "style"],
+        attributes: true,
+      });
+      return () => observer.disconnect();
     }
     animationFrame = window.requestAnimationFrame(draw);
     if (typeof ResizeObserver === "undefined") {
