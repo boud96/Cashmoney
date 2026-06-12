@@ -771,7 +771,6 @@ function ImportPage({ importReport, notify, refs, reloadAll, setImportReport }) 
       <form className="stack-form" onSubmit={submitImport}>
         <label><span>CSV file</span><input accept=".csv,text/csv" name="csv_file" required type="file" /></label>
         <label><span>Bank account</span><Select name="bank_account_id" options={refs.accounts.map((item) => [item.id, item.name])} required /></label>
-        <label><span>CSV mapping</span><Select blank="Account default" name="csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></label>
         <button className="primary-action" type="submit">Import CSV</button>
       </form>
       <div className="import-report">
@@ -1100,7 +1099,7 @@ function HelpPage() {
             <li>Open Import.</li>
             <li>Choose the CSV file.</li>
             <li>Select the bank account.</li>
-            <li>Select a CSV mapping, or use the account default mapping if one is configured.</li>
+            <li>Cashmoney uses the selected bank account's default CSV mapping.</li>
             <li>Submit the import and review the report for created rows, duplicates, and errors.</li>
           </ol>
           <p>
