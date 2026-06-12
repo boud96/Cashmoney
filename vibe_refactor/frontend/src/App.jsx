@@ -749,7 +749,8 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
 function ImportPage({ importReport, notify, refs, reloadAll, setImportReport }) {
   async function submitImport(event) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     try {
       const response = await fetch("/api/imports/", { method: "POST", body: formData });
       const payload = await response.json();
@@ -757,7 +758,7 @@ function ImportPage({ importReport, notify, refs, reloadAll, setImportReport }) 
         throw new Error(payload.error || "Import failed");
       }
       setImportReport(payload.report);
-      event.currentTarget.reset();
+      form.reset();
       notify("CSV imported");
       await reloadAll();
     } catch (error) {
@@ -1271,29 +1272,29 @@ function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraf
 
   return (
     <div className="settings-grid">
-      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} onEdit={(item) => editItem("/csv-mappings/", item)} title="CSV Mappings">
+      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} title="CSV Mappings">
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} onEdit={(item) => editItem("/bank-accounts/", item)} title="Bank Accounts">
+      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} title="Bank Accounts">
         <AccountForm clearEditing={() => clearEditing("/bank-accounts/")} editingItem={editingItems["/bank-accounts/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} onEdit={(item) => editItem("/categories/", item)} title="Categories">
+      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} title="Categories">
         <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.categories} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} onEdit={(item) => editItem("/subcategories/", item)} title="Subcategories">
+      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} notify={notify} onDeleted={() => clearEditing("/subcategories/")} onEdit={(item) => editItem("/subcategories/", item)} reloadAll={reloadAll} title="Subcategories">
         <SubcategoryForm clearEditing={() => clearEditing("/subcategories/")} editingItem={editingItems["/subcategories/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} onEdit={(item) => editItem("/tags/", item)} title="Tags">
+      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} notify={notify} onDeleted={() => clearEditing("/tags/")} onEdit={(item) => editItem("/tags/", item)} reloadAll={reloadAll} title="Tags">
         <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.tags} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} onEdit={(item) => editItem("/keywords/", item)} title="Keywords" wide>
+      <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} notify={notify} onDeleted={() => clearEditing("/keywords/")} onEdit={(item) => editItem("/keywords/", item)} reloadAll={reloadAll} title="Keywords" wide>
         <KeywordForm clearEditing={() => clearEditing("/keywords/")} editingItem={editingItems["/keywords/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
     </div>
   );
 }
 
-function DefinitionPanel({ children, endpoint, formatter, helpText, items, onEdit, title, wide = false }) {
+function DefinitionPanel({ children, endpoint, formatter, helpText, items, notify, onDeleted, onEdit, reloadAll, title, wide = false }) {
   return (
     <section className={`panel ${wide ? "wide-panel" : ""}`}>
       <div className="panel-header">
@@ -1313,7 +1314,7 @@ function DefinitionPanel({ children, endpoint, formatter, helpText, items, onEdi
               <div className="item-actions">
                 {item.color && <span className="swatch" style={{ background: item.color }} />}
                 <button className="edit-button" onClick={() => onEdit(item)} type="button">Edit</button>
-                <DeleteButton endpoint={`${endpoint}${item.id}/`} name={itemTitle} />
+                <DeleteButton endpoint={`${endpoint}${item.id}/`} name={itemTitle} notify={notify} onDeleted={onDeleted} reloadAll={reloadAll} />
               </div>
             </div>
           );
@@ -1332,13 +1333,19 @@ function HelpTooltip({ text }) {
   );
 }
 
-function DeleteButton({ endpoint, name }) {
+function DeleteButton({ endpoint, name, notify, onDeleted, reloadAll }) {
   async function remove() {
     if (!window.confirm(`Delete ${name}?`)) {
       return;
     }
-    await apiDelete(endpoint);
-    window.location.reload();
+    try {
+      await apiDelete(endpoint);
+      onDeleted?.();
+      notify?.(`${name} deleted`);
+      await reloadAll?.();
+    } catch (error) {
+      notify?.(error.message);
+    }
   }
   return <button className="delete-button" onClick={remove} type="button">Delete</button>;
 }
@@ -1365,8 +1372,9 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
-    const data = formObject(event.currentTarget);
-    if (!validateRequiredFields(event.currentTarget, ["name", "account_number", "currency", "owners"], notify)) {
+    const form = event.currentTarget;
+    const data = formObject(form);
+    if (!validateRequiredFields(form, ["name", "account_number", "currency", "owners"], notify)) {
       return;
     }
     const accountConflict = findDuplicate(
@@ -1377,7 +1385,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
     );
     if (accountConflict) {
       notify("Account number already exists");
-      event.currentTarget.elements.account_number?.focus();
+      form.elements.account_number?.focus();
       return;
     }
     data.owners = Number(data.owners || 1);
@@ -1387,7 +1395,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       } else {
         await apiPost("/bank-accounts/", data);
       }
-      event.currentTarget.reset();
+      form.reset();
       clearEditing?.();
       notify(isEditing ? "Account saved" : "Account added");
       await reloadAll();
@@ -1409,7 +1417,10 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
 }
 
 function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll, setDraft }) {
-  const headers = draft.detected?.headers || [];
+  const headers = useMemo(
+    () => mappedColumnOptions(draft.detected?.headers || [], draft.column_map),
+    [draft.detected?.headers, draft.column_map],
+  );
   const isEditing = Boolean(editingItem);
   const [parsingSettings, setParsingSettings] = useState(() => parsingSettingsFromMapping(editingItem));
   const [manualParsingSettings, setManualParsingSettings] = useState(Boolean(editingItem));
@@ -1474,7 +1485,8 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
 
   async function submit(event) {
     event.preventDefault();
-    const data = formObject(event.currentTarget);
+    const form = event.currentTarget;
+    const data = formObject(form);
     const duplicateMapping = findDuplicate(refs.mappings, "name", data.name, editingItem?.id);
     data.header_row = Number(data.header_row || 0);
     data.column_map = sanitizeColumnMap(draft.column_map);
@@ -1482,10 +1494,10 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     data.fallback_date_formats = [];
     if (duplicateMapping) {
       notify("CSV mapping name already exists");
-      event.currentTarget.elements.name?.focus();
+      form.elements.name?.focus();
       return;
     }
-    if (!validateRequiredFields(event.currentTarget, ["default_currency", "delimiter", "quotechar", "encoding", "date_format", "decimal_separator"], notify)) {
+    if (!validateRequiredFields(form, ["default_currency", "delimiter", "quotechar", "encoding", "date_format", "decimal_separator"], notify)) {
       return;
     }
     if (!validateRequiredColumnMap(draft.column_map, notify)) {
@@ -1501,7 +1513,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       } else {
         await apiPost("/csv-mappings/", data);
       }
-      event.currentTarget.reset();
+      form.reset();
       clearEditing?.();
       setParsingSettings(defaultParsingSettings);
       setManualParsingSettings(false);
@@ -1607,10 +1619,11 @@ function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], n
   const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
-    const data = formObject(event.currentTarget);
+    const form = event.currentTarget;
+    const data = formObject(form);
     if (findDuplicate(items, "name", data.name, editingItem?.id)) {
       notify("Name already exists");
-      event.currentTarget.elements.name?.focus();
+      form.elements.name?.focus();
       return;
     }
     try {
@@ -1619,7 +1632,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], n
       } else {
         await apiPost(endpoint, data);
       }
-      event.currentTarget.reset();
+      form.reset();
       clearEditing?.();
       notify(isEditing ? "Record saved" : "Record added");
       await reloadAll();
@@ -1643,13 +1656,14 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
   const isEditing = Boolean(editingItem);
   async function submit(event) {
     event.preventDefault();
-    const data = formObject(event.currentTarget);
-    if (!validateRequiredFields(event.currentTarget, ["category_id", "name"], notify)) {
+    const form = event.currentTarget;
+    const data = formObject(form);
+    if (!validateRequiredFields(form, ["category_id", "name"], notify)) {
       return;
     }
     if (findDuplicateSubcategory(refs.subcategories, data.category_id, data.name, editingItem?.id)) {
       notify("Subcategory already exists in this category");
-      event.currentTarget.elements.name?.focus();
+      form.elements.name?.focus();
       return;
     }
     try {
@@ -1658,7 +1672,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
       } else {
         await apiPost("/subcategories/", data);
       }
-      event.currentTarget.reset();
+      form.reset();
       clearEditing?.();
       notify(isEditing ? "Subcategory saved" : "Subcategory added");
       await reloadAll();
@@ -1776,16 +1790,17 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
 
   async function submit(event) {
     event.preventDefault();
-    const data = formObject(event.currentTarget);
+    const form = event.currentTarget;
+    const data = formObject(form);
     data.include_terms = lines(data.include_terms);
     data.exclude_terms = lines(data.exclude_terms);
     if (!data.include_terms.length) {
       notify("Add at least one include term");
-      event.currentTarget.elements.include_terms?.focus();
+      form.elements.include_terms?.focus();
       return;
     }
     data.priority = Number(data.priority || 0);
-    data.is_ignored = Boolean(event.currentTarget.elements.is_ignored.checked);
+    data.is_ignored = Boolean(form.elements.is_ignored.checked);
     data.tag_ids = tagIds;
     try {
       if (isEditing) {
@@ -1793,7 +1808,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       } else {
         await apiPost("/keywords/", data);
       }
-      event.currentTarget.reset();
+      form.reset();
       clearEditing?.();
       notify(isEditing ? "Keyword saved" : "Keyword added");
       await reloadAll();
@@ -2674,6 +2689,22 @@ function guessColumnMap(headers) {
 function sanitizeColumnMap(columnMap) {
   const visibleKeys = new Set(mappingFields.map(([key]) => key));
   return Object.fromEntries(Object.entries(columnMap || {}).filter(([key]) => visibleKeys.has(key)));
+}
+
+function mappedColumnOptions(headers, columnMap) {
+  const options = [];
+  const seen = new Set();
+  const addOption = (value) => {
+    const option = String(value || "");
+    if (!option || seen.has(option)) {
+      return;
+    }
+    seen.add(option);
+    options.push(option);
+  };
+  headers.forEach(addOption);
+  Object.values(columnMap || {}).flatMap(coerceArray).forEach(addOption);
+  return options;
 }
 
 function parsingSettingsFromMapping(mapping) {
