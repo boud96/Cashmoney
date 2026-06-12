@@ -159,6 +159,7 @@ function emptyFilters() {
     date_to: "",
     bank_account: [],
     category: [],
+    direction: [],
     subcategory: [],
     want_need_investment: [],
     tag: [],
@@ -625,6 +626,14 @@ function DashboardPage({
         </div>
         <div className="filter-checkbox-grid">
           <CheckboxFilterPanel className="filter-account" label="Account" name="bank_account" onChange={onFilterChange} options={refs.accounts.map((item) => [item.id, item.name])} value={filters.bank_account} />
+          <CheckboxFilterPanel
+            className="filter-direction"
+            label="Direction"
+            name="direction"
+            onChange={onFilterChange}
+            options={[["income", "Incomes"], ["expense", "Expenses"]]}
+            value={filters.direction}
+          />
           <CheckboxFilterPanel
             className="filter-category"
             label="Category"
@@ -2662,7 +2671,7 @@ function buildFilterParams(filters) {
   Object.entries(filters).forEach(([key, value]) => {
     if (["include_ignored", "split_by_owners"].includes(key)) return;
     if (Array.isArray(value) ? value.length : value) {
-      params[key] = value;
+      params[key] = Array.isArray(value) ? value.join(",") : value;
     }
   });
   if (filters.include_ignored) {

@@ -780,11 +780,11 @@ def filtered_transactions(request):
         queryset = queryset.filter(
             transaction_date__lte=parse_date_value(params["date_to"], "date_to")
         )
-    if params.get("direction"):
-        clean_choice(
-            params["direction"], "direction", Direction.CHOICES, allow_blank=False
-        )
-        queryset = queryset.filter(direction=params["direction"])
+    direction_values = filter_values(params, "direction")
+    if direction_values:
+        for value in direction_values:
+            clean_choice(value, "direction", Direction.CHOICES, allow_blank=False)
+        queryset = queryset.filter(direction__in=direction_values)
     wni_values, include_unassigned_wni = split_unassigned_filter(
         params, "want_need_investment"
     )

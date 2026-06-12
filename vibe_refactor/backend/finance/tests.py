@@ -674,6 +674,12 @@ class APITests(FinanceTestCase):
             description="Uncategorized",
             amount=Decimal("-3.00"),
         )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-06",
+            description="Salary",
+            amount=Decimal("100.00"),
+        )
         tagged_uncategorized = Transaction.objects.create(
             bank_account=second_account,
             transaction_date="2026-01-05",
@@ -705,12 +711,26 @@ class APITests(FinanceTestCase):
             "/api/transactions/",
             {"tag": f"{self.tag.id},__unassigned__", "limit": "10"},
         )
+        income_response = self.client.get(
+            "/api/transactions/",
+            {"direction": "income", "limit": "10"},
+        )
+        expense_response = self.client.get(
+            "/api/transactions/",
+            {"direction": "expense", "limit": "10"},
+        )
+        both_direction_response = self.client.get(
+            "/api/transactions/?direction=income&direction=expense&limit=10"
+        )
 
-        self.assertEqual(json_body(account_response)["count"], 4)
-        self.assertEqual(json_body(category_response)["count"], 3)
-        self.assertEqual(json_body(subcategory_response)["count"], 2)
-        self.assertEqual(json_body(wni_response)["count"], 2)
-        self.assertEqual(json_body(tag_response)["count"], 3)
+        self.assertEqual(json_body(account_response)["count"], 5)
+        self.assertEqual(json_body(category_response)["count"], 4)
+        self.assertEqual(json_body(subcategory_response)["count"], 3)
+        self.assertEqual(json_body(wni_response)["count"], 3)
+        self.assertEqual(json_body(tag_response)["count"], 4)
+        self.assertEqual(json_body(income_response)["count"], 1)
+        self.assertEqual(json_body(expense_response)["count"], 4)
+        self.assertEqual(json_body(both_direction_response)["count"], 5)
 
     def test_transaction_filter_metadata_returns_oldest_date_and_today(self):
         Transaction.objects.create(
