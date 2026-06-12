@@ -2657,10 +2657,8 @@ function buildSidebarAsciiFrame(frame, size) {
   const width = size.columns;
   const height = size.rows;
   const rows = Array.from({ length: height }, () => Array.from({ length: width }, () => " "));
-  const patterns = [
-    " _0011$ ",
-    ".+Cashmoney+.  ",
-  ];
+  const background = "   .   +   _   ";
+  const ribbon = "CA$HMONEY";
 
   function write(row, col, text) {
     if (row < 0 || row >= height) {
@@ -2676,14 +2674,35 @@ function buildSidebarAsciiFrame(frame, size) {
 
   const time = frame * 0.12;
   for (let y = 0; y < height; y += 1) {
+    const rowDrift = Math.sin(y * 0.18 + time * 0.9) * 4 + Math.sin(y * 0.07 - time * 0.55) * 7;
     for (let x = 0; x < width; x += 1) {
-      const centeredX = x - width / 2;
-      const centeredY = y - height / 2;
-      const offset = Math.sin(centeredX * centeredY * 0.017 + centeredY * 0.033 + time) * 8;
-      const patternIndex = Math.abs(Math.floor(x * 0.18) + Math.floor(y * 0.18)) % patterns.length;
-      const pattern = patterns[patternIndex];
-      const charIndex = Math.floor(Math.abs(centeredX + centeredY + offset)) % pattern.length;
-      rows[y][x] = pattern[charIndex];
+      const primaryCenter =
+        width / 2 +
+        Math.sin(y * 0.21 + time) * width * 0.22 +
+        Math.sin(y * 0.055 - time * 0.7) * width * 0.08;
+      const secondaryCenter =
+        width / 2 +
+        Math.sin(y * 0.17 - time * 0.85 + Math.PI) * width * 0.2 +
+        Math.sin(y * 0.075 + time * 0.5) * width * 0.07;
+      const tertiaryCenter =
+        width / 2 +
+        Math.sin(y * 0.13 + time * 0.7 + Math.PI / 2) * width * 0.15;
+      const distance = Math.min(
+        Math.abs(x - primaryCenter),
+        Math.abs(x - secondaryCenter),
+        Math.abs(x - tertiaryCenter),
+      );
+
+      if (distance < 0.9) {
+        rows[y][x] = ribbon[Math.abs(Math.floor(x + y + time * 3)) % ribbon.length];
+      } else if (distance < 2.5) {
+        rows[y][x] = "+";
+      } else if (distance < 4.5) {
+        rows[y][x] = ".";
+      } else {
+        const charIndex = Math.abs(Math.floor(x + y * 0.7 + rowDrift + time * 2)) % background.length;
+        rows[y][x] = background[charIndex];
+      }
     }
   }
 
