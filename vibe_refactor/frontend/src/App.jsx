@@ -253,7 +253,7 @@ export default function App() {
     try {
       const [nextSummary, nextTransactions] = await Promise.all([
         apiGet("/dashboard/summary/", filterParams),
-        apiGet("/transactions/", { ...filterParams, limit: 500 }),
+        apiGet("/transactions/", { ...filterParams, limit: 10000 }),
       ]);
       setSummary(nextSummary);
       setTransactionPage(nextTransactions);

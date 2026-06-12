@@ -859,7 +859,7 @@ class TransactionCollectionView(JsonView):
         queryset = filtered_transactions(request)
         split_by_owners = parse_bool(request.GET.get("split_by_owners"), default=False)
         limit = min(
-            clean_int(request.GET.get("limit"), "limit", default=500, minimum=1), 1000
+            clean_int(request.GET.get("limit"), "limit", default=500, minimum=1), 10000
         )
         offset = clean_int(request.GET.get("offset"), "offset", default=0, minimum=0)
         count = queryset.count()
