@@ -239,6 +239,11 @@ h2 {
   color: var(--action);
 }
 
+.privacy-toggle.is-active {
+  background: color-mix(in srgb, var(--action) 18%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 18%, transparent);
+}
+
 .accent-picker-trigger {
   display: inline-flex;
   align-items: center;

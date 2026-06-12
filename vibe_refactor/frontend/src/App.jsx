@@ -21,6 +21,8 @@ const pages = {
 };
 export const THEME_STORAGE_KEY = "cashmoney-theme";
 export const ACCENT_STORAGE_KEY = "cashmoney-accent";
+export const HIDE_AMOUNTS_STORAGE_KEY = "cashmoney-hide-amounts";
+const HIDDEN_AMOUNT = "----";
 const accentPresets = [
   ["Blue", "#58a6ff"],
   ["Indigo", "#6366f1"],
@@ -118,6 +120,13 @@ export function getStoredAccent() {
   return normalizeHexColor(window.localStorage.getItem(ACCENT_STORAGE_KEY));
 }
 
+export function getStoredHideAmounts() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.localStorage.getItem(HIDE_AMOUNTS_STORAGE_KEY) === "true";
+}
+
 export function defaultAccentForTheme(theme) {
   return normalizeTheme(theme) === "light" ? "#2f6f9f" : "#58a6ff";
 }
@@ -163,6 +172,7 @@ export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
   const [theme, setTheme] = useState(getStoredTheme);
   const [accent, setAccent] = useState(getStoredAccent);
+  const [hideAmounts, setHideAmounts] = useState(getStoredHideAmounts);
   const [isAccentPickerOpen, setIsAccentPickerOpen] = useState(false);
   const [status, setStatus] = useState("Checking backend");
   const [toast, setToast] = useState("");
@@ -307,6 +317,14 @@ export default function App() {
     });
   };
 
+  const toggleHideAmounts = () => {
+    setHideAmounts((current) => {
+      const next = !current;
+      window.localStorage.setItem(HIDE_AMOUNTS_STORAGE_KEY, String(next));
+      return next;
+    });
+  };
+
   const updateAccent = (color) => {
     setAccent(color);
     applyAccent(color);
@@ -362,6 +380,15 @@ export default function App() {
             >
               {theme === "dark" ? "Light mode" : "Dark mode"}
             </button>
+            <button
+              aria-pressed={hideAmounts}
+              className={`link-button privacy-toggle ${hideAmounts ? "is-active" : ""}`}
+              onClick={toggleHideAmounts}
+              title="Hide amount values"
+              type="button"
+            >
+              {hideAmounts ? "Show amounts" : "Hide amounts"}
+            </button>
             <a className="link-button" href="/admin/" rel="noreferrer" target="_blank">Admin</a>
             <button className="primary-action" onClick={loadAll} type="button">Refresh</button>
           </div>
@@ -370,6 +397,7 @@ export default function App() {
         {activePage === "dashboard" && (
           <DashboardPage
             filters={filters}
+            hideAmounts={hideAmounts}
             importBusy={loadingDashboard}
             onFilterChange={updateFilter}
             refs={refs}
@@ -531,6 +559,7 @@ function SidebarAsciiPlay() {
 function DashboardPage({
   filters,
   filterParams,
+  hideAmounts,
   importBusy,
   notify,
   onFilterChange,
@@ -543,7 +572,10 @@ function DashboardPage({
   transactionPage,
   updateTransaction,
 }) {
-  const metrics = useMemo(() => buildMetrics(summary, transactionPage), [summary, transactionPage]);
+  const metrics = useMemo(
+    () => buildMetrics(summary, transactionPage, hideAmounts),
+    [hideAmounts, summary, transactionPage],
+  );
 
   async function recategorize() {
     if (!transactionPage.count) {
@@ -645,11 +677,11 @@ function DashboardPage({
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
 
       <div className="dashboard-charts">
-        <ChartPanel className="chart-panel-wide" title="Monthly Flow"><MonthlyChart rows={summary?.monthly || []} /></ChartPanel>
-        <ChartPanel title="Income Categories"><SunburstChart rows={summary?.income_categories || []} label="Income" /></ChartPanel>
-        <ChartPanel title="Expense Categories"><SunburstChart rows={summary?.expense_categories || []} label="Expenses" /></ChartPanel>
-        <ChartPanel title="Want / Need / Investment"><WniChart rows={summary?.want_need_investment || []} /></ChartPanel>
-        <ChartPanel title="Top Expense Subcategories"><TopExpenseChart rows={summary?.expense_categories || []} /></ChartPanel>
+        <ChartPanel className="chart-panel-wide" title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
+        <ChartPanel title="Income Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.income_categories || []} /></ChartPanel>
+        <ChartPanel title="Expense Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
+        <ChartPanel title="Want / Need / Investment"><WniChart hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} /></ChartPanel>
+        <ChartPanel title="Top Expense Subcategories"><TopExpenseChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
       </div>
 
       <section className="panel transaction-panel">
@@ -657,13 +689,13 @@ function DashboardPage({
           <h2>Transactions</h2>
           <span className="muted">{transactionPage.count.toLocaleString()} shown</span>
         </div>
-        <TransactionGrid notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
 }
 
-function TransactionGrid({ notify, refs, rows, updateTransaction }) {
+function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction }) {
   const subcategoryOptions = useMemo(() => ["", ...refs.subcategories.map((item) => item.id)], [refs.subcategories]);
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
@@ -682,7 +714,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
       field: "amount",
       headerName: "Amount",
-      valueFormatter: (params) => amountNumber(params.value),
+      valueFormatter: (params) => formatAmountValue(params.value, hideAmounts),
       width: 130,
     },
     {
@@ -764,7 +796,7 @@ function TransactionGrid({ notify, refs, rows, updateTransaction }) {
       ),
       width: 110,
     },
-  ], [accountLookup, categoryLookup, notify, refs.tags, subcategoryLookup, subcategoryOptions, updateTransaction]);
+  ], [accountLookup, categoryLookup, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, updateTransaction]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {
@@ -1941,7 +1973,7 @@ function ChartPanel({ children, className = "", title }) {
   return <section className={`panel chart-panel ${className}`}><div className="panel-header"><h2>{title}</h2></div>{children}</section>;
 }
 
-function MonthlyChart({ rows }) {
+function MonthlyChart({ hideAmounts, rows }) {
   const monthlyRows = completeMonthlyRows(rows);
   if (!monthlyRows.length) return <EmptyChart />;
   const months = monthlyRows.map((row) => row.month);
@@ -1956,7 +1988,7 @@ function MonthlyChart({ rows }) {
       data={[
         {
           customdata: monthlyRows.map((row) => [row.expense, row.net]),
-          hovertemplate: "Month: %{x}<br>Income: %{y:,.0f}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Income: %{y:,.0f}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
           marker: { color: cssVar("--green", "#2f8f65") },
           name: "Income",
           type: "bar",
@@ -1966,7 +1998,7 @@ function MonthlyChart({ rows }) {
         },
         {
           customdata: monthlyRows.map((row) => [row.expense, row.net]),
-          hovertemplate: "Month: %{x}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
           marker: { color: cssVar("--red", "#dc2626") },
           name: "Expenses",
           type: "bar",
@@ -1976,7 +2008,7 @@ function MonthlyChart({ rows }) {
         },
         {
           customdata: monthlyRows.map((row) => [row.income, row.expense]),
-          hovertemplate: "Month: %{x}<br>Net: %{y:,.0f}<br>Income: %{customdata[0]:,.0f}<br>Expenses: %{customdata[1]:,.0f}<extra></extra>",
+          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Net: %{y:,.0f}<br>Income: %{customdata[0]:,.0f}<br>Expenses: %{customdata[1]:,.0f}<extra></extra>",
           marker: {
             color: netColors,
             line: { width: 0 },
@@ -1993,27 +2025,42 @@ function MonthlyChart({ rows }) {
         barmode: "overlay",
         hovermode: "x unified",
         xaxis: { type: "category" },
-        yaxis: { zeroline: true, zerolinecolor: cssVar("--border", "#9facb5"), zerolinewidth: 1 },
+        yaxis: {
+          showticklabels: !hideAmounts,
+          zeroline: true,
+          zerolinecolor: cssVar("--border", "#9facb5"),
+          zerolinewidth: 1,
+        },
       })}
       useResizeHandler
     />
   );
 }
 
-function SunburstChart({ label, rows }) {
+function SunburstChart({ hideAmounts, rows }) {
   if (!rows.length) return <EmptyChart />;
   const { colors, ids, labels, parents, values } = sunburstData(rows);
   return (
     <Plot
       config={{ displaylogo: false, responsive: true }}
-      data={[{ branchvalues: "total", ids, labels, marker: { colors }, parents, type: "sunburst", values }]}
+      data={[{
+        branchvalues: "total",
+        hovertemplate: hideAmounts ? "%{label}<extra></extra>" : undefined,
+        ids,
+        labels,
+        marker: { colors },
+        parents,
+        textinfo: hideAmounts ? "label" : undefined,
+        type: "sunburst",
+        values,
+      }]}
       layout={baseLayout({ extendsunburstcolors: false, margin: { t: 8, r: 8, b: 8, l: 8 }, title: undefined })}
       useResizeHandler
     />
   );
 }
 
-function WniChart({ rows }) {
+function WniChart({ hideAmounts, rows }) {
   const cleanRows = rows.filter((row) => row.amount > 0);
   if (!cleanRows.length) return <EmptyChart />;
   return (
@@ -2022,7 +2069,9 @@ function WniChart({ rows }) {
       data={[{
         hole: 0.48,
         labels: cleanRows.map((row) => titleCase(row.name)),
+        hovertemplate: hideAmounts ? "%{label}<extra></extra>" : undefined,
         marker: { colors: cleanRows.map((row) => wniColor(row.name)) },
+        textinfo: hideAmounts ? "label" : undefined,
         type: "pie",
         values: cleanRows.map((row) => row.amount),
       }]}
@@ -2032,7 +2081,7 @@ function WniChart({ rows }) {
   );
 }
 
-function TopExpenseChart({ rows }) {
+function TopExpenseChart({ hideAmounts, rows }) {
   const topRows = topExpenseSubcategories(rows);
   if (!topRows.length) return <EmptyChart />;
   return (
@@ -2041,7 +2090,8 @@ function TopExpenseChart({ rows }) {
       data={[{
         marker: { color: cssVar("--blue", "#58a6ff") },
         orientation: "h",
-        text: topRows.map((row) => money(row.amount)),
+        hovertemplate: hideAmounts ? "%{y}<extra></extra>" : "%{y}<br>Amount: %{x:,.0f}<extra></extra>",
+        text: topRows.map((row) => formatMoneyValue(row.amount, hideAmounts)),
         textposition: "auto",
         type: "bar",
         x: topRows.map((row) => row.amount),
@@ -2050,7 +2100,7 @@ function TopExpenseChart({ rows }) {
       layout={baseLayout({
         height: 285,
         margin: { t: 8, r: 18, b: 36, l: 150 },
-        xaxis: {},
+        xaxis: { showticklabels: !hideAmounts },
         yaxis: { automargin: true },
       })}
       useResizeHandler
@@ -2516,7 +2566,7 @@ function buildFilterParams(filters) {
   return params;
 }
 
-function buildMetrics(summary, transactionPage) {
+function buildMetrics(summary, transactionPage, hideAmounts = false) {
   const monthly = summary?.monthly || [];
   const monthCount = monthly.length || 1;
   const income = monthly.reduce((acc, row) => acc + Number(row.income || 0), 0);
@@ -2524,9 +2574,9 @@ function buildMetrics(summary, transactionPage) {
   const net = income - expense;
   const uncategorized = (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
   return [
-    ["Income", money(income), "positive", { value: money(income / monthCount), tone: "positive" }],
-    ["Expenses", money(expense), "negative", { value: money(expense / monthCount), tone: "negative" }],
-    ["Net", money(net), "metric-blue", { value: money(net / monthCount), tone: "metric-blue" }],
+    ["Income", formatMoneyValue(income, hideAmounts), "positive", { value: formatMoneyValue(income / monthCount, hideAmounts), tone: "positive" }],
+    ["Expenses", formatMoneyValue(expense, hideAmounts), "negative", { value: formatMoneyValue(expense / monthCount, hideAmounts), tone: "negative" }],
+    ["Net", formatMoneyValue(net, hideAmounts), "metric-blue", { value: formatMoneyValue(net / monthCount, hideAmounts), tone: "metric-blue" }],
     ["Transactions", `${transactionPage.count.toLocaleString()} / ${(transactionPage.total_count ?? transactionPage.count).toLocaleString()}`, ""],
     ["Uncategorized", uncategorized.toLocaleString(), ""],
   ];
@@ -2871,6 +2921,14 @@ function money(value) {
 
 function amountNumber(value) {
   return formatNumber(value, { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+}
+
+function formatMoneyValue(value, hideAmounts = false) {
+  return hideAmounts ? HIDDEN_AMOUNT : money(value);
+}
+
+function formatAmountValue(value, hideAmounts = false) {
+  return hideAmounts ? HIDDEN_AMOUNT : amountNumber(value);
 }
 
 function formatNumber(value, options = {}) {
