@@ -511,6 +511,38 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["sample_rows"][0]["raw"]["Popis"], "McDonalds")
         self.assertEqual(CSVMapping.objects.count(), existing_count)
 
+    def test_csv_mapping_list_includes_headers_from_imported_raw_data(self):
+        csv_import = CSVImport.objects.create(
+            source_filename="statement.csv",
+            bank_account=self.account,
+            csv_mapping=self.mapping,
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=csv_import,
+            transaction_date="2026-01-02",
+            description="Imported row",
+            amount=Decimal("-12.50"),
+            raw_data={
+                "ID": "tx-1",
+                "Date": "2026-01-02",
+                "Description": "Imported row",
+                "Extra Note": "Visible on edit",
+            },
+        )
+
+        response = self.client.get("/api/csv-mappings/")
+        payload = json_body(response)
+        mapping_payload = next(
+            item for item in payload if item["id"] == str(self.mapping.id)
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            mapping_payload["available_headers"],
+            ["ID", "Date", "Description", "Extra Note"],
+        )
+
     def test_csv_mapping_column_detection_detects_utf8_comma_decimal_dot(self):
         response = self.client.post(
             "/api/csv-mappings/detect-columns/",
@@ -803,6 +835,34 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(list(filtered_transaction.tags.all()), [])
         self.assertIsNone(outside_filter.subcategory)
+
+    def test_recategorize_regenerates_description_from_current_mapping(self):
+        self.keyword("McDonalds", ["mcdonald"])
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Original bank text",
+            amount=Decimal("-12.50"),
+            raw_data={
+                "Description": "Original bank text",
+                "Details": "McDonalds Prague",
+            },
+        )
+        self.mapping.column_map["description"] = "Details"
+        self.mapping.save(update_fields=["column_map", "updated_at"])
+
+        response = self.post_json(
+            "/api/transactions/recategorize/",
+            {"transaction_ids": [str(transaction_obj.id)]},
+        )
+        payload = json_body(response)
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["processed"], 1)
+        self.assertEqual(payload["updated"], 1)
+        self.assertEqual(transaction_obj.description, "McDonalds Prague")
+        self.assertEqual(transaction_obj.subcategory, self.subcategory)
 
     def test_dashboard_summary_uses_derived_categories_and_excludes_ignored(self):
         Transaction.objects.create(

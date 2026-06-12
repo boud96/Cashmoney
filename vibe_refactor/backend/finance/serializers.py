@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+from .models import Transaction
+
 
 def money(value):
     if isinstance(value, Decimal):
@@ -17,6 +19,25 @@ def model_ref(obj):
     if not obj:
         return None
     return {"id": str(obj.id), "name": str(obj)}
+
+
+def csv_mapping_available_headers(mapping, limit=25):
+    headers = []
+    seen = set()
+    rows = (
+        Transaction.objects.filter(import_batch__csv_mapping=mapping)
+        .exclude(raw_data={})
+        .order_by("-created_at")
+        .values_list("raw_data", flat=True)[:limit]
+    )
+    for raw_data in rows:
+        if not isinstance(raw_data, dict):
+            continue
+        for header in raw_data.keys():
+            if header not in seen:
+                headers.append(header)
+                seen.add(header)
+    return headers
 
 
 def transaction_display_amount(transaction, split_by_owners=False):
@@ -58,6 +79,7 @@ def serialize_csv_mapping(mapping):
         "default_currency": mapping.default_currency,
         "column_map": mapping.column_map,
         "categorization_fields": mapping.categorization_fields,
+        "available_headers": csv_mapping_available_headers(mapping),
         "created_at": iso(mapping.created_at),
         "updated_at": iso(mapping.updated_at),
     }

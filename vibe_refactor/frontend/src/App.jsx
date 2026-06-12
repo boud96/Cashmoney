@@ -197,6 +197,7 @@ export default function App() {
   const [mappingDraft, setMappingDraft] = useState({
     column_map: {},
     categorization_fields: defaultCategorizationFields,
+    available_headers: [],
     detected: null,
   });
 
@@ -1626,8 +1627,8 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
 
 function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll, setDraft }) {
   const headers = useMemo(
-    () => mappedColumnOptions(draft.detected?.headers || [], draft.column_map),
-    [draft.detected?.headers, draft.column_map],
+    () => mappedColumnOptions(draft.detected?.headers || draft.available_headers || [], draft.column_map),
+    [draft.detected?.headers, draft.available_headers, draft.column_map],
   );
   const isEditing = Boolean(editingItem);
   const [parsingSettings, setParsingSettings] = useState(() => parsingSettingsFromMapping(editingItem));
@@ -1646,6 +1647,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     setDraft({
       column_map: sanitizeColumnMap(editingItem.column_map || {}),
       categorization_fields: editingItem.categorization_fields || defaultCategorizationFields,
+      available_headers: editingItem.available_headers || [],
       detected: null,
     });
   }, [editingItem, setDraft]);
@@ -1687,6 +1689,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
         detected: payload,
         column_map: guessColumnMap(payload.headers),
         categorization_fields: defaultCategorizationFields,
+        available_headers: payload.headers || [],
       });
       notify(`Detected ${payload.headers.length} columns`);
     } catch (error) {
@@ -1731,7 +1734,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       clearEditing?.();
       setParsingSettings(defaultParsingSettings);
       setManualParsingSettings(false);
-      setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, detected: null });
+      setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, available_headers: [], detected: null });
       notify(isEditing ? "CSV mapping saved" : "CSV mapping added");
       await reloadAll();
     } catch (error) {
@@ -1806,7 +1809,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
         clearEditing?.();
         setParsingSettings(defaultParsingSettings);
         setManualParsingSettings(false);
-        setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, detected: null });
+        setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, available_headers: [], detected: null });
       }} isEditing={isEditing} />
     </form>
   );
@@ -2983,7 +2986,7 @@ function mappedColumnOptions(headers, columnMap) {
   };
   headers.forEach(addOption);
   Object.values(columnMap || {}).flatMap(coerceArray).forEach(addOption);
-  return options;
+  return options.sort((left, right) => left.localeCompare(right));
 }
 
 function parsingSettingsFromMapping(mapping) {

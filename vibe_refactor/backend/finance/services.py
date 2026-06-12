@@ -20,6 +20,18 @@ from .serializers import (
 ENCODING_CANDIDATES = ["utf-8-sig", "utf-8", "cp1250", "windows-1250", "latin-1"]
 DELIMITER_CANDIDATES = [",", ";", "\t", "|"]
 DATE_FORMAT_CANDIDATES = ["%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y"]
+RECATEGORIZABLE_TRANSACTION_FIELDS = (
+    "description",
+    "counterparty_account_number",
+    "counterparty_name",
+    "transaction_type",
+    "variable_symbol",
+    "specific_symbol",
+    "constant_symbol",
+    "counterparty_note",
+    "my_note",
+    "other_note",
+)
 
 
 def normalize_text(value):
@@ -47,6 +59,19 @@ def coerce_list(value):
     if isinstance(value, str):
         return [value] if value else []
     return [value]
+
+
+def mapped_transaction_values_from_raw_data(transaction_obj, csv_mapping):
+    raw_data = transaction_obj.raw_data
+    if not isinstance(raw_data, dict) or not raw_data:
+        return {}
+
+    extractor = CSVRowExtractor(csv_mapping)
+    values = {}
+    for field_name in RECATEGORIZABLE_TRANSACTION_FIELDS:
+        if coerce_list(csv_mapping.get_column(field_name)):
+            values[field_name] = extractor.get_value(raw_data, field_name)
+    return values
 
 
 def read_csv_rows_with_headers(csv_mapping, file_obj):
@@ -953,6 +978,15 @@ def recategorize_transactions(queryset):
             stats["skipped_transaction_ids"].append(str(transaction_obj.id))
             continue
 
+        mapped_values = mapped_transaction_values_from_raw_data(
+            transaction_obj, csv_mapping
+        )
+        refreshed_fields = {
+            field_name: value
+            for field_name, value in mapped_values.items()
+            if getattr(transaction_obj, field_name) != value
+        }
+
         data = {
             "bank_account": transaction_obj.bank_account,
             "bank_account_account_number": (
@@ -960,14 +994,11 @@ def recategorize_transactions(queryset):
                 if transaction_obj.bank_account
                 else ""
             ),
-            "description": transaction_obj.description,
-            "counterparty_name": transaction_obj.counterparty_name,
-            "counterparty_account_number": transaction_obj.counterparty_account_number,
-            "counterparty_note": transaction_obj.counterparty_note,
-            "my_note": transaction_obj.my_note,
-            "other_note": transaction_obj.other_note,
-            "transaction_type": transaction_obj.transaction_type,
         }
+        for field_name in RECATEGORIZABLE_TRANSACTION_FIELDS:
+            data[field_name] = mapped_values.get(
+                field_name, getattr(transaction_obj, field_name)
+            )
         text = categorizer.build_categorization_text(data, csv_mapping)
         result = categorizer.apply(text, data)
 
@@ -978,6 +1009,18 @@ def recategorize_transactions(queryset):
             stats["conflicts"] += 1
             stats["category_overlaps"] += 1
             stats["conflict_transaction_ids"].append(str(transaction_obj.id))
+            if refreshed_fields:
+                for field_name, value in refreshed_fields.items():
+                    setattr(transaction_obj, field_name, value)
+                transaction_obj.save(
+                    update_fields=[
+                        *refreshed_fields.keys(),
+                        "direction",
+                        "updated_at",
+                    ]
+                )
+                stats["updated"] += 1
+                stats["updated_transaction_ids"].append(str(transaction_obj.id))
             continue
 
         scalar_changed = (
@@ -990,12 +1033,15 @@ def recategorize_transactions(queryset):
         current_tag_ids = {tag.id for tag in transaction_obj.tags.all()}
         tags_changed = current_tag_ids != desired_tag_ids
 
-        if scalar_changed:
+        if scalar_changed or refreshed_fields:
+            for field_name, value in refreshed_fields.items():
+                setattr(transaction_obj, field_name, value)
             transaction_obj.subcategory = result.subcategory
             transaction_obj.want_need_investment = result.want_need_investment
             transaction_obj.is_ignored = result.is_ignored
             transaction_obj.save(
                 update_fields=[
+                    *refreshed_fields.keys(),
                     "subcategory",
                     "want_need_investment",
                     "is_ignored",
@@ -1006,7 +1052,7 @@ def recategorize_transactions(queryset):
         if tags_changed:
             transaction_obj.tags.set(desired_tags)
 
-        if scalar_changed or tags_changed:
+        if scalar_changed or refreshed_fields or tags_changed:
             stats["updated"] += 1
             stats["updated_transaction_ids"].append(str(transaction_obj.id))
         else:
