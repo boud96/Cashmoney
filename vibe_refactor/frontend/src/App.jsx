@@ -22,6 +22,7 @@ const pages = {
 export const THEME_STORAGE_KEY = "cashmoney-theme";
 export const ACCENT_STORAGE_KEY = "cashmoney-accent";
 export const HIDE_AMOUNTS_STORAGE_KEY = "cashmoney-hide-amounts";
+const FILTER_PRESETS_STORAGE_KEY = "cashmoney-filter-presets";
 const HIDDEN_AMOUNT = "----";
 const accentPresets = [
   ["Blue", "#58a6ff"],
@@ -167,6 +168,50 @@ function emptyFilters() {
     include_ignored: false,
     split_by_owners: false,
   };
+}
+
+function cloneFilters(filters) {
+  return {
+    ...emptyFilters(),
+    ...filters,
+    bank_account: [...(filters.bank_account || [])],
+    category: [...(filters.category || [])],
+    direction: [...(filters.direction || [])],
+    subcategory: [...(filters.subcategory || [])],
+    tag: [...(filters.tag || [])],
+    want_need_investment: [...(filters.want_need_investment || [])],
+  };
+}
+
+function countActiveFilters(filters) {
+  return Object.entries(filters).reduce((count, [key, value]) => {
+    if (Array.isArray(value)) {
+      return count + value.length;
+    }
+    if (typeof value === "boolean") {
+      return count + (value ? 1 : 0);
+    }
+    return count + (value ? 1 : 0);
+  }, 0);
+}
+
+function getStoredFilterPresets() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(FILTER_PRESETS_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function storeFilterPresets(presets) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(FILTER_PRESETS_STORAGE_KEY, JSON.stringify(presets));
 }
 
 export default function App() {
@@ -586,7 +631,78 @@ function DashboardPage({
     () => new Set(recategorizeResult?.conflict_transaction_ids || []),
     [recategorizeResult],
   );
+  const [filtersOpen, setFiltersOpen] = useState(true);
   const [recategorizing, setRecategorizing] = useState(false);
+  const [savedFilterName, setSavedFilterName] = useState("");
+  const [savedFilters, setSavedFilters] = useState(() => getStoredFilterPresets());
+  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
+  const subcategoryFilterOptions = useMemo(() => {
+    const selectedCategories = filters.category || [];
+    if (!selectedCategories.length) {
+      return [[UNASSIGNED, "Unassigned subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])];
+    }
+    const selectedCategoryIds = new Set(selectedCategories.filter((item) => item !== UNASSIGNED));
+    const options = selectedCategories.includes(UNASSIGNED)
+      ? [[UNASSIGNED, "Unassigned subcategory"]]
+      : [];
+    return [
+      ...options,
+      ...refs.subcategories
+        .filter((item) => selectedCategoryIds.has(item.category?.id))
+        .map((item) => [item.id, subLabel(item)]),
+    ];
+  }, [filters.category, refs.subcategories]);
+  const availableSubcategoryValues = useMemo(
+    () => new Set(subcategoryFilterOptions.map(([value]) => value)),
+    [subcategoryFilterOptions],
+  );
+
+  useEffect(() => {
+    const selectedSubcategories = filters.subcategory || [];
+    const validSubcategories = selectedSubcategories.filter((item) => availableSubcategoryValues.has(item));
+    if (validSubcategories.length === selectedSubcategories.length) {
+      return;
+    }
+    setFilters((current) => ({
+      ...current,
+      subcategory: (current.subcategory || []).filter((item) => availableSubcategoryValues.has(item)),
+    }));
+  }, [availableSubcategoryValues, filters.subcategory, setFilters]);
+
+  function saveCurrentFilterPreset(event) {
+    event.preventDefault();
+    const name = savedFilterName.trim();
+    if (!name) {
+      notify("Enter a filter name");
+      return;
+    }
+    const nextPreset = {
+      id: `${Date.now()}`,
+      name,
+      filters: cloneFilters(filters),
+    };
+    const nextPresets = [
+      nextPreset,
+      ...savedFilters.filter((preset) => preset.name.toLowerCase() !== name.toLowerCase()),
+    ].slice(0, 12);
+    setSavedFilters(nextPresets);
+    storeFilterPresets(nextPresets);
+    setSavedFilterName("");
+    notify("Filter preset saved locally");
+  }
+
+  function loadFilterPreset(preset) {
+    setFilters((current) => ({
+      ...current,
+      ...cloneFilters(preset.filters),
+    }));
+  }
+
+  function deleteFilterPreset(presetId) {
+    const nextPresets = savedFilters.filter((preset) => preset.id !== presetId);
+    setSavedFilters(nextPresets);
+    storeFilterPresets(nextPresets);
+  }
 
   async function recategorize() {
     if (!transactionPage.count) {
@@ -612,65 +728,109 @@ function DashboardPage({
   return (
     <>
       <section className="filter-panel">
-        <div className="filter-quick-grid">
-          <DateInput label="From" name="date_from" onChange={onFilterChange} value={filters.date_from} />
-          <DateInput label="To" name="date_to" onChange={onFilterChange} value={filters.date_to} />
-          <label className="wide-field">
-            <span>Search</span>
-            <input onChange={(event) => onFilterChange("q", event.target.value)} placeholder="Description" type="search" value={filters.q} />
-          </label>
-          <label className="check-row">
-            <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
-            <span>Ignored</span>
-          </label>
-          <label className="check-row">
-            <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
-            <span>Split by owners</span>
-          </label>
-        </div>
-        <div className="filter-checkbox-grid">
-          <CheckboxFilterPanel className="filter-account" label="Account" name="bank_account" onChange={onFilterChange} options={refs.accounts.map((item) => [item.id, item.name])} value={filters.bank_account} />
-          <CheckboxFilterPanel
-            className="filter-direction"
-            label="Direction"
-            name="direction"
-            onChange={onFilterChange}
-            options={[["income", "Incomes"], ["expense", "Expenses"]]}
-            value={filters.direction}
-          />
-          <CheckboxFilterPanel
-            className="filter-category"
-            label="Category"
-            name="category"
-            onChange={onFilterChange}
-            options={[[UNASSIGNED, "Unassigned category"], ...refs.categories.map((item) => [item.id, item.name])]}
-            value={filters.category}
-          />
-          <CheckboxFilterPanel
-            className="filter-subcategory"
-            label="Subcategory"
-            name="subcategory"
-            onChange={onFilterChange}
-            options={[[UNASSIGNED, "Unassigned subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])]}
-            value={filters.subcategory}
-          />
-          <CheckboxFilterPanel
-            className="filter-wni"
-            label="WNI"
-            name="want_need_investment"
-            onChange={onFilterChange}
-            options={[...wniOptions, [UNASSIGNED, "Unassigned"]]}
-            value={filters.want_need_investment}
-          />
-          <CheckboxFilterPanel
-            className="filter-tag"
-            label="Tag"
-            name="tag"
-            onChange={onFilterChange}
-            options={[[UNASSIGNED, "No tags"], ...refs.tags.map((item) => [item.id, item.name])]}
-            value={filters.tag}
-          />
-        </div>
+        <button
+          aria-expanded={filtersOpen}
+          className="filter-panel-toggle"
+          onClick={() => setFiltersOpen((current) => !current)}
+          type="button"
+        >
+          <span>
+            <strong>Filters</strong>
+            <span>{activeFilterCount ? `${activeFilterCount} active` : "No filters active"}</span>
+          </span>
+          <span aria-hidden="true">{filtersOpen ? "Hide" : "Show"}</span>
+        </button>
+        {filtersOpen && (
+          <div className="filter-layout">
+            <div className="filter-side-stack">
+              <div className="filter-card date-filter-card">
+                <div className="filter-card-header">
+                  <span className="filter-label">Date range</span>
+                </div>
+                <div className="date-filter-stack">
+                  <DateInput label="From" name="date_from" onChange={onFilterChange} value={filters.date_from} />
+                  <DateInput label="To" name="date_to" onChange={onFilterChange} value={filters.date_to} />
+                </div>
+                <RelativeRangeForm setFilters={setFilters} />
+              </div>
+              <SavedFiltersPanel
+                name={savedFilterName}
+                onDelete={deleteFilterPreset}
+                onLoad={loadFilterPreset}
+                onNameChange={setSavedFilterName}
+                onSave={saveCurrentFilterPreset}
+                presets={savedFilters}
+              />
+            </div>
+            <div className="filter-main-stack">
+              <div className="filter-card filter-basics-card">
+                <label className="filter-search-field">
+                  <span>Search</span>
+                  <input onChange={(event) => onFilterChange("q", event.target.value)} placeholder="Description, note, counterparty" type="search" value={filters.q} />
+                </label>
+                <label className="check-row">
+                  <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
+                  <span>Include ignored</span>
+                </label>
+                <label className="check-row">
+                  <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
+                  <span>Split by owners</span>
+                </label>
+              </div>
+              <div className="filter-group filter-category-group">
+                <div className="filter-group-header">
+                  <span className="filter-label">Categorization</span>
+                </div>
+                <div className="filter-category-row">
+                  <CheckboxFilterPanel
+                    className="filter-category"
+                    label="Category"
+                    name="category"
+                    onChange={onFilterChange}
+                    options={[[UNASSIGNED, "Unassigned category"], ...refs.categories.map((item) => [item.id, item.name])]}
+                    value={filters.category}
+                  />
+                  <CheckboxFilterPanel
+                    className="filter-subcategory"
+                    label="Subcategory"
+                    name="subcategory"
+                    onChange={onFilterChange}
+                    options={subcategoryFilterOptions}
+                    value={filters.subcategory}
+                  />
+                  <CheckboxFilterPanel
+                    className="filter-wni"
+                    label="WNI"
+                    name="want_need_investment"
+                    onChange={onFilterChange}
+                    options={[...wniOptions, [UNASSIGNED, "Unassigned"]]}
+                    value={filters.want_need_investment}
+                  />
+                </div>
+              </div>
+              <div className="filter-support-row">
+                <CheckboxFilterPanel className="filter-account" label="Account" name="bank_account" onChange={onFilterChange} options={refs.accounts.map((item) => [item.id, item.name])} value={filters.bank_account} />
+                <CheckboxFilterPanel
+                  className="filter-direction"
+                  label="Direction"
+                  name="direction"
+                  onChange={onFilterChange}
+                  options={[["income", "Incomes"], ["expense", "Expenses"]]}
+                  searchable={false}
+                  value={filters.direction}
+                />
+                <CheckboxFilterPanel
+                  className="filter-tag"
+                  label="Tag"
+                  name="tag"
+                  onChange={onFilterChange}
+                  options={[[UNASSIGNED, "No tags"], ...refs.tags.map((item) => [item.id, item.name])]}
+                  value={filters.tag}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="metrics-grid">
@@ -688,9 +848,6 @@ function DashboardPage({
         ))}
         <div className="metric dashboard-action-card">
           <div className="metric-label">Actions</div>
-          <div className="dashboard-action-section">
-            <RelativeRangeForm setFilters={setFilters} />
-          </div>
           <div className="dashboard-action-section">
             <LoadingButton
               busy={recategorizing}
@@ -2439,10 +2596,44 @@ function RelativeRangeForm({ setFilters }) {
   }
   return (
     <form className="relative-range-form" onSubmit={submit}>
-      <label><span>Last</span><input min="1" onChange={(event) => setCount(event.target.value)} step="1" type="number" value={count} /></label>
+      <div className="relative-range-title">Set date range to last</div>
+      <label><span>Amount</span><input min="1" onChange={(event) => setCount(event.target.value)} step="1" type="number" value={count} /></label>
       <label><span>Unit</span><select onChange={(event) => setUnit(event.target.value)} value={unit}><option value="days">Days</option><option value="weeks">Weeks</option><option value="months">Months</option></select></label>
-      <button className="link-button" type="submit">Show</button>
+      <button className="link-button" type="submit">Apply date range</button>
     </form>
+  );
+}
+
+function SavedFiltersPanel({ name, onDelete, onLoad, onNameChange, onSave, presets }) {
+  return (
+    <div className="filter-card saved-filters-card">
+      <div className="filter-card-header">
+        <span className="filter-label">Saved filters</span>
+        <span className="muted">Local draft</span>
+      </div>
+      <form className="saved-filter-form" onSubmit={onSave}>
+        <label>
+          <span>Preset name</span>
+          <input
+            onChange={(event) => onNameChange(event.target.value)}
+            placeholder="Example: Cash withdrawals"
+            value={name}
+          />
+        </label>
+        <button className="link-button" type="submit">Save current filters</button>
+      </form>
+      <div className="saved-filter-list">
+        {presets.length ? presets.map((preset) => (
+          <div className="saved-filter-row" key={preset.id}>
+            <button onClick={() => onLoad(preset)} type="button">
+              <span>{preset.name}</span>
+              <small>{countActiveFilters(preset.filters).toLocaleString()} filters</small>
+            </button>
+            <button aria-label={`Delete ${preset.name}`} className="icon-button" onClick={() => onDelete(preset.id)} type="button">x</button>
+          </div>
+        )) : <div className="saved-filter-empty">No saved filters yet</div>}
+      </div>
+    </div>
   );
 }
 
@@ -2450,10 +2641,11 @@ function DateInput({ label, name, onChange, value }) {
   return <label><span>{label}</span><input onChange={(event) => onChange(name, event.target.value)} type="date" value={value} /></label>;
 }
 
-function CheckboxFilterPanel({ className = "", label, name, onChange, options, value }) {
+function CheckboxFilterPanel({ className = "", label, name, onChange, options, searchable = true, value }) {
   const [query, setQuery] = useState("");
   const selectedValues = value || [];
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
+  const showTools = searchable || selectedValues.length > 0;
   const filteredOptions = useMemo(() => {
     const normalizedQuery = normalizeName(query);
     if (!normalizedQuery) {
@@ -2475,17 +2667,21 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, options, v
         <span className="filter-label">{label}</span>
         <span className="filter-count">{selectedValues.length ? `${selectedValues.length} selected` : "All"}</span>
       </div>
-      <div className="prototype-filter-tools">
-        <input
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={`Search ${label.toLowerCase()}`}
-          type="search"
-          value={query}
-        />
-        {selectedValues.length > 0 && (
-          <button className="filter-clear" onClick={() => onChange(name, [])} type="button">Clear</button>
-        )}
-      </div>
+      {showTools && (
+        <div className={`prototype-filter-tools${searchable ? "" : " no-search"}`}>
+          {searchable && (
+            <input
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Search ${label.toLowerCase()}`}
+              type="search"
+              value={query}
+            />
+          )}
+          {selectedValues.length > 0 && (
+            <button className="filter-clear" onClick={() => onChange(name, [])} type="button">Clear</button>
+          )}
+        </div>
+      )}
       <div className="checkbox-filter-list">
         {filteredOptions.length ? filteredOptions.map(([optionValue, text]) => (
           <label className="checkbox-filter-row" key={optionValue} title={text}>
