@@ -25,22 +25,14 @@ export const HIDE_AMOUNTS_STORAGE_KEY = "cashmoney-hide-amounts";
 const FILTER_PRESETS_STORAGE_KEY = "cashmoney-filter-presets";
 const HIDDEN_AMOUNT = "----";
 const accentPresets = [
-  ["Blue", "#58a6ff"],
-  ["Indigo", "#6366f1"],
-  ["Violet", "#a371f7"],
-  ["Fuchsia", "#d946ef"],
-  ["Pink", "#ec4899"],
-  ["Rose", "#f43f5e"],
-  ["Red", "#ef4444"],
-  ["Orange", "#f97316"],
-  ["Amber", "#f59e0b"],
-  ["Yellow", "#eab308"],
-  ["Lime", "#84cc16"],
-  ["Green", "#22c55e"],
-  ["Emerald", "#10b981"],
-  ["Teal", "#14b8a6"],
-  ["Cyan", "#06b6d4"],
-  ["Slate", "#64748b"],
+  "#58a6ff",
+  "#14b8a6",
+  "#22c55e",
+  "#eab308",
+  "#f97316",
+  "#ef4444",
+  "#d946ef",
+  "#8b5cf6",
 ];
 const wniOptions = [
   ["want", "Want"],
@@ -220,6 +212,7 @@ export default function App() {
   const [accent, setAccent] = useState(getStoredAccent);
   const [hideAmounts, setHideAmounts] = useState(getStoredHideAmounts);
   const [isAccentPickerOpen, setIsAccentPickerOpen] = useState(false);
+  const [draftAccent, setDraftAccent] = useState("");
   const [status, setStatus] = useState("Checking backend");
   const [toast, setToast] = useState("");
   const [refs, setRefs] = useState({
@@ -334,6 +327,7 @@ export default function App() {
     if (!isAccentPickerOpen) {
       return undefined;
     }
+    setDraftAccent(accent || defaultAccentForTheme(theme));
     function handleKeyDown(event) {
       if (event.key === "Escape") {
         setIsAccentPickerOpen(false);
@@ -341,7 +335,7 @@ export default function App() {
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isAccentPickerOpen]);
+  }, [accent, isAccentPickerOpen, theme]);
 
   useEffect(() => {
     if (filterDefaults.to || filterDefaults.from) {
@@ -493,19 +487,33 @@ export default function App() {
               <h2 id="accent-modal-title">Accent</h2>
               <button className="icon-button" onClick={() => setIsAccentPickerOpen(false)} type="button" aria-label="Close accent picker">x</button>
             </div>
+            <label className="accent-custom-picker">
+              <span>Custom color</span>
+              <input
+                onChange={(event) => setDraftAccent(event.target.value)}
+                type="color"
+                value={draftAccent || accent || defaultAccentForTheme(theme)}
+              />
+            </label>
+            <button className="primary-action accent-confirm-button" onClick={() => updateAccent(draftAccent || defaultAccentForTheme(theme))} type="button">
+              Apply custom color
+            </button>
+            <div className="accent-preset-label">Presets</div>
             <div className="accent-preset-grid">
-              {accentPresets.map(([name, color]) => {
+              {accentPresets.map((color) => {
                 const isSelected = normalizeHexColor(accent || defaultAccentForTheme(theme)).toLowerCase() === color.toLowerCase();
                 return (
                   <button
+                    aria-label={`Use accent ${color}`}
+                    aria-pressed={isSelected}
                     className={`accent-preset ${isSelected ? "is-selected" : ""}`}
                     key={color}
                     onClick={() => updateAccent(color)}
+                    title={color}
                     style={{ "--preset-color": color }}
                     type="button"
                   >
                     <span className="accent-preset-swatch" />
-                    <span>{name}</span>
                   </button>
                 );
               })}
