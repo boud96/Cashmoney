@@ -2638,7 +2638,19 @@ function SavedFiltersPanel({ name, onDelete, onLoad, onNameChange, onSave, prese
 }
 
 function DateInput({ label, name, onChange, value }) {
-  return <label><span>{label}</span><input onChange={(event) => onChange(name, event.target.value)} type="date" value={value} /></label>;
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        inputMode="numeric"
+        onChange={(event) => onChange(name, event.target.value)}
+        pattern="\d{4}-\d{2}-\d{2}"
+        placeholder="YYYY-MM-DD"
+        type="text"
+        value={value}
+      />
+    </label>
+  );
 }
 
 function CheckboxFilterPanel({ className = "", label, name, onChange, options, searchable = true, value }) {
