@@ -91,6 +91,11 @@ body,
   min-height: 100%;
 }
 
+html {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -110,8 +115,10 @@ button {
 
 .app-shell {
   display: grid;
+  align-content: start;
   grid-template-columns: 248px minmax(0, 1fr);
   min-height: 100vh;
+  min-width: 0;
 }
 
 .sidebar {
@@ -191,6 +198,11 @@ button {
   justify-content: space-between;
   gap: 24px;
   margin-bottom: 22px;
+  min-width: 0;
+}
+
+.topbar > div {
+  min-width: 0;
 }
 
 h1,
@@ -219,6 +231,7 @@ h2 {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
 }
 
 .primary-action,
@@ -1758,6 +1771,12 @@ select option {
   display: grid;
   grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
   gap: 20px;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+.import-layout > * {
+  min-width: 0;
 }
 
 .stack-form,
@@ -1773,6 +1792,11 @@ select option {
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+.stack-form input[type="file"] {
+  max-width: 100%;
+  min-width: 0;
 }
 
 .compact-form {
