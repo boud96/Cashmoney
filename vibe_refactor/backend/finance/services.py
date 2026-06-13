@@ -429,6 +429,9 @@ class CategorizationResult:
     is_uncategorized: bool = False
     is_category_overlap: bool = False
     matched_keyword_ids: list[str] = field(default_factory=list)
+    matched_keywords: list = field(default_factory=list)
+    top_matched_keywords: list = field(default_factory=list)
+    conflict_reason: str = ""
 
     def transaction_values(self):
         return {
@@ -436,6 +439,23 @@ class CategorizationResult:
             "want_need_investment": self.want_need_investment,
             "is_ignored": self.is_ignored,
         }
+
+
+def serialize_keyword_match(keyword, is_top_priority=False):
+    category = keyword.subcategory.category if keyword.subcategory else None
+    return {
+        "id": str(keyword.id),
+        "name": keyword.name,
+        "priority": keyword.priority,
+        "include_terms": keyword.include_terms,
+        "exclude_terms": keyword.exclude_terms,
+        "category": model_ref(category),
+        "subcategory": model_ref(keyword.subcategory),
+        "want_need_investment": keyword.want_need_investment,
+        "is_ignored": keyword.is_ignored,
+        "tags": [serialize_tag(tag) for tag in keyword.tags.all()],
+        "is_top_priority": is_top_priority,
+    }
 
 
 def serialize_categorization_result(result):
@@ -449,6 +469,7 @@ def serialize_categorization_result(result):
         status = "matched"
 
     category = result.subcategory.category if result.subcategory else None
+    top_keyword_ids = {keyword.id for keyword in result.top_matched_keywords}
     return {
         "status": status,
         "category": model_ref(category),
@@ -459,6 +480,15 @@ def serialize_categorization_result(result):
         "is_uncategorized": result.is_uncategorized,
         "is_conflict": result.is_category_overlap,
         "matched_keyword_ids": result.matched_keyword_ids,
+        "matched_keywords": [
+            serialize_keyword_match(keyword, keyword.id in top_keyword_ids)
+            for keyword in result.matched_keywords
+        ],
+        "top_matched_keywords": [
+            serialize_keyword_match(keyword, True)
+            for keyword in result.top_matched_keywords
+        ],
+        "conflict_reason": result.conflict_reason,
     }
 
 
@@ -545,10 +575,12 @@ class CategorizationService:
             result.is_uncategorized = True
             return result
 
+        result.matched_keywords = matched
         highest_priority = matched[0].priority
         top_matches = [
             keyword for keyword in matched if keyword.priority == highest_priority
         ]
+        result.top_matched_keywords = top_matches
         signatures = {
             (
                 keyword.subcategory_id,
@@ -561,6 +593,9 @@ class CategorizationService:
         if len(signatures) > 1:
             result.is_category_overlap = True
             result.matched_keyword_ids = [str(keyword.id) for keyword in top_matches]
+            result.conflict_reason = (
+                f"{len(top_matches)} top-priority keywords assign different results."
+            )
             return result
 
         first = top_matches[0]
@@ -949,6 +984,20 @@ class CSVImportService:
 
 def recategorize_transactions(queryset):
     categorizer = CategorizationService()
+
+    def transaction_summary(transaction_obj, data=None):
+        return {
+            "id": str(transaction_obj.id),
+            "transaction_date": transaction_obj.transaction_date.isoformat(),
+            "description": (
+                data.get("description")
+                if data is not None
+                else transaction_obj.description
+            ),
+            "amount": float(transaction_obj.amount),
+            "bank_account": model_ref(transaction_obj.bank_account),
+        }
+
     stats = {
         "processed": 0,
         "updated": 0,
@@ -962,6 +1011,11 @@ def recategorize_transactions(queryset):
         "conflict_transaction_ids": [],
         "uncategorized_transaction_ids": [],
         "skipped_transaction_ids": [],
+        "updated_transactions": [],
+        "unchanged_transactions": [],
+        "uncategorized_transactions": [],
+        "skipped_transactions": [],
+        "conflict_details": [],
     }
 
     for transaction_obj in queryset.select_related(
@@ -976,6 +1030,7 @@ def recategorize_transactions(queryset):
         if not csv_mapping:
             stats["skipped_no_mapping"] += 1
             stats["skipped_transaction_ids"].append(str(transaction_obj.id))
+            stats["skipped_transactions"].append(transaction_summary(transaction_obj))
             continue
 
         mapped_values = mapped_transaction_values_from_raw_data(
@@ -1005,10 +1060,20 @@ def recategorize_transactions(queryset):
         if result.is_uncategorized:
             stats["uncategorized"] += 1
             stats["uncategorized_transaction_ids"].append(str(transaction_obj.id))
+            stats["uncategorized_transactions"].append(
+                transaction_summary(transaction_obj, data)
+            )
         if result.is_category_overlap:
             stats["conflicts"] += 1
             stats["category_overlaps"] += 1
             stats["conflict_transaction_ids"].append(str(transaction_obj.id))
+            stats["conflict_details"].append(
+                {
+                    "transaction": transaction_summary(transaction_obj, data),
+                    "categorization_text": text,
+                    "categorization": serialize_categorization_result(result),
+                }
+            )
             if refreshed_fields:
                 for field_name, value in refreshed_fields.items():
                     setattr(transaction_obj, field_name, value)
@@ -1021,6 +1086,9 @@ def recategorize_transactions(queryset):
                 )
                 stats["updated"] += 1
                 stats["updated_transaction_ids"].append(str(transaction_obj.id))
+                stats["updated_transactions"].append(
+                    transaction_summary(transaction_obj, data)
+                )
             continue
 
         scalar_changed = (
@@ -1055,9 +1123,15 @@ def recategorize_transactions(queryset):
         if scalar_changed or refreshed_fields or tags_changed:
             stats["updated"] += 1
             stats["updated_transaction_ids"].append(str(transaction_obj.id))
+            stats["updated_transactions"].append(
+                transaction_summary(transaction_obj, data)
+            )
         else:
             stats["unchanged"] += 1
             stats["unchanged_transaction_ids"].append(str(transaction_obj.id))
+            stats["unchanged_transactions"].append(
+                transaction_summary(transaction_obj, data)
+            )
 
     return stats
 

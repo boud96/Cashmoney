@@ -814,6 +814,69 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["processed"], 1)
         self.assertEqual(payload["updated"], 1)
         self.assertEqual(payload["updated_transaction_ids"], [str(transaction_obj.id)])
+        self.assertEqual(
+            payload["updated_transactions"][0]["id"], str(transaction_obj.id)
+        )
+        self.assertEqual(
+            payload["updated_transactions"][0]["transaction_date"],
+            "2026-01-02",
+        )
+        self.assertEqual(
+            payload["updated_transactions"][0]["description"],
+            "McDonalds Prague",
+        )
+        self.assertEqual(payload["updated_transactions"][0]["amount"], -12.5)
+
+    def test_keyword_preview_and_recategorize_explain_conflicts(self):
+        transport = Category.objects.create(name="Transport")
+        gas = Subcategory.objects.create(name="Gas", category=transport)
+        cash_keyword = self.keyword(
+            "Cash withdrawal",
+            ["KB ATM"],
+            subcategory=self.subcategory,
+            priority=100,
+        )
+        gas_keyword = Keyword.objects.create(
+            name="MOL",
+            include_terms=["MOL"],
+            subcategory=gas,
+            want_need_investment=WantNeedInvestment.NEED,
+            priority=100,
+        )
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="KB ATM Olomouc",
+            amount=Decimal("-1000.00"),
+        )
+
+        preview = self.post_json("/api/keywords/preview/", {"text": "KB ATM Olomouc"})
+        preview_payload = json_body(preview)
+        recategorized = self.post_json(
+            "/api/transactions/recategorize/",
+            {"transaction_ids": [str(transaction_obj.id)]},
+        )
+        recategorize_payload = json_body(recategorized)
+
+        self.assertEqual(preview.status_code, 200)
+        self.assertEqual(preview_payload["categorization"]["status"], "conflict")
+        self.assertCountEqual(
+            preview_payload["categorization"]["matched_keyword_ids"],
+            [str(cash_keyword.id), str(gas_keyword.id)],
+        )
+        self.assertEqual(recategorize_payload["conflicts"], 1)
+        self.assertEqual(
+            recategorize_payload["conflict_details"][0]["transaction"]["id"],
+            str(transaction_obj.id),
+        )
+        self.assertEqual(
+            len(
+                recategorize_payload["conflict_details"][0]["categorization"][
+                    "top_matched_keywords"
+                ]
+            ),
+            2,
+        )
 
     def test_recategorize_uses_current_filters_and_replaces_tags(self):
         stale_tag = Tag.objects.create(name="Old rule")

@@ -937,11 +937,98 @@ select option {
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 18px;
-  padding: 12px;
-  background: var(--surface);
+}
+
+.recategorize-metric {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 118px;
+}
+
+.metric-has-details {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+}
+
+.metric-details {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.metric-details summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.metric-empty-detail {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.metric-id-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 156px;
+  margin-top: 8px;
+  overflow: auto;
+}
+
+.metric-id-list code {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--subtle-bg);
+  color: var(--text);
+  font-size: 11px;
+  overflow: hidden;
+  padding: 3px 5px;
+  text-overflow: ellipsis;
+}
+
+.metric-transaction-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  margin-top: 8px;
+  overflow: auto;
+}
+
+.metric-transaction {
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: var(--shadow);
+  background: var(--subtle-bg);
+  padding: 8px;
+}
+
+.metric-transaction-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.metric-transaction-main span {
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.metric-transaction-description {
+  margin-top: 5px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.metric-transaction-account {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .dashboard-charts {
@@ -1204,6 +1291,12 @@ select option {
   font-weight: 600;
 }
 
+.conflict-cell {
+  background: color-mix(in srgb, var(--red) 18%, var(--surface));
+  color: var(--red);
+  font-weight: 800;
+}
+
 .transaction-grid .ag-cell-inline-editing,
 .transaction-grid .ag-cell-edit-wrapper,
 .transaction-grid .ag-popup,
@@ -1396,6 +1489,91 @@ select option {
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+.conflict-detail-list,
+.keyword-match-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.metric-details .conflict-detail-list {
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.conflict-detail,
+.keyword-match,
+.keyword-preview-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--subtle-bg);
+  padding: 10px;
+}
+
+.conflict-detail-title {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.conflict-detail-reason {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 740;
+  margin-top: 6px;
+}
+
+.keyword-match {
+  display: grid;
+  gap: 4px;
+}
+
+.keyword-match > div:first-child {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.keyword-match-target,
+.keyword-match-terms {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.keyword-match-terms {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.keyword-preview-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 10px;
+}
+
+.keyword-preview-result {
+  display: grid;
+  gap: 8px;
+}
+
+.keyword-preview-status {
+  width: fit-content;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 8px;
+}
+
+.keyword-preview-status.status-conflict {
+  background: color-mix(in srgb, var(--red) 16%, var(--surface));
+  color: var(--red);
 }
 
 .import-layout {

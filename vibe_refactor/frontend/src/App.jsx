@@ -582,6 +582,10 @@ function DashboardPage({
     () => buildMetrics(summary, transactionPage, hideAmounts),
     [hideAmounts, summary, transactionPage],
   );
+  const conflictIds = useMemo(
+    () => new Set(recategorizeResult?.conflict_transaction_ids || []),
+    [recategorizeResult],
+  );
   const [recategorizing, setRecategorizing] = useState(false);
 
   async function recategorize() {
@@ -716,13 +720,13 @@ function DashboardPage({
           <h2>Transactions</h2>
           <span className="muted">{transactionPage.count.toLocaleString()} shown</span>
         </div>
-        <TransactionGrid hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid conflictIds={conflictIds} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
 }
 
-function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction }) {
+function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateTransaction }) {
   const subcategoryOptions = useMemo(() => ["", ...refs.subcategories.map((item) => item.id)], [refs.subcategories]);
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
@@ -731,8 +735,9 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
   const rowData = useMemo(() => rows.map((row) => ({
     ...row,
     account_id: row.bank_account?.id || "",
+    categorization_conflict: conflictIds.has(row.id),
     subcategory_id: row.subcategory?.id || "",
-  })), [rows]);
+  })), [conflictIds, rows]);
 
   const columnDefs = useMemo(() => [
     { field: "transaction_date", headerName: "Date", width: 120, sort: "desc" },
@@ -754,6 +759,9 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
       field: "category",
       headerName: "Category",
       cellRenderer: (params) => {
+        if (params.data?.categorization_conflict) {
+          return <ConflictCell />;
+        }
         const category = categoryLookup.get(params.value?.id);
         return <ColorCell color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
       },
@@ -767,6 +775,9 @@ function TransactionGrid({ hideAmounts, notify, refs, rows, updateTransaction })
       field: "subcategory_id",
       headerName: "Subcategory ✎",
       cellRenderer: (params) => {
+        if (params.data?.categorization_conflict) {
+          return <ConflictCell />;
+        }
         const subcategory = subcategoryLookup.get(params.value);
         return <ColorCell color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
       },
@@ -2021,10 +2032,15 @@ function DefinitionCheckboxField({ className = "", label, onChange, options, pla
 function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   const isEditing = Boolean(editingItem);
   const [tagIds, setTagIds] = useState(() => (editingItem?.tags || []).map((item) => item.id));
+  const [previewResult, setPreviewResult] = useState(null);
+  const [previewText, setPreviewText] = useState("");
+  const [previewing, setPreviewing] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setTagIds((editingItem?.tags || []).map((item) => item.id));
+    setPreviewResult(null);
+    setPreviewText("");
   }, [editingItem]);
 
   async function submit(event) {
@@ -2058,6 +2074,23 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       setSaving(false);
     }
   }
+
+  async function previewKeywordMatch() {
+    const text = previewText.trim();
+    if (!text) {
+      notify("Enter preview text");
+      return;
+    }
+    setPreviewing(true);
+    try {
+      setPreviewResult(await apiPost("/keywords/preview/", { text }));
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setPreviewing(false);
+    }
+  }
+
   return (
     <form className="compact-form keyword-form" key={editingItem?.id || "new-keyword"} onSubmit={submit}>
       <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Keyword name" required /></FormField>
@@ -2068,6 +2101,21 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       <DefinitionCheckboxField label="Tags" onChange={setTagIds} options={refs.tags.map((item) => [item.id, item.name])} placeholder="No tags selected" value={tagIds} />
       <FormField label="Priority"><input defaultValue={editingItem?.priority ?? "0"} name="priority" type="number" /></FormField>
       <label className="check-row"><input defaultChecked={Boolean(editingItem?.is_ignored)} name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
+      <div className="keyword-preview-panel">
+        <FormField label="Preview Text"><textarea onChange={(event) => setPreviewText(event.target.value)} placeholder="Paste transaction text" rows="2" value={previewText} /></FormField>
+        <LoadingButton busy={previewing} busyLabel="Previewing" className="link-button" onClick={previewKeywordMatch} type="button">Preview Matches</LoadingButton>
+        {previewResult && (
+          <div className="keyword-preview-result">
+            <div className={`keyword-preview-status status-${previewResult.categorization.status}`}>
+              {titleCase(previewResult.categorization.status)}
+            </div>
+            {previewResult.categorization.conflict_reason && (
+              <div className="conflict-detail-reason">{previewResult.categorization.conflict_reason}</div>
+            )}
+            <KeywordMatchList matches={previewResult.categorization.matched_keywords || []} />
+          </div>
+        )}
+      </div>
       <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
@@ -2217,16 +2265,161 @@ function EmptyChart() {
 }
 
 function RecategorizeStats({ result }) {
+  const conflictDetails = result.conflict_details || [];
+  const metrics = [
+    {
+      label: "Processed",
+      value: result.processed,
+    },
+    {
+      ids: result.updated_transaction_ids || [],
+      label: "Updated",
+      transactions: result.updated_transactions || [],
+      value: result.updated,
+    },
+    {
+      ids: result.unchanged_transaction_ids || [],
+      label: "Unchanged",
+      transactions: result.unchanged_transactions || [],
+      value: result.unchanged,
+    },
+    {
+      ids: result.uncategorized_transaction_ids || [],
+      label: "Uncategorized",
+      transactions: result.uncategorized_transactions || [],
+      value: result.uncategorized,
+    },
+    {
+      details: <ConflictDetailList details={conflictDetails} />,
+      detailCount: conflictDetails.length,
+      label: "Conflicts",
+      value: result.conflicts,
+    },
+    {
+      ids: result.skipped_transaction_ids || [],
+      label: "Skipped",
+      transactions: result.skipped_transactions || [],
+      value: result.skipped_no_mapping,
+    },
+  ];
   return (
     <div className="recategorize-stats">
-      {[
-        ["Processed", result.processed],
-        ["Updated", result.updated],
-        ["Unchanged", result.unchanged],
-        ["Uncategorized", result.uncategorized],
-        ["Conflicts", result.conflicts],
-        ["Skipped", result.skipped_no_mapping],
-      ].map(([label, value]) => <Metric key={label} label={label} value={Number(value || 0).toLocaleString()} />)}
+      {metrics.map((metric) => (
+        <RecategorizeMetric key={metric.label} metric={metric} />
+      ))}
+    </div>
+  );
+}
+
+function RecategorizeMetric({ metric }) {
+  const count = Number(metric.value || 0);
+  const ids = metric.ids || [];
+  const transactions = metric.transactions || [];
+  const detailCount = metric.detailCount ?? (transactions.length || ids.length);
+  const hasDetails = Boolean(detailCount);
+  return (
+    <div className={`metric recategorize-metric${hasDetails ? " metric-has-details" : ""}`}>
+      <div className="metric-label">{metric.label}</div>
+      <div className="metric-value">{count.toLocaleString()}</div>
+      {hasDetails ? (
+        <details className="metric-details">
+          <summary>{detailCount.toLocaleString()} details</summary>
+          {metric.details || (transactions.length ? <TransactionSummaryList transactions={transactions} /> : <TransactionIdList ids={ids} />)}
+        </details>
+      ) : (
+        <div className="metric-empty-detail">No details</div>
+      )}
+    </div>
+  );
+}
+
+function TransactionIdList({ ids }) {
+  const visibleIds = ids.slice(0, 40);
+  return (
+    <div className="metric-id-list">
+      {visibleIds.map((id) => <code key={id}>{id}</code>)}
+      {ids.length > visibleIds.length ? (
+        <span className="muted">+{(ids.length - visibleIds.length).toLocaleString()} more</span>
+      ) : null}
+    </div>
+  );
+}
+
+function TransactionSummaryList({ transactions }) {
+  const visibleTransactions = transactions.slice(0, 40);
+  return (
+    <div className="metric-transaction-list">
+      {visibleTransactions.map((transaction) => (
+        <div className="metric-transaction" key={transaction.id}>
+          <div className="metric-transaction-main">
+            <strong>{transaction.transaction_date}</strong>
+            <span>{formatAmountValue(transaction.amount, false)}</span>
+          </div>
+          <div className="metric-transaction-description">
+            {transaction.description || "No description"}
+          </div>
+          {transaction.bank_account?.name ? (
+            <div className="metric-transaction-account">{transaction.bank_account.name}</div>
+          ) : null}
+        </div>
+      ))}
+      {transactions.length > visibleTransactions.length ? (
+        <span className="muted">+{(transactions.length - visibleTransactions.length).toLocaleString()} more</span>
+      ) : null}
+    </div>
+  );
+}
+
+function ConflictDetailList({ details }) {
+  if (!details.length) {
+    return null;
+  }
+  const visibleDetails = details.slice(0, 20);
+  return (
+    <div className="conflict-detail-list">
+      {visibleDetails.map((detail) => (
+        <article className="conflict-detail" key={detail.transaction.id}>
+          <div className="conflict-detail-title">
+            <strong>{detail.transaction.transaction_date}</strong>
+            <span>{detail.transaction.description}</span>
+            <span>{formatAmountValue(detail.transaction.amount, false)}</span>
+          </div>
+          <div className="conflict-detail-reason">
+            {detail.categorization.conflict_reason || "Top-priority keyword results differ."}
+          </div>
+          <KeywordMatchList matches={detail.categorization.top_matched_keywords || []} />
+        </article>
+      ))}
+      {details.length > visibleDetails.length ? (
+        <div className="muted">+{(details.length - visibleDetails.length).toLocaleString()} more conflicts</div>
+      ) : null}
+    </div>
+  );
+}
+
+function KeywordMatchList({ matches }) {
+  if (!matches?.length) {
+    return <div className="muted">No keyword matches</div>;
+  }
+  return (
+    <div className="keyword-match-list">
+      {matches.map((match) => (
+        <div className="keyword-match" key={match.id}>
+          <div>
+            <strong>{match.name}</strong>
+            <span className="muted">Priority {match.priority}</span>
+          </div>
+          <div className="keyword-match-target">
+            {match.subcategory ? `${match.category?.name || "Uncategorized"} / ${match.subcategory.name}` : "No subcategory"}
+            {match.want_need_investment ? ` - ${titleCase(match.want_need_investment)}` : ""}
+            {match.is_ignored ? " - Ignored" : ""}
+          </div>
+          <div className="keyword-match-terms">
+            <span>Include: {(match.include_terms || []).join(", ") || "none"}</span>
+            {(match.exclude_terms || []).length ? <span>Exclude: {match.exclude_terms.join(", ")}</span> : null}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -2468,6 +2661,10 @@ function ColorPill({ color, label, muted = false }) {
     return <span className="pill muted-pill">{label}</span>;
   }
   return <span className="pill color-pill" style={colorPillStyle(color)}>{label}</span>;
+}
+
+function ConflictCell() {
+  return <span className="color-cell conflict-cell"><span className="color-cell-label">Conflict</span></span>;
 }
 
 function ColorCell({ color, label, muted = false }) {
