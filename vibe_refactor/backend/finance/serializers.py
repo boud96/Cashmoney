@@ -119,6 +119,16 @@ def serialize_tag(tag):
     }
 
 
+def serialize_saved_filter(saved_filter):
+    return {
+        "id": str(saved_filter.id),
+        "name": saved_filter.name,
+        "filters": saved_filter.filters,
+        "created_at": iso(saved_filter.created_at),
+        "updated_at": iso(saved_filter.updated_at),
+    }
+
+
 def serialize_keyword(keyword):
     category = keyword.subcategory.category if keyword.subcategory else None
     return {

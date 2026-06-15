@@ -7,6 +7,16 @@ urlpatterns = [
     path("health/", views.HealthView.as_view(), name="health"),
     path("settings/", views.FinanceSettingsView.as_view(), name="finance-settings"),
     path(
+        "saved-filters/",
+        views.SavedFilterCollectionView.as_view(),
+        name="saved-filters",
+    ),
+    path(
+        "saved-filters/<uuid:pk>/",
+        views.SavedFilterDetailView.as_view(),
+        name="saved-filter-detail",
+    ),
+    path(
         "bank-accounts/",
         views.BankAccountCollectionView.as_view(),
         name="bank-accounts",

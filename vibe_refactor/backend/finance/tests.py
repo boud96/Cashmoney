@@ -17,6 +17,7 @@ from .models import (
     Category,
     FinanceSettings,
     Keyword,
+    SavedFilter,
     Subcategory,
     Tag,
     Transaction,
@@ -485,6 +486,44 @@ class APITests(FinanceTestCase):
         self.assertEqual(
             payload["internal_transfer_subcategory"]["id"], str(self.subcategory.id)
         )
+
+    def test_saved_filter_api_persists_updates_and_deletes_presets(self):
+        created = self.post_json(
+            "/api/saved-filters/",
+            {
+                "name": "Cash withdrawals",
+                "filters": {
+                    "category": [str(self.category.id)],
+                    "direction": ["expense"],
+                    "q": "ATM",
+                },
+            },
+        )
+        updated = self.post_json(
+            "/api/saved-filters/",
+            {
+                "name": "cash withdrawals",
+                "filters": {
+                    "category": [str(self.category.id)],
+                    "direction": ["income", "expense"],
+                    "q": "KB ATM",
+                },
+            },
+        )
+        listed = self.client.get("/api/saved-filters/")
+        preset_id = json_body(updated)["id"]
+
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(SavedFilter.objects.count(), 1)
+        self.assertEqual(json_body(updated)["filters"]["q"], "KB ATM")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(len(json_body(listed)), 1)
+
+        deleted = self.delete_json(f"/api/saved-filters/{preset_id}/")
+
+        self.assertEqual(deleted.status_code, 200)
+        self.assertFalse(SavedFilter.objects.exists())
 
     def test_csv_mapping_column_detection_returns_headers_without_creating_mapping(
         self,

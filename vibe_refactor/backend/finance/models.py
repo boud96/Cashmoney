@@ -214,6 +214,17 @@ class Tag(TimestampedModel):
         super().save(*args, **kwargs)
 
 
+class SavedFilter(TimestampedModel):
+    name = models.CharField(max_length=128, unique=True)
+    filters = models.JSONField(default=empty_dict, blank=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
 class CSVImport(TimestampedModel):
     STATUS_STARTED = "started"
     STATUS_COMPLETED = "completed"

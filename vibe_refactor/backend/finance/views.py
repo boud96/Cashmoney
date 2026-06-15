@@ -30,6 +30,7 @@ from .models import (
     FinanceSettings,
     HEX_COLOR_VALIDATOR,
     Keyword,
+    SavedFilter,
     Subcategory,
     Tag,
     Transaction,
@@ -47,6 +48,7 @@ from .serializers import (
     serialize_csv_mapping,
     serialize_finance_settings,
     serialize_keyword,
+    serialize_saved_filter,
     serialize_subcategory,
     serialize_tag,
     serialize_transaction,
@@ -73,6 +75,7 @@ REQUIRED_BACKUP_TABLES = {
     "finance_csvmapping",
     "finance_financesettings",
     "finance_keyword",
+    "finance_savedfilter",
     "finance_subcategory",
     "finance_tag",
     "finance_transaction",
@@ -362,6 +365,47 @@ class FinanceSettingsView(JsonView):
             )
         settings_obj.save()
         return json_response(serialize_finance_settings(settings_obj))
+
+
+class SavedFilterCollectionView(JsonView):
+    def get(self, request):
+        return json_response(
+            [
+                serialize_saved_filter(saved_filter)
+                for saved_filter in SavedFilter.objects.all()
+            ]
+        )
+
+    def post(self, request):
+        data = parse_json_body(request)
+        name = clean_text(require_field(data, "name"), "name", required=True)
+        filters = clean_dict(data.get("filters"), "filters")
+        saved_filter = SavedFilter.objects.filter(name__iexact=name).first()
+        status = 200
+        if saved_filter:
+            saved_filter.name = name
+            saved_filter.filters = filters
+            saved_filter.save()
+        else:
+            saved_filter = SavedFilter.objects.create(name=name, filters=filters)
+            status = 201
+        return json_response(serialize_saved_filter(saved_filter), status=status)
+
+
+class SavedFilterDetailView(JsonView):
+    def patch(self, request, pk):
+        saved_filter = get_object_or_404(SavedFilter, id=pk)
+        data = parse_json_body(request)
+        if "name" in data:
+            saved_filter.name = clean_text(data["name"], "name", required=True)
+        if "filters" in data:
+            saved_filter.filters = clean_dict(data["filters"], "filters")
+        saved_filter.save()
+        return json_response(serialize_saved_filter(saved_filter))
+
+    def delete(self, request, pk):
+        get_object_or_404(SavedFilter, id=pk).delete()
+        return json_response({"deleted": True})
 
 
 class BankAccountCollectionView(JsonView):
@@ -1169,6 +1213,7 @@ def maintenance_counts():
         "subcategories": Subcategory.objects.count(),
         "tags": Tag.objects.count(),
         "keywords": Keyword.objects.count(),
+        "saved_filters": SavedFilter.objects.count(),
     }
 
 
@@ -1198,6 +1243,7 @@ def delete_all_finance_data():
         Transaction.objects.all().delete()
         CSVImport.objects.all().delete()
         Keyword.objects.all().delete()
+        SavedFilter.objects.all().delete()
         BankAccount.objects.all().delete()
         CSVMapping.objects.all().delete()
         Tag.objects.all().delete()

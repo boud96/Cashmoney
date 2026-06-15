@@ -671,7 +671,9 @@ function DashboardPage({
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [recategorizing, setRecategorizing] = useState(false);
   const [savedFilterName, setSavedFilterName] = useState("");
-  const [savedFilters, setSavedFilters] = useState(() => getStoredFilterPresets());
+  const [savedFilters, setSavedFilters] = useState([]);
+  const [savedFiltersBusy, setSavedFiltersBusy] = useState(false);
+  const localFilterPresetsMigrated = useRef(false);
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
   const subcategoryFilterOptions = useMemo(() => {
     const selectedCategories = filters.category || [];
@@ -706,26 +708,60 @@ function DashboardPage({
     }));
   }, [availableSubcategoryValues, filters.subcategory, setFilters]);
 
-  function saveCurrentFilterPreset(event) {
+  const loadSavedFilters = useCallback(async () => {
+    setSavedFiltersBusy(true);
+    try {
+      let presets = await apiGet("/saved-filters/");
+      const localPresets = getStoredFilterPresets();
+      if (!localFilterPresetsMigrated.current && localPresets.length) {
+        localFilterPresetsMigrated.current = true;
+        const existingNames = new Set(presets.map((preset) => preset.name.toLowerCase()));
+        const presetsToImport = localPresets.filter((preset) => preset.name && !existingNames.has(preset.name.toLowerCase()));
+        if (presetsToImport.length) {
+          await Promise.all(presetsToImport.map((preset) => apiPost("/saved-filters/", {
+            name: preset.name,
+            filters: cloneFilters(preset.filters || {}),
+          })));
+          presets = await apiGet("/saved-filters/");
+        }
+        storeFilterPresets([]);
+      }
+      setSavedFilters(presets);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSavedFiltersBusy(false);
+    }
+  }, [notify]);
+
+  useEffect(() => {
+    loadSavedFilters();
+  }, [loadSavedFilters]);
+
+  async function saveCurrentFilterPreset(event) {
     event.preventDefault();
     const name = savedFilterName.trim();
     if (!name) {
       notify("Enter a filter name");
       return;
     }
-    const nextPreset = {
-      id: `${Date.now()}`,
-      name,
-      filters: cloneFilters(filters),
-    };
-    const nextPresets = [
-      nextPreset,
-      ...savedFilters.filter((preset) => preset.name.toLowerCase() !== name.toLowerCase()),
-    ].slice(0, 12);
-    setSavedFilters(nextPresets);
-    storeFilterPresets(nextPresets);
-    setSavedFilterName("");
-    notify("Filter preset saved locally");
+    setSavedFiltersBusy(true);
+    try {
+      const savedPreset = await apiPost("/saved-filters/", {
+        name,
+        filters: cloneFilters(filters),
+      });
+      setSavedFilters((current) => [
+        savedPreset,
+        ...current.filter((preset) => preset.id !== savedPreset.id && preset.name.toLowerCase() !== savedPreset.name.toLowerCase()),
+      ]);
+      setSavedFilterName("");
+      notify("Filter preset saved");
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSavedFiltersBusy(false);
+    }
   }
 
   function loadFilterPreset(preset) {
@@ -735,10 +771,17 @@ function DashboardPage({
     }));
   }
 
-  function deleteFilterPreset(presetId) {
-    const nextPresets = savedFilters.filter((preset) => preset.id !== presetId);
-    setSavedFilters(nextPresets);
-    storeFilterPresets(nextPresets);
+  async function deleteFilterPreset(presetId) {
+    setSavedFiltersBusy(true);
+    try {
+      await apiDelete(`/saved-filters/${presetId}/`);
+      setSavedFilters((current) => current.filter((preset) => preset.id !== presetId));
+      notify("Filter preset deleted");
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSavedFiltersBusy(false);
+    }
   }
 
   async function recategorize() {
@@ -791,6 +834,7 @@ function DashboardPage({
                 <RelativeRangeForm setFilters={setFilters} />
               </div>
               <SavedFiltersPanel
+                busy={savedFiltersBusy}
                 name={savedFilterName}
                 onDelete={deleteFilterPreset}
                 onLoad={loadFilterPreset}
@@ -1130,6 +1174,7 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
     ["Subcategories", counts.subcategories],
     ["Tags", counts.tags],
     ["Keywords", counts.keywords],
+    ["Saved filters", counts.saved_filters],
   ];
   const financeObjectCount = [
     counts.transactions,
@@ -1140,6 +1185,7 @@ function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance
     counts.subcategories,
     counts.tags,
     counts.keywords,
+    counts.saved_filters,
   ].reduce((total, value) => total + Number(value || 0), 0);
   const sampleObjectCount = [
     counts.sample_transactions,
@@ -2641,12 +2687,12 @@ function RelativeRangeForm({ setFilters }) {
   );
 }
 
-function SavedFiltersPanel({ name, onDelete, onLoad, onNameChange, onSave, presets }) {
+function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave, presets }) {
   return (
     <div className="filter-card saved-filters-card">
       <div className="filter-card-header">
         <span className="filter-label">Saved filters</span>
-        <span className="muted">Local draft</span>
+        <span className="muted">{busy ? "Syncing" : ""}</span>
       </div>
       <form className="saved-filter-form" onSubmit={onSave}>
         <label>
@@ -2657,16 +2703,16 @@ function SavedFiltersPanel({ name, onDelete, onLoad, onNameChange, onSave, prese
             value={name}
           />
         </label>
-        <button className="link-button" type="submit">Save current filters</button>
+        <button className="link-button" disabled={busy} type="submit">Save current filters</button>
       </form>
       <div className="saved-filter-list">
         {presets.length ? presets.map((preset) => (
           <div className="saved-filter-row" key={preset.id}>
-            <button onClick={() => onLoad(preset)} type="button">
+            <button disabled={busy} onClick={() => onLoad(preset)} type="button">
               <span>{preset.name}</span>
               <small>{countActiveFilters(preset.filters).toLocaleString()} filters</small>
             </button>
-            <button aria-label={`Delete ${preset.name}`} className="icon-button" onClick={() => onDelete(preset.id)} type="button">x</button>
+            <button aria-label={`Delete ${preset.name}`} className="icon-button" disabled={busy} onClick={() => onDelete(preset.id)} type="button">x</button>
           </div>
         )) : <div className="saved-filter-empty">No saved filters yet</div>}
       </div>

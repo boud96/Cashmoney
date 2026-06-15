@@ -7,6 +7,7 @@ from .models import (
     Category,
     FinanceSettings,
     Keyword,
+    SavedFilter,
     Subcategory,
     Tag,
     Transaction,
@@ -135,3 +136,9 @@ class FinanceSettingsAdmin(admin.ModelAdmin):
         "internal_transfer_subcategory",
         "updated_at",
     )
+
+
+@admin.register(SavedFilter)
+class SavedFilterAdmin(admin.ModelAdmin):
+    list_display = ("name", "updated_at")
+    search_fields = ("name",)
