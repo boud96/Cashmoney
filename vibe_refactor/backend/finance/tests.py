@@ -978,6 +978,32 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(payload["want_need_investment"][0]["name"], "want")
 
+    def test_dashboard_checkbox_none_marker_returns_no_transactions(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Visible with default filters",
+            amount=Decimal("-12.50"),
+            subcategory=self.subcategory,
+        )
+
+        default_response = self.client.get("/api/transactions/")
+        none_response = self.client.get(
+            "/api/transactions/",
+            {"category": "__none__", "limit": "10000"},
+        )
+        none_summary_response = self.client.get(
+            "/api/dashboard/summary/",
+            {"category": "__none__"},
+        )
+
+        self.assertEqual(default_response.status_code, 200)
+        self.assertEqual(json_body(default_response)["count"], 1)
+        self.assertEqual(none_response.status_code, 200)
+        self.assertEqual(json_body(none_response)["count"], 0)
+        self.assertEqual(none_summary_response.status_code, 200)
+        self.assertEqual(json_body(none_summary_response)["monthly"], [])
+
     def test_dashboard_split_by_owners_adjusts_summary_and_transaction_amounts(self):
         self.account.owners = 2
         self.account.save(update_fields=["owners"])

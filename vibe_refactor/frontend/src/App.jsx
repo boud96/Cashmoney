@@ -12,6 +12,15 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 
 const Plot = createPlotlyComponent(Plotly);
 const UNASSIGNED = "__unassigned__";
+const NO_SELECTION = "__none__";
+const CHECKLIST_FILTER_KEYS = [
+  "bank_account",
+  "category",
+  "direction",
+  "subcategory",
+  "want_need_investment",
+  "tag",
+];
 const pages = {
   dashboard: ["Dashboard", "Monthly flow, category mix, and transaction review."],
   import: ["Import", "Load bank statement CSV files into the local transaction database."],
@@ -162,6 +171,17 @@ function emptyFilters() {
   };
 }
 
+function initialChecklistFilters(refs) {
+  return {
+    bank_account: refs.accounts.map((item) => item.id),
+    category: [UNASSIGNED, ...refs.categories.map((item) => item.id)],
+    direction: ["income", "expense"],
+    subcategory: [UNASSIGNED, ...refs.subcategories.map((item) => item.id)],
+    tag: [UNASSIGNED, ...refs.tags.map((item) => item.id)],
+    want_need_investment: [...wniOptions.map(([value]) => value), UNASSIGNED],
+  };
+}
+
 function cloneFilters(filters) {
   return {
     ...emptyFilters(),
@@ -239,6 +259,7 @@ export default function App() {
     available_headers: [],
     detected: null,
   });
+  const filterSelectionsInitialized = useRef(false);
 
   const notify = useCallback((message) => {
     setToast(message);
@@ -256,7 +277,15 @@ export default function App() {
       apiGet("/keywords/"),
       apiGet("/settings/"),
     ]);
-    setRefs({ accounts, mappings, categories, subcategories, tags, keywords, settings });
+    const nextRefs = { accounts, mappings, categories, subcategories, tags, keywords, settings };
+    setRefs(nextRefs);
+    if (!filterSelectionsInitialized.current) {
+      filterSelectionsInitialized.current = true;
+      setFilters((current) => ({
+        ...current,
+        ...initialChecklistFilters(nextRefs),
+      }));
+    }
   }, []);
 
   const loadFilterDefaults = useCallback(async () => {
@@ -2665,7 +2694,7 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, options, s
   const [query, setQuery] = useState("");
   const selectedValues = value || [];
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
-  const showTools = searchable || selectedValues.length > 0;
+  const canSelectAll = selectedValues.length < options.length;
   const filteredOptions = useMemo(() => {
     const normalizedQuery = normalizeName(query);
     if (!normalizedQuery) {
@@ -2685,23 +2714,22 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, options, s
     <div className={`checkbox-filter-panel prototype-filter ${className}`.trim()}>
       <div className="prototype-filter-header">
         <span className="filter-label">{label}</span>
-        <span className="filter-count">{selectedValues.length ? `${selectedValues.length} selected` : "All"}</span>
+        <span className="filter-count">{selectedValues.length ? `${selectedValues.length} selected` : "None"}</span>
       </div>
-      {showTools && (
-        <div className={`prototype-filter-tools${searchable ? "" : " no-search"}`}>
-          {searchable && (
-            <input
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={`Search ${label.toLowerCase()}`}
-              type="search"
-              value={query}
-            />
-          )}
-          {selectedValues.length > 0 && (
-            <button className="filter-clear" onClick={() => onChange(name, [])} type="button">Clear</button>
-          )}
+      <div className={`prototype-filter-tools${searchable ? "" : " no-search"}`}>
+        {searchable && (
+          <input
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={`Search ${label.toLowerCase()}`}
+            type="search"
+            value={query}
+          />
+        )}
+        <div className="prototype-filter-buttons">
+          <button className="filter-clear" disabled={!canSelectAll} onClick={() => onChange(name, options.map(([optionValue]) => optionValue))} type="button">Select all</button>
+          <button className="filter-clear" disabled={selectedValues.length === 0} onClick={() => onChange(name, [])} type="button">Clear</button>
         </div>
-      )}
+      </div>
       <div className="checkbox-filter-list">
         {filteredOptions.length ? filteredOptions.map(([optionValue, text]) => (
           <label className="checkbox-filter-row" key={optionValue} title={text}>
@@ -3083,6 +3111,10 @@ function buildFilterParams(filters) {
   const params = {};
   Object.entries(filters).forEach(([key, value]) => {
     if (["include_ignored", "split_by_owners"].includes(key)) return;
+    if (CHECKLIST_FILTER_KEYS.includes(key)) {
+      params[key] = Array.isArray(value) && value.length ? value.join(",") : NO_SELECTION;
+      return;
+    }
     if (Array.isArray(value) ? value.length : value) {
       params[key] = Array.isArray(value) ? value.join(",") : value;
     }

@@ -62,6 +62,7 @@ from .services import (
 
 
 UNASSIGNED_FILTER_VALUE = "__unassigned__"
+NONE_FILTER_VALUE = "__none__"
 CONFIRM_DELETE_SAMPLE_DATA = "DELETE SAMPLE DATA"
 CONFIRM_DELETE_ALL_TRANSACTIONS = "DELETE ALL TRANSACTIONS"
 CONFIRM_DELETE_ALL_FINANCE_DATA = "DELETE ALL FINANCE DATA"
@@ -269,8 +270,16 @@ def filter_values(params, field_name):
     return values
 
 
+def filter_has_no_selection(params, field_name):
+    return NONE_FILTER_VALUE in filter_values(params, field_name)
+
+
 def split_unassigned_filter(params, field_name):
-    values = filter_values(params, field_name)
+    values = [
+        value
+        for value in filter_values(params, field_name)
+        if value != NONE_FILTER_VALUE
+    ]
     assigned_values = [value for value in values if value != UNASSIGNED_FILTER_VALUE]
     return assigned_values, UNASSIGNED_FILTER_VALUE in values
 
@@ -780,6 +789,17 @@ def filtered_transactions(request):
         queryset = queryset.filter(
             transaction_date__lte=parse_date_value(params["date_to"], "date_to")
         )
+    for field_name in [
+        "direction",
+        "want_need_investment",
+        "bank_account",
+        "category",
+        "subcategory",
+        "tag",
+    ]:
+        if filter_has_no_selection(params, field_name):
+            return queryset.none()
+
     direction_values = filter_values(params, "direction")
     if direction_values:
         for value in direction_values:

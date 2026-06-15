@@ -709,6 +709,11 @@ select option {
   font-weight: 760;
 }
 
+.filter-clear:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
 .filter-option-list {
   display: grid;
   gap: 2px;
@@ -810,6 +815,13 @@ select option {
   display: flex;
   justify-content: flex-end;
   min-height: 34px;
+}
+
+.prototype-filter-buttons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .prototype-filter-tools input {
