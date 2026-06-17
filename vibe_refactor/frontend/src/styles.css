@@ -926,6 +926,18 @@ select option {
   font-weight: 700;
 }
 
+.definition-checkbox-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.definition-checkbox-title .help-tooltip-button {
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+}
+
 .definition-checkbox-list {
   display: grid;
   gap: 2px;
@@ -1814,6 +1826,22 @@ select option {
 .compact-form {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
+}
+
+.app-settings-form {
+  grid-template-columns: minmax(300px, 1.15fr) minmax(260px, 1fr) auto;
+  align-items: end;
+}
+
+.app-settings-form .check-row,
+.app-settings-form .form-field,
+.app-settings-form > button {
+  align-self: end;
+}
+
+.app-settings-form > button {
+  min-height: 38px;
+  white-space: nowrap;
 }
 
 .compact-form button {

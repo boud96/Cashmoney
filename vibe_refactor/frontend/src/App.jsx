@@ -73,14 +73,10 @@ const mappingFields = [
   ["my_note", "My Note"],
   ["other_note", "Other Note"],
 ];
-const defaultCategorizationFields = [
-  "description",
-  "counterparty_name",
-  "counterparty_note",
-  "my_note",
-  "other_note",
-  "transaction_type",
-];
+const categorizationFieldOptions = mappingFields.filter(
+  ([key]) => !["original_id", "transaction_date", "posted_date", "amount", "currency"].includes(key),
+);
+const defaultCategorizationFields = categorizationFieldOptions.map(([key]) => key);
 const defaultParsingSettings = {
   delimiter: ",",
   quotechar: '"',
@@ -1674,13 +1670,13 @@ function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraf
 
   return (
     <div className="settings-grid">
-      <section className="panel">
+      <section className="panel wide-panel">
         <div className="panel-header">
           <h2>App Settings</h2>
         </div>
         <SettingsForm notify={notify} refs={refs} reloadAll={reloadAll} settings={refs.settings} />
       </section>
-      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} title="CSV Mappings">
+      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} title="CSV Mappings" wide>
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} title="Bank Accounts">
@@ -1734,7 +1730,7 @@ function SettingsForm({ notify, refs, reloadAll, settings }) {
   }
 
   return (
-    <form className="compact-form" onSubmit={submit}>
+    <form className="compact-form app-settings-form" onSubmit={submit}>
       <label className="check-row">
         <input
           checked={ignoreInternalAccounts}
@@ -1908,7 +1904,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     setManualParsingSettings(true);
     setDraft({
       column_map: sanitizeColumnMap(editingItem.column_map || {}),
-      categorization_fields: editingItem.categorization_fields || defaultCategorizationFields,
+      categorization_fields: editingItem.categorization_fields?.length ? editingItem.categorization_fields : defaultCategorizationFields,
       available_headers: editingItem.available_headers || [],
       detected: null,
     });
@@ -2061,8 +2057,9 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       <DefinitionCheckboxField
         className="mapping-categorization-field"
         label="Categorization Fields"
+        helpText="Keywords and recategorization build their matching text from these transaction fields. Select every field that can contain useful merchant, counterparty, note, symbol, or transaction-type text."
         onChange={(next) => setDraft((current) => ({ ...current, categorization_fields: next }))}
-        options={mappingFields.filter(([key]) => !["original_id", "transaction_date", "posted_date", "amount", "currency"].includes(key))}
+        options={categorizationFieldOptions}
         placeholder="No categorization fields selected"
         value={draft.categorization_fields}
       />
@@ -2231,7 +2228,7 @@ function ColorInput({ initialValue = "", label = "Color", name }) {
   );
 }
 
-function DefinitionCheckboxField({ className = "", label, onChange, options, placeholder = "None selected", value }) {
+function DefinitionCheckboxField({ className = "", helpText = "", label, onChange, options, placeholder = "None selected", value }) {
   const selectedValues = value || [];
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
 
@@ -2245,7 +2242,10 @@ function DefinitionCheckboxField({ className = "", label, onChange, options, pla
   return (
     <div className={`definition-checkbox-field ${className}`.trim()}>
       <div className="definition-checkbox-header">
-        <span>{label}</span>
+        <span className="definition-checkbox-title">
+          {label}
+          {helpText && <HelpTooltip text={helpText} />}
+        </span>
         <div className="prototype-filter-actions">
           <span className="filter-count">{selectedValues.length ? `${selectedValues.length} selected` : placeholder}</span>
           {selectedValues.length > 0 && (

@@ -23,9 +23,12 @@ class WantNeedInvestment:
 DEFAULT_CATEGORIZATION_FIELDS = [
     "description",
     "counterparty_name",
+    "counterparty_account_number",
+    "transaction_type",
+    "variable_symbol",
+    "specific_symbol",
+    "constant_symbol",
     "counterparty_note",
     "my_note",
     "other_note",
-    "transaction_type",
 ]
-
