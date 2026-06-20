@@ -601,6 +601,12 @@ textarea {
   outline: none;
 }
 
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--action);
+}
+
 textarea {
   resize: vertical;
 }
