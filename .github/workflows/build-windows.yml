@@ -41,11 +41,54 @@ jobs:
         shell: cmd
         run: build_packaged_app.bat
 
-      - name: Upload Windows build artifact
+      - name: Prepare Windows artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $dist = "desktop/dist"
+          $artifactRoot = "artifacts"
+          $setupDir = Join-Path $artifactRoot "setup"
+          $portableDir = Join-Path $artifactRoot "portable"
+          $unpackedDir = Join-Path $artifactRoot "win-unpacked"
+
+          New-Item -ItemType Directory -Force -Path $setupDir, $portableDir, $unpackedDir | Out-Null
+
+          $setup = Get-ChildItem -Path $dist -Filter "Cashmoney Setup *.exe" | Select-Object -First 1
+          if ($null -eq $setup) {
+            throw "Setup installer was not found in $dist."
+          }
+          Copy-Item -LiteralPath $setup.FullName -Destination $setupDir
+
+          $portable = Get-ChildItem -Path $dist -Filter "Cashmoney *.exe" |
+            Where-Object { $_.Name -notlike "Cashmoney Setup *" } |
+            Select-Object -First 1
+          if ($null -eq $portable) {
+            throw "Portable executable was not found in $dist."
+          }
+          Copy-Item -LiteralPath $portable.FullName -Destination $portableDir
+
+          if (!(Test-Path -LiteralPath "$dist/win-unpacked")) {
+            throw "Unpacked app folder was not found in $dist."
+          }
+          Copy-Item -LiteralPath "$dist/win-unpacked" -Destination $unpackedDir -Recurse
+
+      - name: Upload setup installer
         uses: actions/upload-artifact@v7
         with:
-          name: cashmoney-windows
-          path: |
-            desktop/dist/*.exe
-            desktop/dist/win-unpacked/**
+          name: cashmoney-setup-exe
+          path: artifacts/setup/**
+          if-no-files-found: error
+
+      - name: Upload portable executable
+        uses: actions/upload-artifact@v7
+        with:
+          name: cashmoney-portable-exe
+          path: artifacts/portable/**
+          if-no-files-found: error
+
+      - name: Upload unpacked Windows app
+        uses: actions/upload-artifact@v7
+        with:
+          name: cashmoney-win-unpacked
+          path: artifacts/win-unpacked/**
           if-no-files-found: error
