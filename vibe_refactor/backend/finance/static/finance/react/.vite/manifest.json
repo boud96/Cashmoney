@@ -1,11 +1,53 @@
 {
   "index.html": {
-    "file": "assets/index-D1EYbUhC.js",
+    "file": "assets/index-BuW-onQB.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
+    "dynamicImports": [
+      "src/pages/ImportPage.jsx",
+      "src/pages/DefinitionsPage.jsx",
+      "src/pages/MaintenancePage.jsx",
+      "src/pages/HelpPage.jsx"
+    ],
     "css": [
       "assets/index-BqTPEe8S.css"
+    ]
+  },
+  "src/pages/DefinitionsPage.jsx": {
+    "file": "assets/DefinitionsPage-DrngqVr0.js",
+    "name": "DefinitionsPage",
+    "src": "src/pages/DefinitionsPage.jsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html"
+    ]
+  },
+  "src/pages/HelpPage.jsx": {
+    "file": "assets/HelpPage-DgLsSmd7.js",
+    "name": "HelpPage",
+    "src": "src/pages/HelpPage.jsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html"
+    ]
+  },
+  "src/pages/ImportPage.jsx": {
+    "file": "assets/ImportPage-DYFHQGMc.js",
+    "name": "ImportPage",
+    "src": "src/pages/ImportPage.jsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html"
+    ]
+  },
+  "src/pages/MaintenancePage.jsx": {
+    "file": "assets/MaintenancePage-ChRoSgeS.js",
+    "name": "MaintenancePage",
+    "src": "src/pages/MaintenancePage.jsx",
+    "isDynamicEntry": true,
+    "imports": [
+      "index.html"
     ]
   }
 }
