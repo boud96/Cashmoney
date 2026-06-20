@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
 import { AgGridReact } from "ag-grid-react";
-import { AllCommunityModule, ModuleRegistry } from "ag-grid-community";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
 import { LoadingButton } from "../components.jsx";
@@ -38,6 +36,43 @@ import {
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 const Plot = createPlotlyComponent(Plotly);
+const transactionGridTheme = themeQuartz
+  .withParams({
+    accentColor: "var(--action)",
+    backgroundColor: "var(--bg)",
+    borderColor: "var(--border)",
+    browserColorScheme: "dark",
+    cellTextColor: "var(--text)",
+    chromeBackgroundColor: "var(--subtle-bg)",
+    dataBackgroundColor: "var(--surface)",
+    foregroundColor: "var(--text)",
+    headerBackgroundColor: "var(--subtle-bg)",
+    headerTextColor: "var(--text)",
+    menuBackgroundColor: "var(--surface)",
+    oddRowBackgroundColor: "var(--surface)",
+    rowHoverColor: "var(--surface-2)",
+    selectedRowBackgroundColor: "var(--focus-ring)",
+    wrapperBorder: "1px solid var(--border)",
+    wrapperBorderRadius: "8px",
+  }, "dark")
+  .withParams({
+    accentColor: "var(--action)",
+    backgroundColor: "var(--bg)",
+    borderColor: "var(--border)",
+    browserColorScheme: "light",
+    cellTextColor: "var(--text)",
+    chromeBackgroundColor: "var(--subtle-bg)",
+    dataBackgroundColor: "var(--surface)",
+    foregroundColor: "var(--text)",
+    headerBackgroundColor: "var(--subtle-bg)",
+    headerTextColor: "var(--text)",
+    menuBackgroundColor: "var(--surface)",
+    oddRowBackgroundColor: "var(--surface)",
+    rowHoverColor: "var(--surface-2)",
+    selectedRowBackgroundColor: "var(--focus-ring)",
+    wrapperBorder: "1px solid var(--border)",
+    wrapperBorderRadius: "8px",
+  }, "light");
 
 export default function DashboardPage({
   filters,
@@ -398,6 +433,7 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
         const category = categoryLookup.get(params.value?.id);
         return <ColorCell color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
       },
+      valueFormatter: (params) => params.value?.name || "Unassigned",
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
       width: 150,
     },
@@ -406,7 +442,8 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
       cellEditorParams: { values: subcategoryOptions },
       editable: true,
       field: "subcategory_id",
-      headerName: "Subcategory âœŽ",
+      headerClass: "editable-header",
+      headerName: "Subcategory",
       cellRenderer: (params) => {
         if (params.data?.categorization_conflict) {
           return <ConflictCell />;
@@ -426,7 +463,8 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
       cellEditorParams: { values: ["", "want", "need", "investment"] },
       editable: true,
       field: "want_need_investment",
-      headerName: "WNI âœŽ",
+      headerClass: "editable-header",
+      headerName: "WNI",
       cellRenderer: (params) => <WniCell value={params.value} />,
       valueFormatter: (params) => (params.value ? titleCase(params.value) : "Unassigned"),
       cellClass: (params) => `editable-cell ${!params.value ? "muted-cell" : ""}`,
@@ -434,7 +472,8 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
     },
     {
       field: "tags",
-      headerName: "Tags âœŽ",
+      headerClass: "editable-header",
+      headerName: "Tags",
       cellRenderer: (params) => (
         <EditableTagCell
           allTags={refs.tags}
@@ -444,13 +483,15 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
           updateTransaction={updateTransaction}
         />
       ),
+      valueFormatter: (params) => (params.value || []).map((tag) => tag.name).join(", ") || "No tags",
       sortable: false,
       flex: 1,
       minWidth: 240,
     },
     {
       field: "is_ignored",
-      headerName: "Ignored âœŽ",
+      headerClass: "editable-header",
+      headerName: "Ignored",
       cellRenderer: (params) => (
         <input
           checked={Boolean(params.value)}
@@ -486,7 +527,7 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
   }
 
   return (
-    <div className="ag-theme-quartz transaction-grid">
+    <div className="transaction-grid">
       <AgGridReact
         columnDefs={columnDefs}
         defaultColDef={{ resizable: true, sortable: true }}
@@ -496,6 +537,7 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
         rowData={rowData}
         rowHeight={48}
         stopEditingWhenCellsLoseFocus
+        theme={transactionGridTheme}
       />
     </div>
   );

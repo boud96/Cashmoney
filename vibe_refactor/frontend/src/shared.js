@@ -92,8 +92,10 @@ export function applyTheme(theme) {
   const normalizedTheme = normalizeTheme(theme);
   if (normalizedTheme === "light") {
     document.documentElement.setAttribute("data-theme", "light");
+    document.documentElement.setAttribute("data-ag-theme-mode", "light");
   } else {
     document.documentElement.removeAttribute("data-theme");
+    document.documentElement.setAttribute("data-ag-theme-mode", "dark");
   }
   window.localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme);
 }

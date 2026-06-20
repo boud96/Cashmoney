@@ -1,6 +1,6 @@
 {
   "index.html": {
-    "file": "assets/index-BuW-onQB.js",
+    "file": "assets/index-ChzVvF8v.js",
     "name": "index",
     "src": "index.html",
     "isEntry": true,
@@ -11,11 +11,11 @@
       "src/pages/HelpPage.jsx"
     ],
     "css": [
-      "assets/index-BqTPEe8S.css"
+      "assets/index-BnB7lDtj.css"
     ]
   },
   "src/pages/DefinitionsPage.jsx": {
-    "file": "assets/DefinitionsPage-DrngqVr0.js",
+    "file": "assets/DefinitionsPage-BE2jaW1i.js",
     "name": "DefinitionsPage",
     "src": "src/pages/DefinitionsPage.jsx",
     "isDynamicEntry": true,
@@ -24,7 +24,7 @@
     ]
   },
   "src/pages/HelpPage.jsx": {
-    "file": "assets/HelpPage-DgLsSmd7.js",
+    "file": "assets/HelpPage-CpC0TvSZ.js",
     "name": "HelpPage",
     "src": "src/pages/HelpPage.jsx",
     "isDynamicEntry": true,
@@ -33,7 +33,7 @@
     ]
   },
   "src/pages/ImportPage.jsx": {
-    "file": "assets/ImportPage-DYFHQGMc.js",
+    "file": "assets/ImportPage-BsdCJzbO.js",
     "name": "ImportPage",
     "src": "src/pages/ImportPage.jsx",
     "isDynamicEntry": true,
@@ -42,7 +42,7 @@
     ]
   },
   "src/pages/MaintenancePage.jsx": {
-    "file": "assets/MaintenancePage-ChRoSgeS.js",
+    "file": "assets/MaintenancePage-BS9sxQ0Z.js",
     "name": "MaintenancePage",
     "src": "src/pages/MaintenancePage.jsx",
     "isDynamicEntry": true,
