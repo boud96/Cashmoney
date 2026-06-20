@@ -187,6 +187,39 @@ button {
   border-color: var(--border);
 }
 
+.sidebar-footer {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-tool-button {
+  align-items: center;
+  background: color-mix(in srgb, var(--sidebar-bg) 82%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  padding: 0;
+  width: 38px;
+}
+
+.sidebar-tool-button:hover,
+.sidebar-tool-button:focus {
+  background: var(--surface-2);
+  border-color: var(--action);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.icon-svg {
+  flex: 0 0 auto;
+}
+
 .main {
   min-width: 0;
   padding: 24px;
@@ -1083,6 +1116,9 @@ select option {
 }
 
 .dashboard-action-section {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
   padding: 12px 0;
   border-top: 1px solid var(--border);
 }
@@ -1108,8 +1144,16 @@ select option {
 }
 
 .dashboard-action-card .primary-action {
-  width: 100%;
+  flex: 1 1 auto;
   min-height: 38px;
+  min-width: 0;
+  padding-inline: 10px;
+}
+
+.dashboard-icon-action {
+  flex: 0 0 36px;
+  min-height: 38px;
+  padding: 0;
 }
 
 .positive,
@@ -2085,6 +2129,10 @@ td {
   font-weight: 760;
 }
 
+.danger-link-button {
+  text-decoration: none;
+}
+
 .danger-button:disabled {
   cursor: wait;
   opacity: 0.55;
@@ -2224,6 +2272,16 @@ td {
   }
 }
 
+@media (max-width: 1320px) {
+  .dashboard-action-section {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-action-card .primary-action {
+    flex-basis: 100%;
+  }
+}
+
 @media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -2244,6 +2302,11 @@ td {
   .nav-tabs {
     display: flex;
     flex-wrap: wrap;
+    margin-top: 0;
+  }
+
+  .sidebar-footer {
+    margin-left: auto;
     margin-top: 0;
   }
 

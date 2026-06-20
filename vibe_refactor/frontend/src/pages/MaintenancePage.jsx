@@ -250,6 +250,15 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
           <p>These actions permanently remove local finance data from this database.</p>
         </div>
         <div className="danger-action-grid">
+          <article className="danger-card">
+            <div>
+              <h3>Django admin</h3>
+              <p>Open the raw Django admin interface for direct database maintenance.</p>
+            </div>
+            <a className="danger-button danger-link-button" href="/admin/" rel="noreferrer" target="_blank">
+              Admin
+            </a>
+          </article>
           {actions.map((action) => (
             <article className="danger-card" key={action.phrase}>
               <div>

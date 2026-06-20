@@ -81,6 +81,7 @@ export default function DashboardPage({
   importBusy,
   notify,
   onFilterChange,
+  onToggleHideAmounts,
   recategorizeResult,
   refs,
   reloadDashboard,
@@ -360,6 +361,16 @@ export default function DashboardPage({
         <div className="metric dashboard-action-card">
           <div className="metric-label">Actions</div>
           <div className="dashboard-action-section">
+            <button
+              aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
+              aria-pressed={hideAmounts}
+              className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
+              onClick={onToggleHideAmounts}
+              title={hideAmounts ? "Show amounts" : "Hide amounts"}
+              type="button"
+            >
+              {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
             <LoadingButton
               busy={recategorizing}
               busyLabel="Recategorizing"
@@ -391,6 +402,34 @@ export default function DashboardPage({
         <TransactionGrid conflictIds={conflictIds} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
+  );
+}
+
+function IconSvg({ children }) {
+  return (
+    <svg aria-hidden="true" className="icon-svg" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
+      {children}
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <IconSvg>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </IconSvg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <IconSvg>
+      <path d="m3 3 18 18" />
+      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+      <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.2 17.2 0 0 1-2.2 3.2" />
+      <path d="M6.2 6.5C3.5 8.2 2 12 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8" />
+    </IconSvg>
   );
 }
 

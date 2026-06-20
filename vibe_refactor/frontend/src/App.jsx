@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, apiPatch } from "./api.js";
-import { LoadingButton, Spinner } from "./components.jsx";
+import { Spinner } from "./components.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import {
   accentPresets,
@@ -50,7 +50,6 @@ export default function App() {
   const [transactionPage, setTransactionPage] = useState({ count: 0, total_count: 0, results: [] });
   const [recategorizeResult, setRecategorizeResult] = useState(null);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
-  const [refreshingApp, setRefreshingApp] = useState(false);
   const [importReport, setImportReport] = useState(null);
   const [maintenanceSummary, setMaintenanceSummary] = useState(null);
   const [mappingDraft, setMappingDraft] = useState({
@@ -101,7 +100,6 @@ export default function App() {
   }, []);
 
   const loadAll = useCallback(async () => {
-    setRefreshingApp(true);
     try {
       await apiGet("/health/");
       setStatus("Backend online");
@@ -109,8 +107,6 @@ export default function App() {
     } catch (error) {
       setStatus("Backend offline");
       notify(error.message);
-    } finally {
-      setRefreshingApp(false);
     }
   }, [loadFilterDefaults, loadReferenceData, notify]);
 
@@ -233,6 +229,27 @@ export default function App() {
             </button>
           ))}
         </nav>
+        <div className="sidebar-footer" aria-label="Display preferences">
+          <button
+            aria-label="Choose accent color"
+            className="sidebar-tool-button accent-picker-trigger"
+            onClick={() => setIsAccentPickerOpen(true)}
+            title="Choose accent color"
+            type="button"
+          >
+            <span className="accent-swatch" style={{ background: accent || defaultAccentForTheme(theme) }} />
+          </button>
+          <button
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-pressed={theme === "light"}
+            className="sidebar-tool-button theme-toggle"
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            type="button"
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+        </div>
       </aside>
 
       <main className="main">
@@ -241,31 +258,6 @@ export default function App() {
             <h1>{title}</h1>
             <p>{kicker}</p>
           </div>
-          <div className="topbar-actions">
-            <button className="link-button accent-picker-trigger" onClick={() => setIsAccentPickerOpen(true)} title="Choose accent color" type="button">
-              <span className="accent-swatch" style={{ background: accent || defaultAccentForTheme(theme) }} />
-              <span>Accent</span>
-            </button>
-            <button
-              aria-pressed={theme === "light"}
-              className="link-button theme-toggle"
-              onClick={toggleTheme}
-              type="button"
-            >
-              {theme === "dark" ? "Light mode" : "Dark mode"}
-            </button>
-            <button
-              aria-pressed={hideAmounts}
-              className={`link-button privacy-toggle ${hideAmounts ? "is-active" : ""}`}
-              onClick={toggleHideAmounts}
-              title="Hide amount values"
-              type="button"
-            >
-              {hideAmounts ? "Show amounts" : "Hide amounts"}
-            </button>
-            <a className="link-button" href="/admin/" rel="noreferrer" target="_blank">Admin</a>
-            <LoadingButton busy={refreshingApp} busyLabel="Refreshing" className="primary-action" onClick={loadAll} type="button">Refresh</LoadingButton>
-          </div>
         </header>
 
         {activePage === "dashboard" && (
@@ -273,6 +265,7 @@ export default function App() {
             filters={filters}
             hideAmounts={hideAmounts}
             importBusy={loadingDashboard}
+            onToggleHideAmounts={toggleHideAmounts}
             onFilterChange={updateFilter}
             refs={refs}
             recategorizeResult={recategorizeResult}
@@ -354,6 +347,38 @@ export default function App() {
       )}
       <div className={`toast ${toast ? "is-visible" : ""}`}>{toast}</div>
     </div>
+  );
+}
+
+function IconSvg({ children }) {
+  return (
+    <svg aria-hidden="true" className="icon-svg" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
+      {children}
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <IconSvg>
+      <path d="M12 3a6.8 6.8 0 0 0 9 8.9A9 9 0 1 1 12 3Z" />
+    </IconSvg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <IconSvg>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2" />
+      <path d="M12 20v2" />
+      <path d="m4.93 4.93 1.41 1.41" />
+      <path d="m17.66 17.66 1.41 1.41" />
+      <path d="M2 12h2" />
+      <path d="M20 12h2" />
+      <path d="m6.34 17.66-1.41 1.41" />
+      <path d="m19.07 4.93-1.41 1.41" />
+    </IconSvg>
   );
 }
 
