@@ -31,6 +31,7 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+!backend/cashmoney-backend.spec
 
 # Installer logs
 pip-log.txt
@@ -60,6 +61,7 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+*.sqlite3
 
 # Flask stuff:
 instance/
@@ -121,7 +123,7 @@ celerybeat.pid
 
 # Environments
 .env
-.venv
+.venv/
 env/
 venv/
 ENV/
@@ -155,3 +157,17 @@ cython_debug/
 # PyCharm
 .idea/
 /data/
+
+# Frontend / desktop dependencies
+desktop/node_modules/
+frontend/node_modules/
+
+# Portable local tooling
+tools/node/
+tools/node.old/
+tools/*.zip
+
+# App build outputs
+backend/build/
+backend/dist/
+desktop/dist/

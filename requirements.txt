@@ -1,8 +1,0 @@
-Django==5.2.4
-django-multiselectfield~=1.0.1
-pandas==2.3.3
-plotly==6.2.0
-psycopg2-binary==2.9.10
-python-dotenv==1.1.1
-Requests==2.32.4
-streamlit==1.51.0
