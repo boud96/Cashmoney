@@ -62,12 +62,12 @@ def delete_sample_data():
 @transaction.atomic
 def seed_sample_data(
     *,
-    admin_email="admin@example.local",
-    admin_password="CashmoneyDemo2026!",
-    admin_username="admin",
+    admin_email="",
+    admin_password="",
+    admin_username="",
     if_empty=False,
     reset_sample=False,
-    skip_admin=False,
+    skip_admin=True,
 ):
     if reset_sample:
         delete_sample_data()
@@ -77,6 +77,8 @@ def seed_sample_data(
 
     admin = None
     if not skip_admin:
+        if not admin_username or not admin_password:
+            raise ValueError("Admin username and password are required.")
         admin = create_admin(admin_username, admin_password, admin_email)
 
     mappings = create_csv_mappings()

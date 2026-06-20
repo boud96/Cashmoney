@@ -61,6 +61,18 @@ If your shell does not like the spaced path examples above, use:
 & "..\.venv\Scripts\python.exe" manage.py runserver 127.0.0.1:8000
 ```
 
+## Django Admin
+
+The app does not create a default admin account or ship hardcoded admin
+credentials. To use the Django admin, create a local superuser yourself:
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\manage.py createsuperuser
+```
+
+Then open `/admin/` from the running app and sign in with the credentials you
+created.
+
 ## Packaging
 
 To build a Windows package using Electron plus a PyInstaller Django backend:

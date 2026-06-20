@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import IntegrityError, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 
@@ -173,8 +174,8 @@ class SampleDataCommandTests(TestCase):
             ).count(),
         }
 
-    def test_if_empty_skip_admin_creates_exact_sample_dataset(self):
-        self.seed("--if-empty", "--skip-admin")
+    def test_if_empty_creates_exact_sample_dataset_without_admin(self):
+        self.seed("--if-empty")
 
         self.assertEqual(
             self.sample_counts(),
@@ -191,6 +192,28 @@ class SampleDataCommandTests(TestCase):
         )
         self.assertFalse(get_user_model().objects.exists())
         self.assertTrue(BankAccount.objects.filter(owners=2).exists())
+
+    def test_create_admin_requires_explicit_credentials(self):
+        with self.assertRaises(CommandError):
+            self.seed("--create-admin", "--admin-username", "local-admin")
+
+    def test_create_admin_uses_supplied_credentials(self):
+        self.seed(
+            "--if-empty",
+            "--create-admin",
+            "--admin-username",
+            "local-admin",
+            "--admin-password",
+            "local-test-password",
+            "--admin-email",
+            "local-admin@example.local",
+        )
+
+        user = get_user_model().objects.get(username="local-admin")
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertEqual(user.email, "local-admin@example.local")
+        self.assertTrue(user.check_password("local-test-password"))
 
     def test_sample_data_is_prefixed_spans_four_months_and_has_ignored_transfers(self):
         self.seed("--if-empty", "--skip-admin")
