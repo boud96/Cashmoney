@@ -15,19 +15,21 @@ if exist "%LOCAL_NPM%" (
     set "PATH=%LOCAL_NODE_DIR%;%PATH%"
     set "NPM=%LOCAL_NPM%"
 ) else (
-    where npm >nul 2>nul
+    where npm.cmd >nul 2>nul
     if errorlevel 1 (
         echo npm is not available. Run setup_dev.bat first.
         exit /b 1
     )
-    set "NPM=npm"
+    for /f "delims=" %%I in ('where npm.cmd') do (
+        if not defined NPM set "NPM=%%I"
+    )
 )
 
 if not exist "%FRONTEND%\node_modules" (
     cd /d "%FRONTEND%"
-    "%NPM%" install
+    call "%NPM%" install
     if errorlevel 1 exit /b 1
 )
 
 cd /d "%FRONTEND%"
-"%NPM%" run build
+call "%NPM%" run build

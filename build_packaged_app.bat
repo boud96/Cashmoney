@@ -30,15 +30,19 @@ if exist "..\tools\node\node.exe" (
   set "NPM=..\tools\node\npm.cmd"
   set "NPX=..\tools\node\npx.cmd"
 ) else (
-  set "NPM=npm"
-  set "NPX=npx"
+  for /f "delims=" %%I in ('where npm.cmd') do (
+    if not defined NPM set "NPM=%%I"
+  )
+  for /f "delims=" %%I in ('where npx.cmd') do (
+    if not defined NPX set "NPX=%%I"
+  )
 )
-"%NPM%" install
+call "%NPM%" install
 if errorlevel 1 (
   popd
   exit /b 1
 )
-"%NPM%" run dist
+call "%NPM%" run dist
 if errorlevel 1 (
   popd
   exit /b 1

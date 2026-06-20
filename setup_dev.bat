@@ -24,7 +24,7 @@ if exist "%FRONTEND%\package.json" (
     if not exist "%FRONTEND%\node_modules" (
         echo Installing frontend dependencies...
         pushd "%FRONTEND%"
-        "%NPM%" install
+        call "%NPM%" install
         if errorlevel 1 (
             popd
             exit /b 1
@@ -37,7 +37,7 @@ if exist "%DESKTOP%\package.json" (
     if not exist "%DESKTOP%\node_modules" (
         echo Installing desktop dependencies...
         pushd "%DESKTOP%"
-        "%NPM%" install
+        call "%NPM%" install
         if errorlevel 1 (
             popd
             exit /b 1
@@ -59,9 +59,11 @@ if exist "%LOCAL_NPM%" (
     exit /b 0
 )
 
-where npm >nul 2>nul
+where npm.cmd >nul 2>nul
 if not errorlevel 1 (
-    set "NPM=npm"
+    for /f "delims=" %%I in ('where npm.cmd') do (
+        if not defined NPM set "NPM=%%I"
+    )
     exit /b 0
 )
 
