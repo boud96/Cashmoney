@@ -5,16 +5,27 @@ Electron packaging support.
 
 ## Launch
 
-Run the app from Windows with:
+For a fresh clone on Windows, bootstrap the local Python and Node dependencies
+first:
+
+```powershell
+.\setup_dev.bat
+```
+
+The setup script creates `.venv`, installs backend dependencies, and installs
+frontend/desktop npm dependencies. If npm is not available globally, it downloads
+a portable Node.js runtime into `tools\node`.
+
+Then run the app with:
 
 ```powershell
 .\run_app.bat
 ```
 
-The launcher applies Django migrations, builds the React frontend when needed,
-starts the backend, and opens the app. If Electron has been installed in
-`desktop\node_modules`, it launches the Electron shell; otherwise it opens the
-Django-served frontend in the default browser.
+The launcher also calls `setup_dev.bat`, applies Django migrations, builds the
+React frontend when needed, starts the backend, and opens the app. If Electron
+has been installed in `desktop\node_modules`, it launches the Electron shell;
+otherwise it opens the Django-served frontend in the default browser.
 
 To build the React frontend manually:
 
@@ -28,8 +39,7 @@ To install the Electron shell:
 .\desktop\install_desktop.bat
 ```
 
-This uses the portable npm in `tools\node` when present. Then run
-`.\run_app.bat` again.
+This also calls `setup_dev.bat`, so it works on a fresh clone.
 
 ## Backend
 
@@ -58,6 +68,9 @@ To build a Windows package using Electron plus a PyInstaller Django backend:
 ```powershell
 .\build_packaged_app.bat
 ```
+
+This also calls `setup_dev.bat`, so it creates `.venv` and installs npm
+dependencies before building.
 
 This command:
 
