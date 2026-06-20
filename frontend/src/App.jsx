@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, apiPatch } from "./api.js";
 import { Spinner } from "./components.jsx";
@@ -15,6 +15,7 @@ import {
   getStoredAccent,
   getStoredHideAmounts,
   getStoredTheme,
+  HIDE_AMOUNTS_STORAGE_KEY,
   initialChecklistFilters,
   normalizeHexColor,
   pages,
@@ -260,49 +261,51 @@ export default function App() {
           </div>
         </header>
 
-        {activePage === "dashboard" && (
-          <DashboardPage
-            filters={filters}
-            hideAmounts={hideAmounts}
-            importBusy={loadingDashboard}
-            onToggleHideAmounts={toggleHideAmounts}
-            onFilterChange={updateFilter}
-            refs={refs}
-            recategorizeResult={recategorizeResult}
-            setFilters={setFilters}
-            setRecategorizeResult={setRecategorizeResult}
-            summary={summary}
-            transactionPage={transactionPage}
-            updateTransaction={updateTransaction}
-            filterParams={filterParams}
-            notify={notify}
-            reloadDashboard={loadDashboard}
-          />
-        )}
-        <Suspense fallback={<PageFallback />}>
-          {activePage === "import" && (
-            <ImportPage importReport={importReport} notify={notify} refs={refs} reloadAll={loadAll} setImportReport={setImportReport} />
-          )}
-          {activePage === "settings" && (
-            <DefinitionsPage
-              mappingDraft={mappingDraft}
-              notify={notify}
+        <PageErrorBoundary key={activePage}>
+          {activePage === "dashboard" && (
+            <DashboardPage
+              filters={filters}
+              hideAmounts={hideAmounts}
+              importBusy={loadingDashboard}
+              onToggleHideAmounts={toggleHideAmounts}
+              onFilterChange={updateFilter}
               refs={refs}
-              reloadAll={loadAll}
-              setMappingDraft={setMappingDraft}
-            />
-          )}
-          {activePage === "maintenance" && (
-            <MaintenancePage
+              recategorizeResult={recategorizeResult}
+              setFilters={setFilters}
+              setRecategorizeResult={setRecategorizeResult}
+              summary={summary}
+              transactionPage={transactionPage}
+              updateTransaction={updateTransaction}
+              filterParams={filterParams}
               notify={notify}
-              reloadAll={loadAll}
               reloadDashboard={loadDashboard}
-              reloadMaintenance={loadMaintenance}
-              summary={maintenanceSummary}
             />
           )}
-          {activePage === "help" && <HelpPage />}
-        </Suspense>
+          <Suspense fallback={<PageFallback />}>
+            {activePage === "import" && (
+              <ImportPage importReport={importReport} notify={notify} refs={refs} reloadAll={loadAll} setImportReport={setImportReport} />
+            )}
+            {activePage === "settings" && (
+              <DefinitionsPage
+                mappingDraft={mappingDraft}
+                notify={notify}
+                refs={refs}
+                reloadAll={loadAll}
+                setMappingDraft={setMappingDraft}
+              />
+            )}
+            {activePage === "maintenance" && (
+              <MaintenancePage
+                notify={notify}
+                reloadAll={loadAll}
+                reloadDashboard={loadDashboard}
+                reloadMaintenance={loadMaintenance}
+                summary={maintenanceSummary}
+              />
+            )}
+            {activePage === "help" && <HelpPage />}
+          </Suspense>
+        </PageErrorBoundary>
       </main>
       {isAccentPickerOpen && (
         <div className="modal-backdrop" onMouseDown={() => setIsAccentPickerOpen(false)} role="presentation">
@@ -348,6 +351,39 @@ export default function App() {
       <div className={`toast ${toast ? "is-visible" : ""}`}>{toast}</div>
     </div>
   );
+}
+
+class PageErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error) {
+    console.error("Page render failed", error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <section className="panel page-error-panel">
+          <div>
+            <h2>Page failed to render</h2>
+            <p>{this.state.error.message || "An unexpected frontend error occurred."}</p>
+          </div>
+          <button className="link-button" onClick={() => this.setState({ error: null })} type="button">
+            Try again
+          </button>
+        </section>
+      );
+    }
+
+    return this.props.children;
+  }
 }
 
 function IconSvg({ children }) {
