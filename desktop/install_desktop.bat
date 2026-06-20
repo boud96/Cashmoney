@@ -1,6 +1,9 @@
 @echo off
 setlocal
 
+call "%~dp0..\setup_dev.bat"
+if errorlevel 1 exit /b 1
+
 set "LOCAL_NODE_DIR=%~dp0..\tools\node"
 set "LOCAL_NPM=%~dp0..\tools\node\npm.cmd"
 

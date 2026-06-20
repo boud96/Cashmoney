@@ -6,20 +6,28 @@ set "FRONTEND=%ROOT%frontend"
 set "LOCAL_NODE_DIR=%ROOT%tools\node"
 set "LOCAL_NPM=%LOCAL_NODE_DIR%\npm.cmd"
 
-if exist "%LOCAL_NODE_DIR%\node.exe" (
-    set "PATH=%LOCAL_NODE_DIR%;%PATH%"
+if /I not "%~1"=="--skip-setup" (
+    call "%ROOT%setup_dev.bat"
+    if errorlevel 1 exit /b 1
 )
 
-if not exist "%LOCAL_NPM%" (
-    echo Portable npm is missing from tools\node.
-    exit /b 1
+if exist "%LOCAL_NPM%" (
+    set "PATH=%LOCAL_NODE_DIR%;%PATH%"
+    set "NPM=%LOCAL_NPM%"
+) else (
+    where npm >nul 2>nul
+    if errorlevel 1 (
+        echo npm is not available. Run setup_dev.bat first.
+        exit /b 1
+    )
+    set "NPM=npm"
 )
 
 if not exist "%FRONTEND%\node_modules" (
     cd /d "%FRONTEND%"
-    "%LOCAL_NPM%" install
+    "%NPM%" install
     if errorlevel 1 exit /b 1
 )
 
 cd /d "%FRONTEND%"
-"%LOCAL_NPM%" run build
+"%NPM%" run build

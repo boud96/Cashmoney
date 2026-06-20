@@ -3,12 +3,10 @@ setlocal
 
 cd /d "%~dp0"
 
-if not exist ".venv\Scripts\python.exe" (
-  echo Python virtual environment not found at .venv
-  exit /b 1
-)
+call setup_dev.bat
+if errorlevel 1 exit /b 1
 
-call build_frontend.bat
+call build_frontend.bat --skip-setup
 if errorlevel 1 exit /b 1
 
 ".venv\Scripts\python.exe" -m pip show pyinstaller >nul 2>nul
@@ -29,13 +27,18 @@ popd
 pushd desktop
 if exist "..\tools\node\node.exe" (
   set "PATH=%CD%\..\tools\node;%PATH%"
+  set "NPM=..\tools\node\npm.cmd"
+  set "NPX=..\tools\node\npx.cmd"
+) else (
+  set "NPM=npm"
+  set "NPX=npx"
 )
-call npm install
+"%NPM%" install
 if errorlevel 1 (
   popd
   exit /b 1
 )
-call npm run dist
+"%NPM%" run dist
 if errorlevel 1 (
   popd
   exit /b 1
