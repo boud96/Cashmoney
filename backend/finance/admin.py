@@ -33,11 +33,13 @@ class TransactionAdmin(admin.ModelAdmin):
         "subcategory",
         "want_need_investment",
         "is_ignored",
+        "is_categorization_locked",
     )
     list_filter = (
         "direction",
         "want_need_investment",
         "is_ignored",
+        "is_categorization_locked",
         "bank_account",
         "subcategory__category",
         "subcategory",

@@ -1,3 +1,31 @@
+const workflowSteps = [
+  "Define categories, subcategories, tags, and CSV mappings.",
+  "Assign a default CSV mapping to each bank account.",
+  "Preview and import CSV statements.",
+  "Review filters, stats, charts, and transactions on the Dashboard.",
+  "Improve keyword rules, then recategorize the filtered transactions.",
+];
+
+const conceptItems = [
+  ["Bank Account", "Groups imported transactions and decides which CSV mapping is used during import."],
+  ["CSV Mapping", "Describes how a bank export is parsed: dates, separators, columns, currency, and categorization fields."],
+  ["Category", "The top-level reporting bucket. It is derived from the assigned subcategory."],
+  ["Subcategory", "The main assignable classification value for a transaction."],
+  ["WNI", "Want, Need, or Investment. Useful for expense analysis beyond category."],
+  ["Tags", "Flexible labels for filtering and grouping transactions across categories."],
+  ["Ignored", "Marks transactions that should be excluded from normal dashboard analysis unless explicitly included."],
+  ["Locked", "Protects manual categorization edits from normal recategorization."],
+];
+
+const troubleshootingItems = [
+  ["Import button is disabled", "Choose a CSV file, select a bank account, make sure that account has a default CSV mapping, then run Preview Import first."],
+  ["CSV preview has errors", "Check the CSV mapping delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
+  ["No transactions are shown", "A checklist filter with no selected items means show nothing. Use Select all or load a saved filter."],
+  ["A row did not recategorize", "It may be locked. Enable Include locked before recategorizing if you intentionally want to reset locked rows."],
+  ["Internal transfers are not detected", "Check App Settings, bank account numbers, and whether the relevant account-number field is selected in CSV Mapping categorization fields."],
+  ["Charts look wrong", "Review date range, ignored/locked inclusion, direction, account, category, subcategory, WNI, tag, and saved filter state."],
+];
+
 export default function HelpPage() {
   return (
     <div className="help-page">
@@ -5,223 +33,185 @@ export default function HelpPage() {
         <div>
           <h2>Cashmoney Help Guide</h2>
           <p>
-            Cashmoney is a local desktop finance app for importing bank statement CSV files,
-            automatically categorizing transactions, reviewing spending patterns, and maintaining
-            your own finance definitions. The normal workflow is: define accounts and mappings,
-            import CSV files, review the dashboard, adjust rules, then recategorize filtered
-            transactions when your rules improve.
+            Cashmoney is a local finance app for importing bank CSV files, categorizing transactions,
+            reviewing spending, and maintaining your own rules. Most work starts in Definitions,
+            continues through Import, and gets reviewed or corrected on the Dashboard.
           </p>
         </div>
-        <HelpScreenshot
-          label="Screenshot placeholder"
-          note="Add a full Dashboard screenshot here after the final layout is stable."
-        />
+        <div className="help-workflow">
+          <h3>Normal workflow</h3>
+          <ol>
+            {workflowSteps.map((step) => <li key={step}>{step}</li>)}
+          </ol>
+        </div>
       </section>
 
       <section className="help-grid">
-        <article className="panel help-card">
-          <h2>1. Set Up Definitions First</h2>
-          <p>
-            The Definitions page is where you create the objects the rest of the app depends on.
-            You can add bank accounts, CSV mappings, categories, subcategories, tags, and keyword
-            rules. The dashboard and import flow become much more useful once these are defined.
-          </p>
-          <ul>
-            <li><strong>Bank Accounts:</strong> create one entry per account you import from. Use owner count for shared accounts.</li>
-            <li><strong>CSV Mappings:</strong> describe how each bank statement format maps columns into transactions.</li>
-            <li><strong>Categories:</strong> create broad reporting groups such as Food, Housing, Transport, or Income.</li>
-            <li><strong>Subcategories:</strong> create the assignable child values, such as Groceries, Coffee, Rent, or Salary.</li>
-            <li><strong>Tags:</strong> add flexible labels for cross-cutting topics like Vacation, Work, Cash, or Family.</li>
-            <li><strong>Keywords:</strong> define text matching rules that categorize imported or existing transactions.</li>
-          </ul>
-          <HelpScreenshot
-            label="Definitions screenshot"
-            note="Capture the Definitions page showing several populated sections and the color picker."
-          />
-        </article>
-
-        <article className="panel help-card">
-          <h2>2. Create A CSV Mapping</h2>
-          <p>
-            A CSV mapping tells Cashmoney how to read a specific bank export. If different banks
-            use different column names, separators, date formats, or decimal separators, create a
-            separate mapping for each format.
-          </p>
-          <ol>
-            <li>Open Definitions and find CSV Mappings.</li>
-            <li>Fill in the mapping name and default currency.</li>
-            <li>Choose a sample CSV file from that bank export.</li>
-            <li>Use column detection to fill parsing settings and populate dropdown options from the actual CSV headers.</li>
-            <li>Select which CSV columns map to transaction fields like date, description, amount, currency, and notes.</li>
-            <li>Select categorization fields. These are the text fields Keywords will inspect.</li>
-          </ol>
-          <p>
-            Advanced parsing settings remain editable if detection guesses a separator, header row, encoding, or date format incorrectly.
-          </p>
-        </article>
-
-        <article className="panel help-card">
-          <h2>3. Import A Bank Statement</h2>
-          <p>
-            The Import page loads a CSV statement into the local SQLite database. Each parsed row
-            becomes a Transaction. During import, Cashmoney applies your current Keyword rules to
-            assign subcategory, Want/Need/Investment, tags, or ignored status.
-          </p>
-          <ol>
-            <li>Open Import.</li>
-            <li>Choose the CSV file.</li>
-            <li>Select the bank account.</li>
-            <li>Cashmoney uses the selected bank account's default CSV mapping.</li>
-            <li>Submit the import and review the report for created rows, duplicates, and errors.</li>
-          </ol>
-          <p>
-            Duplicate detection helps prevent accidentally importing the same statement twice.
-            Malformed or missing required CSV fields are reported so you can fix the mapping or
-            the source file.
-          </p>
-          <HelpScreenshot
-            label="Import screenshot"
-            note="Capture the Import page with a selected CSV and an import result report."
-          />
-        </article>
-
-        <article className="panel help-card">
-          <h2>4. Understand Automatic Categorization</h2>
-          <p>
-            Keywords are matching rules. When transaction text contains the configured include
-            terms and does not contain excluded terms, the rule can assign a subcategory, WNI value,
-            tags, and ignored status. Higher priority rules win when more than one rule matches.
-          </p>
-          <ul>
-            <li><strong>Subcategory:</strong> controls the derived Category shown in the table and charts.</li>
-            <li><strong>WNI:</strong> classifies expenses as Want, Need, or Investment.</li>
-            <li><strong>Tags:</strong> add one or more reusable labels to matching transactions.</li>
-            <li><strong>Ignored:</strong> removes transactions such as own-account transfers from normal dashboard analysis.</li>
-            <li><strong>Priority:</strong> helps resolve multiple matching rules.</li>
-          </ul>
-          <p>
-            Good keyword rules are usually short and specific. For example, a rule matching a
-            known merchant name should usually be more reliable than a broad word like payment.
-          </p>
-        </article>
-
-        <article className="panel help-card help-card-wide">
-          <h2>5. Review The Dashboard</h2>
-          <p>
-            The Dashboard is the main workspace. It combines filters, charts, a recategorization
-            action, summary metrics, and an editable transaction table.
-          </p>
-          <div className="help-two-column">
-            <div>
-              <h3>Charts</h3>
-              <ul>
-                <li><strong>Monthly Flow:</strong> income is positive, expenses are negative, and net overlays the bars.</li>
-                <li><strong>Income Categories:</strong> category and subcategory sunburst for income transactions.</li>
-                <li><strong>Expense Categories:</strong> category and subcategory sunburst for expense transactions.</li>
-                <li><strong>WNI:</strong> Want, Need, Investment, and Uncategorized distribution.</li>
-                <li><strong>Top Expense Subcategories:</strong> the largest expense subcategories in the current filter scope.</li>
-              </ul>
-            </div>
-            <div>
-              <h3>Filters</h3>
-              <ul>
-                <li>Date range filters default from the oldest transaction to today.</li>
-                <li>The Actions card can quickly show the last X days, weeks, or months.</li>
-                <li>Account, Category, Subcategory, WNI, and Tag filters support multiple selections.</li>
-                <li>Unassigned filter options help find uncategorized or untagged transactions.</li>
-                <li>Search looks across relevant transaction text fields.</li>
-              </ul>
-            </div>
+        <HelpCard title="Core Concepts" wide>
+          <div className="help-concept-grid">
+            {conceptItems.map(([term, description]) => (
+              <div className="help-concept" key={term}>
+                <strong>{term}</strong>
+                <span>{description}</span>
+              </div>
+            ))}
           </div>
-          <HelpScreenshot
-            label="Dashboard screenshot"
-            note="Capture the Dashboard with filters open, charts visible, and a few rows in the transaction table."
-          />
-        </article>
+        </HelpCard>
 
-        <article className="panel help-card">
-          <h2>6. Edit Transactions In The Table</h2>
+        <HelpCard title="Definitions">
           <p>
-            The Transactions table is meant for review and correction. Amounts are colored by
-            direction. Category, Subcategory, and WNI cells use their assigned colors as cell
-            backgrounds. Tags remain visible as colored labels.
+            Definitions are the reusable objects used by imports, filters, charts, and automatic
+            categorization.
           </p>
           <ul>
-            <li><strong>Subcategory:</strong> edit with the dropdown to manually change the classification.</li>
-            <li><strong>WNI:</strong> edit with the dropdown to choose Want, Need, Investment, or blank.</li>
-            <li><strong>Tags:</strong> click the Tags cell to open the multi-tag editor, then Apply.</li>
-            <li><strong>Ignored:</strong> use the checkbox to include or exclude a transaction from normal analysis.</li>
+            <li><strong>App Settings:</strong> enable automatic internal-transfer handling and choose the subcategory used for those transfers.</li>
+            <li><strong>CSV Mappings:</strong> map CSV columns to transaction fields and choose categorization fields used by Keywords.</li>
+            <li><strong>Bank Accounts:</strong> store account details and set the default CSV mapping used by Import.</li>
+            <li><strong>Categories and Subcategories:</strong> define the reporting hierarchy shown in filters, charts, and the table.</li>
+            <li><strong>Tags:</strong> add cross-cutting labels such as projects, people, trips, or special cases.</li>
+            <li><strong>Keywords:</strong> match transaction text and assign subcategory, WNI, tags, or ignored status.</li>
           </ul>
-          <p>
-            Saved table edits are written to the backend immediately. After a successful edit,
-            the charts refresh so the dashboard stays in sync.
-          </p>
-        </article>
+        </HelpCard>
 
-        <article className="panel help-card">
-          <h2>7. Recategorize After Rule Changes</h2>
+        <HelpCard title="CSV Mappings">
           <p>
-            Recategorization is useful after you import transactions, notice many uncategorized
-            rows, and then improve your Keyword rules. It only affects the transactions currently
-            selected by the Dashboard filters.
+            A CSV Mapping should represent one bank-export format. Use Detect Columns with a sample
+            CSV whenever possible, then inspect the parsed sample rows before saving.
+          </p>
+          <ul>
+            <li><strong>Required fields:</strong> transaction date and amount must be mapped.</li>
+            <li><strong>Description:</strong> can combine multiple CSV columns into the dashboard description.</li>
+            <li><strong>Categorization Fields:</strong> decide which parsed transaction fields Keywords inspect during import and recategorization.</li>
+            <li><strong>Advanced parsing:</strong> delimiter, quote character, encoding, header row, date format, and separators stay editable.</li>
+          </ul>
+        </HelpCard>
+
+        <HelpCard title="Import">
+          <p>
+            The Import page is preview-first. The selected bank account automatically supplies the
+            CSV mapping; there is no separate mapping picker in the import flow.
           </p>
           <ol>
-            <li>Filter the Dashboard to the transactions you want to update.</li>
-            <li>Open Definitions and add or adjust Keywords.</li>
-            <li>Return to Dashboard.</li>
-            <li>Use Recategorize Filtered.</li>
-            <li>Review the result counts and table changes.</li>
+            <li>Drop or browse for a CSV file.</li>
+            <li>Select the bank account.</li>
+            <li>Confirm the shown default CSV mapping. If there is a warning, set the default mapping in Definitions first.</li>
+            <li>Run Preview Import. The preview shows parsed date, amount, description, status, headers, and summary counts.</li>
+            <li>Import Valid Rows after the preview looks right.</li>
           </ol>
           <p>
-            This makes it possible to recategorize one account, one month, one tag, or only
-            uncategorized transactions instead of rewriting everything.
+            Recent Imports shows the latest import batches. Import Report shows loaded, created,
+            duplicate, and error counts for the last import in the session.
           </p>
-        </article>
+        </HelpCard>
 
-        <article className="panel help-card">
-          <h2>8. Use Maintenance Carefully</h2>
+        <HelpCard title="Dashboard Filters">
           <p>
-            Maintenance is for backups, restores, sample data, and destructive cleanup. It is
-            useful during development and for local database management.
+            Filters control the table, stats, charts, recategorization, and bulk assignment. Actions
+            apply only to the current filtered transaction set.
           </p>
           <ul>
-            <li><strong>Database Snapshot:</strong> shows counts for transactions, imports, definitions, and sample data.</li>
-            <li><strong>Export Backup:</strong> downloads a SQLite backup of the current database.</li>
-            <li><strong>Restore Backup:</strong> replaces the current database from a backup file.</li>
-            <li><strong>Recreate Samples:</strong> removes and recreates demo sample data.</li>
-            <li><strong>Danger Zone:</strong> deletes sample data, all transactions, or all finance data.</li>
+            <li><strong>Date range:</strong> From and To use the same YYYY-MM-DD format as the table. The relative range controls can quickly set a recent period.</li>
+            <li><strong>Saved filters:</strong> save the current filter state under a name and load it later.</li>
+            <li><strong>Checklist filters:</strong> empty means show nothing. On startup, all checklist options are selected.</li>
+            <li><strong>Category/Subcategory/WNI:</strong> subcategory options narrow automatically when categories are selected.</li>
+            <li><strong>Direction:</strong> Incomes are positive transactions and Expenses are negative transactions.</li>
+            <li><strong>Include ignored / Include locked:</strong> control whether those rows appear in the filtered data.</li>
+            <li><strong>Split by owners:</strong> divides shared-account amounts by the account owner count.</li>
+          </ul>
+        </HelpCard>
+
+        <HelpCard title="Stats, Charts, And Amount Privacy">
+          <p>
+            The Dashboard combines summary metrics, charts, and a transaction grid for the active
+            filters.
+          </p>
+          <ul>
+            <li><strong>Stats:</strong> Income, Expenses, Net, Transactions, and Uncategorized reflect the current filters.</li>
+            <li><strong>Charts:</strong> Monthly Flow, Income Categories, Expense Categories, Want / Need / Investment, and Top Expense Subcategories.</li>
+            <li><strong>Hide amounts:</strong> the eye button hides amount values in the dashboard and import preview.</li>
+            <li><strong>Accent and theme:</strong> use the sidebar footer controls for accent color and light/dark mode.</li>
+          </ul>
+        </HelpCard>
+
+        <HelpCard title="Editing Transactions">
+          <p>
+            The transaction grid is editable where a small pencil appears in the header. Changes are
+            saved immediately and the dashboard refreshes after a successful update.
+          </p>
+          <ul>
+            <li><strong>Subcategory:</strong> edits the subcategory and therefore the derived category.</li>
+            <li><strong>WNI:</strong> edits Want, Need, Investment, or blank.</li>
+            <li><strong>Tags:</strong> opens the tag editor for multi-tag changes.</li>
+            <li><strong>Ignored:</strong> toggles whether the transaction is excluded from normal analysis.</li>
+            <li><strong>Locked:</strong> manually protect or unlock categorization.</li>
           </ul>
           <p>
-            Export a backup before using Danger Zone actions. These actions affect the local
-            database and are not meant as routine dashboard tools.
+            Manual changes to subcategory, WNI, tags, ignored, or category-related fields lock the
+            transaction so future recategorization does not overwrite your correction by default.
           </p>
-          <HelpScreenshot
-            label="Maintenance screenshot"
-            note="Capture the Maintenance page showing Database Snapshot, Safe Tools, and Danger Zone."
-          />
-        </article>
+        </HelpCard>
 
-        <article className="panel help-card">
-          <h2>9. Troubleshooting</h2>
+        <HelpCard title="Actions">
+          <p>
+            The Actions section changes transactions in the current filter scope. Review the shown
+            transaction count before confirming any action.
+          </p>
           <ul>
-            <li><strong>CSV import has errors:</strong> check delimiter, header row, date format, decimal separator, and required column mapping.</li>
-            <li><strong>Transactions are uncategorized:</strong> add Keywords, then recategorize the filtered transactions.</li>
-            <li><strong>Charts look empty:</strong> check filters, include ignored setting, and date range.</li>
-            <li><strong>Own-account transfers distort totals:</strong> add transfer Keywords that mark those transactions as ignored.</li>
-            <li><strong>Wrong category appears:</strong> edit the transaction manually or adjust Keyword priority and recategorize.</li>
-            <li><strong>Need to start over:</strong> export a backup first, then use Maintenance cleanup actions.</li>
+            <li><strong>Recategorize Filtered:</strong> reruns keyword matching for the filtered transactions.</li>
+            <li><strong>Include locked:</strong> resets locked filtered transactions and lets recategorization overwrite them.</li>
+            <li><strong>Bulk assign Subcategory:</strong> assigns one subcategory to all filtered transactions.</li>
+            <li><strong>Bulk assign Tag:</strong> adds one tag to all filtered transactions.</li>
+            <li><strong>Bulk assign WNI:</strong> assigns one WNI value to all filtered transactions.</li>
           </ul>
-        </article>
+        </HelpCard>
+
+        <HelpCard title="Conflicts And Uncategorized">
+          <p>
+            Recategorization reports details so you can improve rules instead of guessing.
+          </p>
+          <ul>
+            <li><strong>Conflicts:</strong> more than one matching rule points to incompatible categorization. Inspect the matching keywords and adjust priority, include terms, or exclude terms.</li>
+            <li><strong>Uncategorized:</strong> no rule assigned a subcategory. Add or improve Keywords, then recategorize the filtered transactions.</li>
+            <li><strong>Updated / unchanged:</strong> result sections show readable transaction labels so IDs are not the only clue.</li>
+            <li><strong>Ignored internal transfers:</strong> App Settings can automatically ignore transactions that mention another configured account number and optionally assign a transfer subcategory.</li>
+          </ul>
+        </HelpCard>
+
+        <HelpCard title="Maintenance">
+          <p>
+            Maintenance is for database-level work and dangerous cleanup actions. It is not part of
+            normal transaction review.
+          </p>
+          <ul>
+            <li><strong>Database Snapshot:</strong> shows current counts for finance objects and sample data.</li>
+            <li><strong>Export database backup:</strong> downloads a SQLite backup of the current local database.</li>
+            <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically.</li>
+            <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
+            <li><strong>Admin:</strong> opens Django admin for power users.</li>
+            <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Export a backup first.</li>
+          </ul>
+        </HelpCard>
+
+        <HelpCard title="Troubleshooting" wide>
+          <div className="help-troubleshooting-grid">
+            {troubleshootingItems.map(([problem, fix]) => (
+              <div className="help-troubleshooting-item" key={problem}>
+                <strong>{problem}</strong>
+                <span>{fix}</span>
+              </div>
+            ))}
+          </div>
+        </HelpCard>
       </section>
     </div>
   );
 }
 
-function HelpScreenshot({ label, note }) {
+function HelpCard({ children, title, wide = false }) {
   return (
-    <div className="help-screenshot">
-      <div className="help-screenshot-label">{label}</div>
-      <p>{note}</p>
-    </div>
+    <article className={`panel help-card ${wide ? "help-card-wide" : ""}`}>
+      <h2>{title}</h2>
+      {children}
+    </article>
   );
 }

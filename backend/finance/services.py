@@ -982,7 +982,7 @@ class CSVImportService:
         return transaction_obj, categorization
 
 
-def recategorize_transactions(queryset):
+def recategorize_transactions(queryset, include_locked=False):
     categorizer = CategorizationService()
 
     def transaction_summary(transaction_obj, data=None):
@@ -1006,15 +1006,18 @@ def recategorize_transactions(queryset):
         "conflicts": 0,
         "category_overlaps": 0,
         "skipped_no_mapping": 0,
+        "skipped_locked": 0,
         "updated_transaction_ids": [],
         "unchanged_transaction_ids": [],
         "conflict_transaction_ids": [],
         "uncategorized_transaction_ids": [],
         "skipped_transaction_ids": [],
+        "skipped_locked_transaction_ids": [],
         "updated_transactions": [],
         "unchanged_transactions": [],
         "uncategorized_transactions": [],
         "skipped_transactions": [],
+        "skipped_locked_transactions": [],
         "conflict_details": [],
     }
 
@@ -1022,6 +1025,14 @@ def recategorize_transactions(queryset):
         "bank_account", "bank_account__default_csv_mapping"
     ).prefetch_related("tags"):
         stats["processed"] += 1
+        if transaction_obj.is_categorization_locked and not include_locked:
+            stats["skipped_locked"] += 1
+            stats["skipped_locked_transaction_ids"].append(str(transaction_obj.id))
+            stats["skipped_locked_transactions"].append(
+                transaction_summary(transaction_obj)
+            )
+            continue
+
         csv_mapping = (
             transaction_obj.bank_account.default_csv_mapping
             if transaction_obj.bank_account
@@ -1074,12 +1085,19 @@ def recategorize_transactions(queryset):
                     "categorization": serialize_categorization_result(result),
                 }
             )
-            if refreshed_fields:
+            lock_changed = transaction_obj.is_categorization_locked and include_locked
+            if refreshed_fields or lock_changed:
                 for field_name, value in refreshed_fields.items():
                     setattr(transaction_obj, field_name, value)
+                if lock_changed:
+                    transaction_obj.is_categorization_locked = False
+                lock_update_fields = (
+                    ["is_categorization_locked"] if lock_changed else []
+                )
                 transaction_obj.save(
                     update_fields=[
                         *refreshed_fields.keys(),
+                        *lock_update_fields,
                         "direction",
                         "updated_at",
                     ]
@@ -1100,19 +1118,24 @@ def recategorize_transactions(queryset):
         desired_tag_ids = {tag.id for tag in desired_tags}
         current_tag_ids = {tag.id for tag in transaction_obj.tags.all()}
         tags_changed = current_tag_ids != desired_tag_ids
+        lock_changed = transaction_obj.is_categorization_locked and include_locked
 
-        if scalar_changed or refreshed_fields:
+        if scalar_changed or refreshed_fields or lock_changed:
             for field_name, value in refreshed_fields.items():
                 setattr(transaction_obj, field_name, value)
             transaction_obj.subcategory = result.subcategory
             transaction_obj.want_need_investment = result.want_need_investment
             transaction_obj.is_ignored = result.is_ignored
+            if lock_changed:
+                transaction_obj.is_categorization_locked = False
+            lock_update_fields = ["is_categorization_locked"] if lock_changed else []
             transaction_obj.save(
                 update_fields=[
                     *refreshed_fields.keys(),
                     "subcategory",
                     "want_need_investment",
                     "is_ignored",
+                    *lock_update_fields,
                     "direction",
                     "updated_at",
                 ]
@@ -1120,7 +1143,7 @@ def recategorize_transactions(queryset):
         if tags_changed:
             transaction_obj.tags.set(desired_tags)
 
-        if scalar_changed or refreshed_fields or tags_changed:
+        if scalar_changed or refreshed_fields or tags_changed or lock_changed:
             stats["updated"] += 1
             stats["updated_transaction_ids"].append(str(transaction_obj.id))
             stats["updated_transactions"].append(

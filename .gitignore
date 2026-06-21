@@ -170,4 +170,5 @@ tools/*.zip
 # App build outputs
 backend/build/
 backend/dist/
+backend/finance/static/finance/react/
 desktop/dist/

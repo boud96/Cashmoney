@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from io import StringIO
 from decimal import Decimal
 
@@ -6,8 +7,10 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import IntegrityError, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
 
 from .constants import Direction, WantNeedInvestment
 from .models import (
@@ -173,8 +176,8 @@ class SampleDataCommandTests(TestCase):
             ).count(),
         }
 
-    def test_if_empty_skip_admin_creates_exact_sample_dataset(self):
-        self.seed("--if-empty", "--skip-admin")
+    def test_if_empty_creates_exact_sample_dataset_without_admin(self):
+        self.seed("--if-empty")
 
         self.assertEqual(
             self.sample_counts(),
@@ -191,6 +194,28 @@ class SampleDataCommandTests(TestCase):
         )
         self.assertFalse(get_user_model().objects.exists())
         self.assertTrue(BankAccount.objects.filter(owners=2).exists())
+
+    def test_create_admin_requires_explicit_credentials(self):
+        with self.assertRaises(CommandError):
+            self.seed("--create-admin", "--admin-username", "local-admin")
+
+    def test_create_admin_uses_supplied_credentials(self):
+        self.seed(
+            "--if-empty",
+            "--create-admin",
+            "--admin-username",
+            "local-admin",
+            "--admin-password",
+            "local-test-password",
+            "--admin-email",
+            "local-admin@example.local",
+        )
+
+        user = get_user_model().objects.get(username="local-admin")
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertEqual(user.email, "local-admin@example.local")
+        self.assertTrue(user.check_password("local-test-password"))
 
     def test_sample_data_is_prefixed_spans_four_months_and_has_ignored_transfers(self):
         self.seed("--if-empty", "--skip-admin")
@@ -667,18 +692,66 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(patch.status_code, 200)
         self.assertEqual(json_body(patch)["tags"], [])
+        self.assertTrue(json_body(patch)["is_categorization_locked"])
 
         hidden = self.client.get("/api/transactions/", {"q": "Reviewed"})
+        locked_hidden = self.client.get(
+            "/api/transactions/",
+            {"q": "Reviewed", "include_ignored": "true"},
+        )
         visible = self.client.get(
             "/api/transactions/",
-            {"q": "Reviewed", "include_ignored": "true", "limit": "1"},
+            {
+                "q": "Reviewed",
+                "include_ignored": "true",
+                "include_locked": "true",
+                "limit": "1",
+            },
         )
 
         self.assertEqual(json_body(hidden)["count"], 0)
         self.assertEqual(json_body(hidden)["total_count"], 1)
+        self.assertEqual(json_body(locked_hidden)["count"], 0)
         self.assertEqual(json_body(visible)["count"], 1)
         self.assertEqual(json_body(visible)["total_count"], 1)
         self.assertEqual(json_body(visible)["limit"], 1)
+
+    def test_transaction_categorization_edits_lock_and_can_unlock(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Manual edit",
+            amount=Decimal("-12.50"),
+        )
+
+        subcategory_patch = self.patch_json(
+            f"/api/transactions/{transaction_obj.id}/",
+            {"subcategory_id": str(self.subcategory.id)},
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(subcategory_patch.status_code, 200)
+        self.assertTrue(transaction_obj.is_categorization_locked)
+        self.assertTrue(json_body(subcategory_patch)["is_categorization_locked"])
+
+        unlocked = self.patch_json(
+            f"/api/transactions/{transaction_obj.id}/",
+            {"is_categorization_locked": False},
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(unlocked.status_code, 200)
+        self.assertFalse(transaction_obj.is_categorization_locked)
+        self.assertFalse(json_body(unlocked)["is_categorization_locked"])
+
+        wni_patch = self.patch_json(
+            f"/api/transactions/{transaction_obj.id}/",
+            {"want_need_investment": WantNeedInvestment.NEED},
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(wni_patch.status_code, 200)
+        self.assertTrue(transaction_obj.is_categorization_locked)
 
     def test_transaction_filters_support_multi_select_and_unassigned_values(self):
         second_account = BankAccount.objects.create(
@@ -830,6 +903,39 @@ class APITests(FinanceTestCase):
         self.assertEqual(committed.status_code, 201)
         self.assertEqual(Transaction.objects.count(), 1)
 
+    def test_imports_api_lists_recent_imports(self):
+        older = CSVImport.objects.create(
+            bank_account=self.account,
+            csv_mapping=self.mapping,
+            source_filename="older.csv",
+            loaded_count=3,
+            created_count=2,
+        )
+        latest = CSVImport.objects.create(
+            bank_account=self.account,
+            csv_mapping=self.mapping,
+            source_filename="latest.csv",
+            loaded_count=5,
+            created_count=4,
+            skipped_count=1,
+        )
+        now = timezone.now()
+        CSVImport.objects.filter(id=older.id).update(
+            created_at=now - timedelta(minutes=1)
+        )
+        CSVImport.objects.filter(id=latest.id).update(created_at=now)
+
+        response = self.client.get("/api/imports/", {"limit": "1"})
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["id"], str(latest.id))
+        self.assertEqual(payload[0]["source_filename"], "latest.csv")
+        self.assertEqual(payload[0]["created_count"], 4)
+        self.assertEqual(payload[0]["skipped_count"], 1)
+        self.assertNotEqual(payload[0]["id"], str(older.id))
+
     def test_keyword_preview_and_recategorize_details(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(
@@ -957,6 +1063,116 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(list(filtered_transaction.tags.all()), [])
         self.assertIsNone(outside_filter.subcategory)
+
+    def test_recategorize_skips_locked_transactions_unless_requested(self):
+        self.keyword("McDonalds", ["mcdonald"])
+        locked_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="McDonalds Prague",
+            amount=Decimal("-12.50"),
+            is_categorization_locked=True,
+        )
+
+        skipped_response = self.post_json(
+            "/api/transactions/recategorize/?date_from=2026-01-01&include_locked=true",
+            {},
+        )
+        skipped_payload = json_body(skipped_response)
+        locked_transaction.refresh_from_db()
+
+        self.assertEqual(skipped_response.status_code, 200)
+        self.assertEqual(skipped_payload["processed"], 1)
+        self.assertEqual(skipped_payload["updated"], 0)
+        self.assertEqual(skipped_payload["skipped_locked"], 1)
+        self.assertEqual(
+            skipped_payload["skipped_locked_transaction_ids"],
+            [str(locked_transaction.id)],
+        )
+        self.assertIsNone(locked_transaction.subcategory)
+        self.assertTrue(locked_transaction.is_categorization_locked)
+
+        recategorized_response = self.post_json(
+            "/api/transactions/recategorize/?date_from=2026-01-01&include_locked=true",
+            {"include_locked": True},
+        )
+        recategorized_payload = json_body(recategorized_response)
+        locked_transaction.refresh_from_db()
+
+        self.assertEqual(recategorized_response.status_code, 200)
+        self.assertEqual(recategorized_payload["processed"], 1)
+        self.assertEqual(recategorized_payload["updated"], 1)
+        self.assertEqual(recategorized_payload["skipped_locked"], 0)
+        self.assertEqual(locked_transaction.subcategory, self.subcategory)
+        self.assertFalse(locked_transaction.is_categorization_locked)
+
+    def test_bulk_assign_transactions_updates_filtered_scope_and_locks(self):
+        stale_tag = Tag.objects.create(name="Existing tag")
+        assigned_tag = Tag.objects.create(name="Reviewed")
+        filtered_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Filtered",
+            amount=Decimal("-12.50"),
+        )
+        filtered_transaction.tags.add(stale_tag)
+        outside_filter = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2025-12-31",
+            description="Outside",
+            amount=Decimal("-9.00"),
+        )
+
+        subcategory_response = self.post_json(
+            "/api/transactions/bulk-assign/?date_from=2026-01-01",
+            {
+                "assignment_type": "subcategory",
+                "subcategory_id": str(self.subcategory.id),
+            },
+        )
+        subcategory_payload = json_body(subcategory_response)
+        filtered_transaction.refresh_from_db()
+        outside_filter.refresh_from_db()
+
+        self.assertEqual(subcategory_response.status_code, 200)
+        self.assertEqual(subcategory_payload["updated"], 1)
+        self.assertEqual(
+            subcategory_payload["label"],
+            f"{self.category.name} / {self.subcategory.name}",
+        )
+        self.assertEqual(filtered_transaction.subcategory, self.subcategory)
+        self.assertTrue(filtered_transaction.is_categorization_locked)
+        self.assertIsNone(outside_filter.subcategory)
+        self.assertFalse(outside_filter.is_categorization_locked)
+
+        tag_response = self.post_json(
+            "/api/transactions/bulk-assign/?date_from=2026-01-01&include_locked=true",
+            {"assignment_type": "tag", "tag_id": str(assigned_tag.id)},
+        )
+        filtered_transaction.refresh_from_db()
+
+        self.assertEqual(tag_response.status_code, 200)
+        self.assertEqual(json_body(tag_response)["updated"], 1)
+        self.assertCountEqual(
+            list(filtered_transaction.tags.values_list("id", flat=True)),
+            [stale_tag.id, assigned_tag.id],
+        )
+
+        wni_response = self.post_json(
+            "/api/transactions/bulk-assign/?date_from=2026-01-01&include_locked=true",
+            {
+                "assignment_type": "want_need_investment",
+                "want_need_investment": WantNeedInvestment.NEED,
+            },
+        )
+        filtered_transaction.refresh_from_db()
+
+        self.assertEqual(wni_response.status_code, 200)
+        self.assertEqual(json_body(wni_response)["updated"], 1)
+        self.assertEqual(
+            filtered_transaction.want_need_investment, WantNeedInvestment.NEED
+        )
+        self.assertTrue(filtered_transaction.is_categorization_locked)
 
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])

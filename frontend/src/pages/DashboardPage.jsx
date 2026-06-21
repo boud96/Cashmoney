@@ -100,7 +100,11 @@ export default function DashboardPage({
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
+  const [bulkAssignModal, setBulkAssignModal] = useState(null);
+  const [bulkAssignValue, setBulkAssignValue] = useState("");
+  const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
+  const [recategorizeLocked, setRecategorizeLocked] = useState(false);
   const [savedFilterName, setSavedFilterName] = useState("");
   const [savedFilters, setSavedFilters] = useState([]);
   const [savedFiltersBusy, setSavedFiltersBusy] = useState(false);
@@ -220,12 +224,13 @@ export default function DashboardPage({
       notify("No filtered transactions");
       return;
     }
-    if (!window.confirm(`Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?`)) {
+    const lockedText = recategorizeLocked ? " Locked transactions included by the current filters will be reset and recategorized." : "";
+    if (!window.confirm(`Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?${lockedText}`)) {
       return;
     }
     setRecategorizing(true);
     try {
-      const result = await apiPost("/transactions/recategorize/", {}, filterParams);
+      const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeLocked }, filterParams);
       setRecategorizeResult(result);
       notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
       await reloadDashboard();
@@ -233,6 +238,59 @@ export default function DashboardPage({
       notify(error.message);
     } finally {
       setRecategorizing(false);
+    }
+  }
+
+  const bulkAssignOptions = useMemo(() => ({
+    subcategory: refs.subcategories.map((item) => [item.id, subLabel(item)]),
+    tag: refs.tags.map((item) => [item.id, item.name]),
+    want_need_investment: wniOptions.map(([value, label]) => [value, label]),
+  }), [refs.subcategories, refs.tags]);
+
+  const bulkAssignSelectedLabel = useMemo(() => {
+    if (!bulkAssignModal || !bulkAssignValue) {
+      return "";
+    }
+    return bulkAssignOptions[bulkAssignModal]?.find(([value]) => value === bulkAssignValue)?.[1] || "";
+  }, [bulkAssignModal, bulkAssignOptions, bulkAssignValue]);
+
+  function openBulkAssignModal(type) {
+    setBulkAssignModal(type);
+    setBulkAssignValue("");
+  }
+
+  function closeBulkAssignModal() {
+    if (bulkAssignBusy) {
+      return;
+    }
+    setBulkAssignModal(null);
+    setBulkAssignValue("");
+  }
+
+  async function submitBulkAssign() {
+    if (!bulkAssignModal || !bulkAssignValue) {
+      notify("Choose a value first");
+      return;
+    }
+    const payload = { assignment_type: bulkAssignModal };
+    if (bulkAssignModal === "subcategory") {
+      payload.subcategory_id = bulkAssignValue;
+    } else if (bulkAssignModal === "tag") {
+      payload.tag_id = bulkAssignValue;
+    } else if (bulkAssignModal === "want_need_investment") {
+      payload.want_need_investment = bulkAssignValue;
+    }
+    setBulkAssignBusy(true);
+    try {
+      const result = await apiPost("/transactions/bulk-assign/", payload, filterParams);
+      notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
+      setBulkAssignModal(null);
+      setBulkAssignValue("");
+      await reloadDashboard();
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setBulkAssignBusy(false);
     }
   }
 
@@ -283,6 +341,10 @@ export default function DashboardPage({
                 <label className="check-row">
                   <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
                   <span>Include ignored</span>
+                </label>
+                <label className="check-row">
+                  <input checked={filters.include_locked} onChange={(event) => onFilterChange("include_locked", event.target.checked)} type="checkbox" />
+                  <span>Include locked</span>
                 </label>
                 <label className="check-row">
                   <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
@@ -345,45 +407,88 @@ export default function DashboardPage({
         )}
       </section>
 
-      <div className="metrics-grid">
-        {metrics.map(([label, value, tone, secondary]) => (
-          <div className="metric" key={label}>
-            <div className="metric-label">{label}</div>
-            <div className={`metric-value ${tone}`}>{value}</div>
-            {secondary && (
-              <div className="metric-secondary">
-                <span>Avg / month:</span>
-                <strong className={secondary.tone}>{secondary.value}</strong>
+      <div className="dashboard-summary-row">
+        <section className="filter-panel dashboard-stats-section" aria-labelledby="dashboard-stats-title">
+          <h2 id="dashboard-stats-title" className="dashboard-section-title">Stats</h2>
+          <div className="metrics-grid">
+            {metrics.map(([label, value, tone, secondary], index) => (
+              <div className={`metric stats-metric stats-metric-${index + 1}`} key={label}>
+                <div className="metric-label">{label}</div>
+                <div className={`metric-value ${tone}`}>{value}</div>
+                {secondary && (
+                  <div className="metric-secondary">
+                    <span>Avg / month:</span>
+                    <strong className={secondary.tone}>{secondary.value}</strong>
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
-        ))}
-        <div className="metric dashboard-action-card">
-          <div className="metric-label">Actions</div>
+        </section>
+
+        <section className="filter-panel dashboard-action-card" aria-labelledby="dashboard-actions-title">
+          <h2 id="dashboard-actions-title" className="dashboard-section-title">Actions</h2>
           <div className="dashboard-action-section">
-            <button
-              aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
-              aria-pressed={hideAmounts}
-              className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
-              onClick={onToggleHideAmounts}
-              title={hideAmounts ? "Show amounts" : "Hide amounts"}
-              type="button"
-            >
-              {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
-            </button>
-            <LoadingButton
-              busy={recategorizing}
-              busyLabel="Recategorizing"
-              className="primary-action"
-              disabled={!transactionPage.count || importBusy}
-              onClick={recategorize}
-              type="button"
-            >
-              Recategorize Filtered
-            </LoadingButton>
+            <div className="dashboard-action-row">
+              <div className="dashboard-action-subsection dashboard-privacy-action">
+                <button
+                  aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
+                  aria-pressed={hideAmounts}
+                  className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
+                  onClick={onToggleHideAmounts}
+                  title={hideAmounts ? "Show amounts" : "Hide amounts"}
+                  type="button"
+                >
+                  {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+              <div className="dashboard-action-subsection dashboard-recategorize-action">
+                <label className="check-row recategorize-locked-toggle">
+                  <input checked={recategorizeLocked} onChange={(event) => setRecategorizeLocked(event.target.checked)} type="checkbox" />
+                  <span>Include locked</span>
+                </label>
+                <LoadingButton
+                  busy={recategorizing}
+                  busyLabel="Recategorizing"
+                  className="primary-action"
+                  disabled={!transactionPage.count || importBusy}
+                  onClick={recategorize}
+                  type="button"
+                >
+                  Recategorize Filtered
+                </LoadingButton>
+              </div>
+            </div>
+            <div className="dashboard-action-subsection dashboard-bulk-assign-action">
+              <div className="metric-label">Bulk assign filtered transactions</div>
+              <div className="bulk-assign-buttons">
+                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("subcategory")} type="button">
+                  Subcategory
+                </button>
+                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("tag")} type="button">
+                  Tag
+                </button>
+                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("want_need_investment")} type="button">
+                  WNI
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
       </div>
+      {bulkAssignModal && (
+        <BulkAssignModal
+          busy={bulkAssignBusy}
+          count={transactionPage.count}
+          onClose={closeBulkAssignModal}
+          onSubmit={submitBulkAssign}
+          onValueChange={setBulkAssignValue}
+          options={bulkAssignOptions[bulkAssignModal] || []}
+          selectedLabel={bulkAssignSelectedLabel}
+          type={bulkAssignModal}
+          value={bulkAssignValue}
+        />
+      )}
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
 
       <div className="dashboard-charts">
@@ -402,6 +507,67 @@ export default function DashboardPage({
         <TransactionGrid conflictIds={conflictIds} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
+  );
+}
+
+function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, options, selectedLabel, type, value }) {
+  const config = {
+    subcategory: {
+      blank: "Choose subcategory",
+      confirm: "Assign subcategory",
+      label: "Subcategory",
+      title: "Assign Filtered to Subcategory",
+      warning: selectedLabel
+        ? `This will assign ${count.toLocaleString()} currently filtered transactions to ${selectedLabel} and lock their categorization.`
+        : `Choose a subcategory to assign ${count.toLocaleString()} currently filtered transactions.`,
+    },
+    tag: {
+      blank: "Choose tag",
+      confirm: "Assign tag",
+      label: "Tag",
+      title: "Assign Tag to Filtered",
+      warning: selectedLabel
+        ? `This will add the ${selectedLabel} tag to ${count.toLocaleString()} currently filtered transactions and lock their categorization. Existing tags will stay in place.`
+        : `Choose a tag to add to ${count.toLocaleString()} currently filtered transactions.`,
+    },
+    want_need_investment: {
+      blank: "Choose WNI",
+      confirm: "Assign WNI",
+      label: "WNI",
+      title: "Assign WNI to Filtered",
+      warning: selectedLabel
+        ? `This will set ${count.toLocaleString()} currently filtered transactions to ${selectedLabel} and lock their categorization.`
+        : `Choose a WNI value to assign ${count.toLocaleString()} currently filtered transactions.`,
+    },
+  }[type];
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+      <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="bulk-assign-modal-header">
+          <h2 id="bulk-assign-modal-title">{config.title}</h2>
+          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">×</button>
+        </div>
+        <label className="form-field">
+          <span>{config.label}</span>
+          <select autoFocus disabled={busy} onChange={(event) => onValueChange(event.target.value)} value={value}>
+            <option value="">{config.blank}</option>
+            {options.map(([optionValue, optionLabel]) => (
+              <option key={optionValue} value={optionValue}>{optionLabel}</option>
+            ))}
+          </select>
+        </label>
+        <div className="bulk-assign-warning">
+          {config.warning}
+        </div>
+        <div className="bulk-assign-modal-actions">
+          <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
+          <LoadingButton busy={busy} busyLabel="Assigning" className="primary-action" disabled={!value} onClick={onSubmit} type="button">
+            {config.confirm}
+          </LoadingButton>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -429,6 +595,19 @@ function EyeOffIcon() {
       <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
       <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.2 17.2 0 0 1-2.2 3.2" />
       <path d="M6.2 6.5C3.5 8.2 2 12 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8" />
+    </IconSvg>
+  );
+}
+
+function LockIcon({ locked }) {
+  return (
+    <IconSvg>
+      {locked ? (
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      ) : (
+        <path d="M7 11V7a5 5 0 0 1 9.5-2.2" />
+      )}
+      <rect height="10" rx="2" width="14" x="5" y="11" />
     </IconSvg>
   );
 }
@@ -546,6 +725,36 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
         />
       ),
       width: 110,
+    },
+    {
+      cellClass: "lock-cell",
+      field: "is_categorization_locked",
+      headerName: "Locked",
+      cellRenderer: (params) => {
+        const locked = Boolean(params.value);
+        return (
+          <button
+            aria-label={locked ? "Unlock categorization" : "Lock categorization"}
+            aria-pressed={locked}
+            className={`lock-cell-button ${locked ? "is-locked" : ""}`}
+            onClick={async (event) => {
+              event.stopPropagation();
+              try {
+                await updateTransaction(params.data, { is_categorization_locked: !locked });
+                notify(locked ? "Transaction unlocked" : "Transaction locked");
+              } catch (error) {
+                notify(error.message);
+              }
+            }}
+            title={locked ? "Unlock categorization" : "Lock categorization"}
+            type="button"
+          >
+            <LockIcon locked={locked} />
+          </button>
+        );
+      },
+      valueFormatter: (params) => (params.value ? "Locked" : "Unlocked"),
+      width: 96,
     },
   ], [accountLookup, categoryLookup, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, updateTransaction]);
 
@@ -762,6 +971,12 @@ function RecategorizeStats({ result }) {
       label: "Skipped",
       transactions: result.skipped_transactions || [],
       value: result.skipped_no_mapping,
+    },
+    {
+      ids: result.skipped_locked_transaction_ids || [],
+      label: "Skipped locked",
+      transactions: result.skipped_locked_transactions || [],
+      value: result.skipped_locked,
     },
   ];
   return (

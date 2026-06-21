@@ -110,7 +110,7 @@ function SettingsForm({ notify, refs, reloadAll, settings }) {
           onChange={(event) => setIgnoreInternalAccounts(event.target.checked)}
           type="checkbox"
         />
-        <span>Ignore transactions that mention another configured bank account</span>
+        <span>Set transactions as ignored that mention another configured bank account automatically</span>
       </label>
       <FormField label="Internal Transfer Subcategory">
         <Select

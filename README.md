@@ -33,6 +33,10 @@ To build the React frontend manually:
 .\build_frontend.bat
 ```
 
+The generated React bundle is written to
+`backend\finance\static\finance\react\`. This directory is generated build
+output and is intentionally not tracked in git.
+
 To install the Electron shell:
 
 ```powershell
@@ -60,6 +64,18 @@ If your shell does not like the spaced path examples above, use:
 ```powershell
 & "..\.venv\Scripts\python.exe" manage.py runserver 127.0.0.1:8000
 ```
+
+## Django Admin
+
+The app does not create a default admin account or ship hardcoded admin
+credentials. To use the Django admin, create a local superuser yourself:
+
+```powershell
+.\.venv\Scripts\python.exe .\backend\manage.py createsuperuser
+```
+
+Then open `/admin/` from the running app and sign in with the credentials you
+created.
 
 ## Packaging
 
