@@ -304,6 +304,7 @@ class Transaction(TimestampedModel):
         max_length=32, choices=WantNeedInvestment.CHOICES, null=True, blank=True
     )
     is_ignored = models.BooleanField(default=False)
+    is_categorization_locked = models.BooleanField(default=False)
     raw_data = models.JSONField(default=empty_dict, blank=True)
 
     class Meta:
@@ -315,6 +316,7 @@ class Transaction(TimestampedModel):
             models.Index(fields=["bank_account", "transaction_date"]),
             models.Index(fields=["subcategory"]),
             models.Index(fields=["want_need_investment"]),
+            models.Index(fields=["is_categorization_locked"]),
         ]
         constraints = [
             models.UniqueConstraint(

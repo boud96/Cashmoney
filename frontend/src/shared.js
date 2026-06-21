@@ -152,6 +152,7 @@ export function emptyFilters() {
     tag: [],
     q: "",
     include_ignored: false,
+    include_locked: false,
     split_by_owners: false,
   };
 }
@@ -215,7 +216,7 @@ export function storeFilterPresets(presets) {
 export function buildFilterParams(filters) {
   const params = {};
   Object.entries(filters).forEach(([key, value]) => {
-    if (["include_ignored", "split_by_owners"].includes(key)) return;
+    if (["include_ignored", "include_locked", "split_by_owners"].includes(key)) return;
     if (CHECKLIST_FILTER_KEYS.includes(key)) {
       params[key] = Array.isArray(value) && value.length ? value.join(",") : NO_SELECTION;
       return;
@@ -226,6 +227,9 @@ export function buildFilterParams(filters) {
   });
   if (filters.include_ignored) {
     params.include_ignored = "true";
+  }
+  if (filters.include_locked) {
+    params.include_locked = "true";
   }
   if (filters.split_by_owners) {
     params.split_by_owners = "true";

@@ -825,6 +825,8 @@ def filtered_transactions(request):
 
     if not parse_bool(params.get("include_ignored"), default=False):
         queryset = queryset.filter(is_ignored=False)
+    if not parse_bool(params.get("include_locked"), default=False):
+        queryset = queryset.filter(is_categorization_locked=False)
     if params.get("date_from"):
         queryset = queryset.filter(
             transaction_date__gte=parse_date_value(params["date_from"], "date_from")
@@ -1018,6 +1020,13 @@ class TransactionDetailView(JsonView):
             id=pk,
         )
         data = parse_json_body(request)
+        lock_trigger_fields = {
+            "subcategory_id",
+            "want_need_investment",
+            "tag_ids",
+            "is_ignored",
+        }
+        should_lock_categorization = bool(lock_trigger_fields & data.keys())
         for field in [
             "description",
             "transaction_date",
@@ -1064,6 +1073,12 @@ class TransactionDetailView(JsonView):
             transaction.subcategory = optional_object(
                 Subcategory, data["subcategory_id"], "subcategory_id"
             )
+        if "is_categorization_locked" in data:
+            transaction.is_categorization_locked = parse_bool(
+                data["is_categorization_locked"]
+            )
+        if should_lock_categorization:
+            transaction.is_categorization_locked = True
         transaction.save()
         if "tag_ids" in data:
             set_tags(transaction, data["tag_ids"])
@@ -1078,10 +1093,13 @@ class RecategorizeTransactionsView(JsonView):
     def post(self, request):
         data = parse_json_body(request)
         transaction_ids = clean_list(data.get("transaction_ids"), "transaction_ids")
+        include_locked = parse_bool(data.get("include_locked"), default=False)
         queryset = filtered_transactions(request)
         if transaction_ids:
             queryset = queryset.filter(id__in=transaction_ids)
-        return json_response(recategorize_transactions(queryset))
+        return json_response(
+            recategorize_transactions(queryset, include_locked=include_locked)
+        )
 
 
 def resolve_import_inputs(request):

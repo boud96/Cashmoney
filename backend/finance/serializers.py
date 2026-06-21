@@ -168,6 +168,7 @@ def serialize_transaction(transaction, split_by_owners=False):
         "tags": [serialize_tag(tag) for tag in transaction.tags.all()],
         "want_need_investment": transaction.want_need_investment,
         "is_ignored": transaction.is_ignored,
+        "is_categorization_locked": transaction.is_categorization_locked,
         "raw_data": transaction.raw_data,
         "created_at": iso(transaction.created_at),
         "updated_at": iso(transaction.updated_at),

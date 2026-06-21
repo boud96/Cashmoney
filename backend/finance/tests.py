@@ -690,18 +690,66 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(patch.status_code, 200)
         self.assertEqual(json_body(patch)["tags"], [])
+        self.assertTrue(json_body(patch)["is_categorization_locked"])
 
         hidden = self.client.get("/api/transactions/", {"q": "Reviewed"})
+        locked_hidden = self.client.get(
+            "/api/transactions/",
+            {"q": "Reviewed", "include_ignored": "true"},
+        )
         visible = self.client.get(
             "/api/transactions/",
-            {"q": "Reviewed", "include_ignored": "true", "limit": "1"},
+            {
+                "q": "Reviewed",
+                "include_ignored": "true",
+                "include_locked": "true",
+                "limit": "1",
+            },
         )
 
         self.assertEqual(json_body(hidden)["count"], 0)
         self.assertEqual(json_body(hidden)["total_count"], 1)
+        self.assertEqual(json_body(locked_hidden)["count"], 0)
         self.assertEqual(json_body(visible)["count"], 1)
         self.assertEqual(json_body(visible)["total_count"], 1)
         self.assertEqual(json_body(visible)["limit"], 1)
+
+    def test_transaction_categorization_edits_lock_and_can_unlock(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Manual edit",
+            amount=Decimal("-12.50"),
+        )
+
+        subcategory_patch = self.patch_json(
+            f"/api/transactions/{transaction_obj.id}/",
+            {"subcategory_id": str(self.subcategory.id)},
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(subcategory_patch.status_code, 200)
+        self.assertTrue(transaction_obj.is_categorization_locked)
+        self.assertTrue(json_body(subcategory_patch)["is_categorization_locked"])
+
+        unlocked = self.patch_json(
+            f"/api/transactions/{transaction_obj.id}/",
+            {"is_categorization_locked": False},
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(unlocked.status_code, 200)
+        self.assertFalse(transaction_obj.is_categorization_locked)
+        self.assertFalse(json_body(unlocked)["is_categorization_locked"])
+
+        wni_patch = self.patch_json(
+            f"/api/transactions/{transaction_obj.id}/",
+            {"want_need_investment": WantNeedInvestment.NEED},
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(wni_patch.status_code, 200)
+        self.assertTrue(transaction_obj.is_categorization_locked)
 
     def test_transaction_filters_support_multi_select_and_unassigned_values(self):
         second_account = BankAccount.objects.create(
@@ -980,6 +1028,48 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(list(filtered_transaction.tags.all()), [])
         self.assertIsNone(outside_filter.subcategory)
+
+    def test_recategorize_skips_locked_transactions_unless_requested(self):
+        self.keyword("McDonalds", ["mcdonald"])
+        locked_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="McDonalds Prague",
+            amount=Decimal("-12.50"),
+            is_categorization_locked=True,
+        )
+
+        skipped_response = self.post_json(
+            "/api/transactions/recategorize/?date_from=2026-01-01&include_locked=true",
+            {},
+        )
+        skipped_payload = json_body(skipped_response)
+        locked_transaction.refresh_from_db()
+
+        self.assertEqual(skipped_response.status_code, 200)
+        self.assertEqual(skipped_payload["processed"], 1)
+        self.assertEqual(skipped_payload["updated"], 0)
+        self.assertEqual(skipped_payload["skipped_locked"], 1)
+        self.assertEqual(
+            skipped_payload["skipped_locked_transaction_ids"],
+            [str(locked_transaction.id)],
+        )
+        self.assertIsNone(locked_transaction.subcategory)
+        self.assertTrue(locked_transaction.is_categorization_locked)
+
+        recategorized_response = self.post_json(
+            "/api/transactions/recategorize/?date_from=2026-01-01&include_locked=true",
+            {"include_locked": True},
+        )
+        recategorized_payload = json_body(recategorized_response)
+        locked_transaction.refresh_from_db()
+
+        self.assertEqual(recategorized_response.status_code, 200)
+        self.assertEqual(recategorized_payload["processed"], 1)
+        self.assertEqual(recategorized_payload["updated"], 1)
+        self.assertEqual(recategorized_payload["skipped_locked"], 0)
+        self.assertEqual(locked_transaction.subcategory, self.subcategory)
+        self.assertFalse(locked_transaction.is_categorization_locked)
 
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])

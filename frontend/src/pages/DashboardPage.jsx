@@ -101,6 +101,7 @@ export default function DashboardPage({
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [recategorizing, setRecategorizing] = useState(false);
+  const [recategorizeLocked, setRecategorizeLocked] = useState(false);
   const [savedFilterName, setSavedFilterName] = useState("");
   const [savedFilters, setSavedFilters] = useState([]);
   const [savedFiltersBusy, setSavedFiltersBusy] = useState(false);
@@ -220,12 +221,13 @@ export default function DashboardPage({
       notify("No filtered transactions");
       return;
     }
-    if (!window.confirm(`Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?`)) {
+    const lockedText = recategorizeLocked ? " Locked transactions included by the current filters will be reset and recategorized." : "";
+    if (!window.confirm(`Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?${lockedText}`)) {
       return;
     }
     setRecategorizing(true);
     try {
-      const result = await apiPost("/transactions/recategorize/", {}, filterParams);
+      const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeLocked }, filterParams);
       setRecategorizeResult(result);
       notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
       await reloadDashboard();
@@ -283,6 +285,10 @@ export default function DashboardPage({
                 <label className="check-row">
                   <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
                   <span>Include ignored</span>
+                </label>
+                <label className="check-row">
+                  <input checked={filters.include_locked} onChange={(event) => onFilterChange("include_locked", event.target.checked)} type="checkbox" />
+                  <span>Include locked</span>
                 </label>
                 <label className="check-row">
                   <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
@@ -345,44 +351,58 @@ export default function DashboardPage({
         )}
       </section>
 
-      <div className="metrics-grid">
-        {metrics.map(([label, value, tone, secondary]) => (
-          <div className="metric" key={label}>
-            <div className="metric-label">{label}</div>
-            <div className={`metric-value ${tone}`}>{value}</div>
-            {secondary && (
-              <div className="metric-secondary">
-                <span>Avg / month:</span>
-                <strong className={secondary.tone}>{secondary.value}</strong>
+      <div className="dashboard-summary-row">
+        <section className="filter-panel dashboard-stats-section" aria-labelledby="dashboard-stats-title">
+          <h2 id="dashboard-stats-title" className="dashboard-section-title">Stats</h2>
+          <div className="metrics-grid">
+            {metrics.map(([label, value, tone, secondary], index) => (
+              <div className={`metric stats-metric stats-metric-${index + 1}`} key={label}>
+                <div className="metric-label">{label}</div>
+                <div className={`metric-value ${tone}`}>{value}</div>
+                {secondary && (
+                  <div className="metric-secondary">
+                    <span>Avg / month:</span>
+                    <strong className={secondary.tone}>{secondary.value}</strong>
+                  </div>
+                )}
               </div>
-            )}
+            ))}
           </div>
-        ))}
-        <div className="metric dashboard-action-card">
-          <div className="metric-label">Actions</div>
+        </section>
+
+        <section className="filter-panel dashboard-action-card" aria-labelledby="dashboard-actions-title">
+          <h2 id="dashboard-actions-title" className="dashboard-section-title">Actions</h2>
           <div className="dashboard-action-section">
-            <button
-              aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
-              aria-pressed={hideAmounts}
-              className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
-              onClick={onToggleHideAmounts}
-              title={hideAmounts ? "Show amounts" : "Hide amounts"}
-              type="button"
-            >
-              {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
-            </button>
-            <LoadingButton
-              busy={recategorizing}
-              busyLabel="Recategorizing"
-              className="primary-action"
-              disabled={!transactionPage.count || importBusy}
-              onClick={recategorize}
-              type="button"
-            >
-              Recategorize Filtered
-            </LoadingButton>
+            <div className="dashboard-action-subsection dashboard-privacy-action">
+              <button
+                aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
+                aria-pressed={hideAmounts}
+                className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
+                onClick={onToggleHideAmounts}
+                title={hideAmounts ? "Show amounts" : "Hide amounts"}
+                type="button"
+              >
+                {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
+              </button>
+            </div>
+            <div className="dashboard-action-subsection dashboard-recategorize-action">
+              <label className="check-row recategorize-locked-toggle">
+                <input checked={recategorizeLocked} onChange={(event) => setRecategorizeLocked(event.target.checked)} type="checkbox" />
+                <span>Include locked</span>
+              </label>
+              <LoadingButton
+                busy={recategorizing}
+                busyLabel="Recategorizing"
+                className="primary-action"
+                disabled={!transactionPage.count || importBusy}
+                onClick={recategorize}
+                type="button"
+              >
+                Recategorize Filtered
+              </LoadingButton>
+            </div>
           </div>
-        </div>
+        </section>
       </div>
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
 
@@ -429,6 +449,19 @@ function EyeOffIcon() {
       <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
       <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.2 17.2 0 0 1-2.2 3.2" />
       <path d="M6.2 6.5C3.5 8.2 2 12 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8" />
+    </IconSvg>
+  );
+}
+
+function LockIcon({ locked }) {
+  return (
+    <IconSvg>
+      {locked ? (
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      ) : (
+        <path d="M7 11V7a5 5 0 0 1 9.5-2.2" />
+      )}
+      <rect height="10" rx="2" width="14" x="5" y="11" />
     </IconSvg>
   );
 }
@@ -546,6 +579,36 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
         />
       ),
       width: 110,
+    },
+    {
+      cellClass: "lock-cell",
+      field: "is_categorization_locked",
+      headerName: "Locked",
+      cellRenderer: (params) => {
+        const locked = Boolean(params.value);
+        return (
+          <button
+            aria-label={locked ? "Unlock categorization" : "Lock categorization"}
+            aria-pressed={locked}
+            className={`lock-cell-button ${locked ? "is-locked" : ""}`}
+            onClick={async (event) => {
+              event.stopPropagation();
+              try {
+                await updateTransaction(params.data, { is_categorization_locked: !locked });
+                notify(locked ? "Transaction unlocked" : "Transaction locked");
+              } catch (error) {
+                notify(error.message);
+              }
+            }}
+            title={locked ? "Unlock categorization" : "Lock categorization"}
+            type="button"
+          >
+            <LockIcon locked={locked} />
+          </button>
+        );
+      },
+      valueFormatter: (params) => (params.value ? "Locked" : "Unlocked"),
+      width: 96,
     },
   ], [accountLookup, categoryLookup, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, updateTransaction]);
 
@@ -762,6 +825,12 @@ function RecategorizeStats({ result }) {
       label: "Skipped",
       transactions: result.skipped_transactions || [],
       value: result.skipped_no_mapping,
+    },
+    {
+      ids: result.skipped_locked_transaction_ids || [],
+      label: "Skipped locked",
+      transactions: result.skipped_locked_transactions || [],
+      value: result.skipped_locked,
     },
   ];
   return (
