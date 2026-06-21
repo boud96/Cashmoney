@@ -8,6 +8,13 @@ const BACKEND_PORT = app.isPackaged ? "8765" : "8000";
 const APP_URL = `http://127.0.0.1:${BACKEND_PORT}/`;
 let backendProcess = null;
 
+function appIconPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "favicon.ico");
+  }
+  return path.resolve(__dirname, "..", "backend", "finance", "static", "favicon.ico");
+}
+
 function backendRoot() {
   return path.resolve(__dirname, "..", "backend");
 }
@@ -101,6 +108,7 @@ function createWindow() {
     minHeight: 760,
     backgroundColor: "#f5f7f8",
     title: "Cashmoney",
+    icon: appIconPath(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

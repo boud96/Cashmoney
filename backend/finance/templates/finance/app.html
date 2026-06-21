@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Cashmoney</title>
+    <link rel="icon" href="{% static 'favicon.ico' %}">
     {% for css_file in react_entry_css %}
         <link rel="stylesheet" href="{% static 'finance/react/'|add:css_file %}">
     {% endfor %}
