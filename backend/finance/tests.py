@@ -1071,6 +1071,74 @@ class APITests(FinanceTestCase):
         self.assertEqual(locked_transaction.subcategory, self.subcategory)
         self.assertFalse(locked_transaction.is_categorization_locked)
 
+    def test_bulk_assign_transactions_updates_filtered_scope_and_locks(self):
+        stale_tag = Tag.objects.create(name="Existing tag")
+        assigned_tag = Tag.objects.create(name="Reviewed")
+        filtered_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Filtered",
+            amount=Decimal("-12.50"),
+        )
+        filtered_transaction.tags.add(stale_tag)
+        outside_filter = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2025-12-31",
+            description="Outside",
+            amount=Decimal("-9.00"),
+        )
+
+        subcategory_response = self.post_json(
+            "/api/transactions/bulk-assign/?date_from=2026-01-01",
+            {
+                "assignment_type": "subcategory",
+                "subcategory_id": str(self.subcategory.id),
+            },
+        )
+        subcategory_payload = json_body(subcategory_response)
+        filtered_transaction.refresh_from_db()
+        outside_filter.refresh_from_db()
+
+        self.assertEqual(subcategory_response.status_code, 200)
+        self.assertEqual(subcategory_payload["updated"], 1)
+        self.assertEqual(
+            subcategory_payload["label"],
+            f"{self.category.name} / {self.subcategory.name}",
+        )
+        self.assertEqual(filtered_transaction.subcategory, self.subcategory)
+        self.assertTrue(filtered_transaction.is_categorization_locked)
+        self.assertIsNone(outside_filter.subcategory)
+        self.assertFalse(outside_filter.is_categorization_locked)
+
+        tag_response = self.post_json(
+            "/api/transactions/bulk-assign/?date_from=2026-01-01&include_locked=true",
+            {"assignment_type": "tag", "tag_id": str(assigned_tag.id)},
+        )
+        filtered_transaction.refresh_from_db()
+
+        self.assertEqual(tag_response.status_code, 200)
+        self.assertEqual(json_body(tag_response)["updated"], 1)
+        self.assertCountEqual(
+            list(filtered_transaction.tags.values_list("id", flat=True)),
+            [stale_tag.id, assigned_tag.id],
+        )
+
+        wni_response = self.post_json(
+            "/api/transactions/bulk-assign/?date_from=2026-01-01&include_locked=true",
+            {
+                "assignment_type": "want_need_investment",
+                "want_need_investment": WantNeedInvestment.NEED,
+            },
+        )
+        filtered_transaction.refresh_from_db()
+
+        self.assertEqual(wni_response.status_code, 200)
+        self.assertEqual(json_body(wni_response)["updated"], 1)
+        self.assertEqual(
+            filtered_transaction.want_need_investment, WantNeedInvestment.NEED
+        )
+        self.assertTrue(filtered_transaction.is_categorization_locked)
+
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(

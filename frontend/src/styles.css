@@ -360,12 +360,55 @@ h2 {
   padding: 14px;
 }
 
+.bulk-assign-modal {
+  width: min(440px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+  padding: 14px;
+}
+
 .accent-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.bulk-assign-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.bulk-assign-modal .form-field {
+  margin-bottom: 12px;
+}
+
+.bulk-assign-warning {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--field-bg);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 640;
+  line-height: 1.45;
+  margin-bottom: 14px;
+  padding: 10px;
+}
+
+.bulk-assign-modal-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+
+.bulk-assign-modal-actions button {
+  min-height: 38px;
 }
 
 .accent-custom-picker {
@@ -1150,10 +1193,17 @@ select option {
 
 .dashboard-action-section {
   display: grid;
-  grid-template-columns: minmax(54px, 0.28fr) minmax(0, 1fr);
+  align-content: stretch;
+  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
   padding-top: 12px;
+}
+
+.dashboard-action-row {
+  display: grid;
+  grid-template-columns: minmax(54px, 0.28fr) minmax(0, 1fr);
+  min-width: 0;
 }
 
 .dashboard-action-card .relative-range-form {
@@ -1193,6 +1243,29 @@ select option {
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   padding-left: 12px;
+}
+
+.dashboard-bulk-assign-action {
+  align-content: end;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.bulk-assign-buttons {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.bulk-assign-button {
+  justify-content: center;
+  min-height: 36px;
+  min-width: 0;
+  padding-inline: 10px;
+  white-space: nowrap;
 }
 
 .recategorize-locked-toggle {
@@ -2491,6 +2564,11 @@ td {
   }
 
   .dashboard-action-section {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-action-row,
+  .bulk-assign-buttons {
     grid-template-columns: 1fr;
   }
 

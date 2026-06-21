@@ -1102,6 +1102,76 @@ class RecategorizeTransactionsView(JsonView):
         )
 
 
+class BulkAssignTransactionsView(JsonView):
+    def post(self, request):
+        data = parse_json_body(request)
+        assignment_type = clean_text(
+            require_field(data, "assignment_type"), "assignment_type", required=True
+        )
+        queryset = filtered_transactions(request)
+        transaction_ids = list(queryset.values_list("id", flat=True))
+        updated_count = len(transaction_ids)
+
+        if assignment_type == "subcategory":
+            subcategory = optional_object(
+                Subcategory, require_field(data, "subcategory_id"), "subcategory_id"
+            )
+            Transaction.objects.filter(id__in=transaction_ids).update(
+                subcategory=subcategory,
+                is_categorization_locked=True,
+                updated_at=timezone.now(),
+            )
+            label = (
+                f"{subcategory.category.name} / {subcategory.name}"
+                if subcategory
+                else "Unassigned"
+            )
+        elif assignment_type == "tag":
+            tag = optional_object(Tag, require_field(data, "tag_id"), "tag_id")
+            Transaction.objects.filter(id__in=transaction_ids).update(
+                is_categorization_locked=True,
+                updated_at=timezone.now(),
+            )
+            through_model = Transaction.tags.through
+            through_model.objects.bulk_create(
+                [
+                    through_model(transaction_id=transaction_id, tag_id=tag.id)
+                    for transaction_id in transaction_ids
+                ],
+                ignore_conflicts=True,
+            )
+            label = tag.name
+        elif assignment_type == "want_need_investment":
+            want_need_investment = clean_choice(
+                require_field(data, "want_need_investment"),
+                "want_need_investment",
+                WantNeedInvestment.CHOICES,
+                allow_blank=False,
+            )
+            Transaction.objects.filter(id__in=transaction_ids).update(
+                want_need_investment=want_need_investment,
+                is_categorization_locked=True,
+                updated_at=timezone.now(),
+            )
+            label = dict(WantNeedInvestment.CHOICES)[want_need_investment]
+        else:
+            raise APIValidationError(
+                "Invalid assignment type",
+                {
+                    "field": "assignment_type",
+                    "allowed": ["subcategory", "tag", "want_need_investment"],
+                },
+            )
+
+        return json_response(
+            {
+                "updated": updated_count,
+                "assignment_type": assignment_type,
+                "label": label,
+            }
+        )
+
+
 def resolve_import_inputs(request):
     bank_account_id = request.POST.get("bank_account_id")
     csv_mapping_id = request.POST.get("csv_mapping_id")

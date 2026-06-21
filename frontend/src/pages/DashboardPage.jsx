@@ -100,6 +100,9 @@ export default function DashboardPage({
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
+  const [bulkAssignModal, setBulkAssignModal] = useState(null);
+  const [bulkAssignValue, setBulkAssignValue] = useState("");
+  const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
   const [recategorizeLocked, setRecategorizeLocked] = useState(false);
   const [savedFilterName, setSavedFilterName] = useState("");
@@ -238,6 +241,59 @@ export default function DashboardPage({
     }
   }
 
+  const bulkAssignOptions = useMemo(() => ({
+    subcategory: refs.subcategories.map((item) => [item.id, subLabel(item)]),
+    tag: refs.tags.map((item) => [item.id, item.name]),
+    want_need_investment: wniOptions.map(([value, label]) => [value, label]),
+  }), [refs.subcategories, refs.tags]);
+
+  const bulkAssignSelectedLabel = useMemo(() => {
+    if (!bulkAssignModal || !bulkAssignValue) {
+      return "";
+    }
+    return bulkAssignOptions[bulkAssignModal]?.find(([value]) => value === bulkAssignValue)?.[1] || "";
+  }, [bulkAssignModal, bulkAssignOptions, bulkAssignValue]);
+
+  function openBulkAssignModal(type) {
+    setBulkAssignModal(type);
+    setBulkAssignValue("");
+  }
+
+  function closeBulkAssignModal() {
+    if (bulkAssignBusy) {
+      return;
+    }
+    setBulkAssignModal(null);
+    setBulkAssignValue("");
+  }
+
+  async function submitBulkAssign() {
+    if (!bulkAssignModal || !bulkAssignValue) {
+      notify("Choose a value first");
+      return;
+    }
+    const payload = { assignment_type: bulkAssignModal };
+    if (bulkAssignModal === "subcategory") {
+      payload.subcategory_id = bulkAssignValue;
+    } else if (bulkAssignModal === "tag") {
+      payload.tag_id = bulkAssignValue;
+    } else if (bulkAssignModal === "want_need_investment") {
+      payload.want_need_investment = bulkAssignValue;
+    }
+    setBulkAssignBusy(true);
+    try {
+      const result = await apiPost("/transactions/bulk-assign/", payload, filterParams);
+      notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
+      setBulkAssignModal(null);
+      setBulkAssignValue("");
+      await reloadDashboard();
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setBulkAssignBusy(false);
+    }
+  }
+
   return (
     <>
       <section className="filter-panel">
@@ -373,37 +429,66 @@ export default function DashboardPage({
         <section className="filter-panel dashboard-action-card" aria-labelledby="dashboard-actions-title">
           <h2 id="dashboard-actions-title" className="dashboard-section-title">Actions</h2>
           <div className="dashboard-action-section">
-            <div className="dashboard-action-subsection dashboard-privacy-action">
-              <button
-                aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
-                aria-pressed={hideAmounts}
-                className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
-                onClick={onToggleHideAmounts}
-                title={hideAmounts ? "Show amounts" : "Hide amounts"}
-                type="button"
-              >
-                {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
-              </button>
+            <div className="dashboard-action-row">
+              <div className="dashboard-action-subsection dashboard-privacy-action">
+                <button
+                  aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
+                  aria-pressed={hideAmounts}
+                  className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
+                  onClick={onToggleHideAmounts}
+                  title={hideAmounts ? "Show amounts" : "Hide amounts"}
+                  type="button"
+                >
+                  {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+              <div className="dashboard-action-subsection dashboard-recategorize-action">
+                <label className="check-row recategorize-locked-toggle">
+                  <input checked={recategorizeLocked} onChange={(event) => setRecategorizeLocked(event.target.checked)} type="checkbox" />
+                  <span>Include locked</span>
+                </label>
+                <LoadingButton
+                  busy={recategorizing}
+                  busyLabel="Recategorizing"
+                  className="primary-action"
+                  disabled={!transactionPage.count || importBusy}
+                  onClick={recategorize}
+                  type="button"
+                >
+                  Recategorize Filtered
+                </LoadingButton>
+              </div>
             </div>
-            <div className="dashboard-action-subsection dashboard-recategorize-action">
-              <label className="check-row recategorize-locked-toggle">
-                <input checked={recategorizeLocked} onChange={(event) => setRecategorizeLocked(event.target.checked)} type="checkbox" />
-                <span>Include locked</span>
-              </label>
-              <LoadingButton
-                busy={recategorizing}
-                busyLabel="Recategorizing"
-                className="primary-action"
-                disabled={!transactionPage.count || importBusy}
-                onClick={recategorize}
-                type="button"
-              >
-                Recategorize Filtered
-              </LoadingButton>
+            <div className="dashboard-action-subsection dashboard-bulk-assign-action">
+              <div className="metric-label">Assign filtered</div>
+              <div className="bulk-assign-buttons">
+                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("subcategory")} type="button">
+                  Assign subcategory
+                </button>
+                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("tag")} type="button">
+                  Assign tag
+                </button>
+                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("want_need_investment")} type="button">
+                  Assign WNI
+                </button>
+              </div>
             </div>
           </div>
         </section>
       </div>
+      {bulkAssignModal && (
+        <BulkAssignModal
+          busy={bulkAssignBusy}
+          count={transactionPage.count}
+          onClose={closeBulkAssignModal}
+          onSubmit={submitBulkAssign}
+          onValueChange={setBulkAssignValue}
+          options={bulkAssignOptions[bulkAssignModal] || []}
+          selectedLabel={bulkAssignSelectedLabel}
+          type={bulkAssignModal}
+          value={bulkAssignValue}
+        />
+      )}
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
 
       <div className="dashboard-charts">
@@ -422,6 +507,67 @@ export default function DashboardPage({
         <TransactionGrid conflictIds={conflictIds} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
+  );
+}
+
+function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, options, selectedLabel, type, value }) {
+  const config = {
+    subcategory: {
+      blank: "Choose subcategory",
+      confirm: "Assign subcategory",
+      label: "Subcategory",
+      title: "Assign Filtered to Subcategory",
+      warning: selectedLabel
+        ? `This will assign ${count.toLocaleString()} currently filtered transactions to ${selectedLabel} and lock their categorization.`
+        : `Choose a subcategory to assign ${count.toLocaleString()} currently filtered transactions.`,
+    },
+    tag: {
+      blank: "Choose tag",
+      confirm: "Assign tag",
+      label: "Tag",
+      title: "Assign Tag to Filtered",
+      warning: selectedLabel
+        ? `This will add the ${selectedLabel} tag to ${count.toLocaleString()} currently filtered transactions and lock their categorization. Existing tags will stay in place.`
+        : `Choose a tag to add to ${count.toLocaleString()} currently filtered transactions.`,
+    },
+    want_need_investment: {
+      blank: "Choose WNI",
+      confirm: "Assign WNI",
+      label: "WNI",
+      title: "Assign WNI to Filtered",
+      warning: selectedLabel
+        ? `This will set ${count.toLocaleString()} currently filtered transactions to ${selectedLabel} and lock their categorization.`
+        : `Choose a WNI value to assign ${count.toLocaleString()} currently filtered transactions.`,
+    },
+  }[type];
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+      <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="bulk-assign-modal-header">
+          <h2 id="bulk-assign-modal-title">{config.title}</h2>
+          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">×</button>
+        </div>
+        <label className="form-field">
+          <span>{config.label}</span>
+          <select autoFocus disabled={busy} onChange={(event) => onValueChange(event.target.value)} value={value}>
+            <option value="">{config.blank}</option>
+            {options.map(([optionValue, optionLabel]) => (
+              <option key={optionValue} value={optionValue}>{optionLabel}</option>
+            ))}
+          </select>
+        </label>
+        <div className="bulk-assign-warning">
+          {config.warning}
+        </div>
+        <div className="bulk-assign-modal-actions">
+          <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
+          <LoadingButton busy={busy} busyLabel="Assigning" className="primary-action" disabled={!value} onClick={onSubmit} type="button">
+            {config.confirm}
+          </LoadingButton>
+        </div>
+      </div>
+    </div>
   );
 }
 
