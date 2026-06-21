@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 from io import StringIO
 from decimal import Decimal
 
@@ -9,6 +10,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
 
 from .constants import Direction, WantNeedInvestment
 from .models import (
@@ -900,6 +902,39 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(committed.status_code, 201)
         self.assertEqual(Transaction.objects.count(), 1)
+
+    def test_imports_api_lists_recent_imports(self):
+        older = CSVImport.objects.create(
+            bank_account=self.account,
+            csv_mapping=self.mapping,
+            source_filename="older.csv",
+            loaded_count=3,
+            created_count=2,
+        )
+        latest = CSVImport.objects.create(
+            bank_account=self.account,
+            csv_mapping=self.mapping,
+            source_filename="latest.csv",
+            loaded_count=5,
+            created_count=4,
+            skipped_count=1,
+        )
+        now = timezone.now()
+        CSVImport.objects.filter(id=older.id).update(
+            created_at=now - timedelta(minutes=1)
+        )
+        CSVImport.objects.filter(id=latest.id).update(created_at=now)
+
+        response = self.client.get("/api/imports/", {"limit": "1"})
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["id"], str(latest.id))
+        self.assertEqual(payload[0]["source_filename"], "latest.csv")
+        self.assertEqual(payload[0]["created_count"], 4)
+        self.assertEqual(payload[0]["skipped_count"], 1)
+        self.assertNotEqual(payload[0]["id"], str(older.id))
 
     def test_keyword_preview_and_recategorize_details(self):
         self.keyword("McDonalds", ["mcdonald"])

@@ -283,7 +283,7 @@ export default function App() {
           )}
           <Suspense fallback={<PageFallback />}>
             {activePage === "import" && (
-              <ImportPage importReport={importReport} notify={notify} refs={refs} reloadAll={loadAll} setImportReport={setImportReport} />
+              <ImportPage hideAmounts={hideAmounts} importReport={importReport} notify={notify} refs={refs} reloadAll={loadAll} setImportReport={setImportReport} />
             )}
             {activePage === "settings" && (
               <DefinitionsPage

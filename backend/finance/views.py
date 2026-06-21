@@ -1215,6 +1215,17 @@ class ImportPreviewView(JsonView):
 
 
 class ImportTransactionsView(JsonView):
+    def get(self, request):
+        limit = min(
+            clean_int(request.GET.get("limit"), "limit", default=8, minimum=1), 25
+        )
+        imports = CSVImport.objects.select_related(
+            "bank_account", "csv_mapping"
+        ).order_by("-created_at")[:limit]
+        return json_response(
+            [serialize_csv_import(csv_import) for csv_import in imports]
+        )
+
     def post(self, request):
         bank_account, csv_mapping, csv_file = resolve_import_inputs(request)
         dry_run = parse_bool(request.POST.get("dry_run"), default=False)
