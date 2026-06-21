@@ -460,16 +460,16 @@ export default function DashboardPage({
               </div>
             </div>
             <div className="dashboard-action-subsection dashboard-bulk-assign-action">
-              <div className="metric-label">Assign filtered</div>
+              <div className="metric-label">Bulk assign filtered transactions</div>
               <div className="bulk-assign-buttons">
                 <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("subcategory")} type="button">
-                  Assign subcategory
+                  Subcategory
                 </button>
                 <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("tag")} type="button">
-                  Assign tag
+                  Tag
                 </button>
                 <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("want_need_investment")} type="button">
-                  Assign WNI
+                  WNI
                 </button>
               </div>
             </div>
