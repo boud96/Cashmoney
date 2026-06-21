@@ -33,6 +33,10 @@ To build the React frontend manually:
 .\build_frontend.bat
 ```
 
+The generated React bundle is written to
+`backend\finance\static\finance\react\`. This directory is generated build
+output and is intentionally not tracked in git.
+
 To install the Electron shell:
 
 ```powershell
