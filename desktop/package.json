@@ -27,9 +27,14 @@
       {
         "from": "../backend/dist/cashmoney-backend",
         "to": "backend"
+      },
+      {
+        "from": "../backend/finance/static/favicon.ico",
+        "to": "favicon.ico"
       }
     ],
     "win": {
+      "icon": "../backend/finance/static/favicon.ico",
       "signAndEditExecutable": false,
       "target": [
         "nsis",
