@@ -63,13 +63,13 @@ export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll,
         <AccountForm clearEditing={() => clearEditing("/bank-accounts/")} editingItem={editingItems["/bank-accounts/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} title="Categories">
-        <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.categories} notify={notify} reloadAll={reloadAll} />
+        <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" entityLabel="Category" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.categories} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} notify={notify} onDeleted={() => clearEditing("/subcategories/")} onEdit={(item) => editItem("/subcategories/", item)} reloadAll={reloadAll} title="Subcategories">
         <SubcategoryForm clearEditing={() => clearEditing("/subcategories/")} editingItem={editingItems["/subcategories/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} notify={notify} onDeleted={() => clearEditing("/tags/")} onEdit={(item) => editItem("/tags/", item)} reloadAll={reloadAll} title="Tags">
-        <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.tags} notify={notify} reloadAll={reloadAll} />
+        <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" entityLabel="Tag" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.tags} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} notify={notify} onDeleted={() => clearEditing("/keywords/")} onEdit={(item) => editItem("/keywords/", item)} reloadAll={reloadAll} title="Keywords" wide>
         <KeywordForm clearEditing={() => clearEditing("/keywords/")} editingItem={editingItems["/keywords/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
@@ -342,18 +342,31 @@ function FormField({ children, className = "", label }) {
   );
 }
 
-function FormActions({ busy = false, clearEditing, isEditing }) {
-  return (
-    <div className="form-actions">
-      <LoadingButton busy={busy} busyLabel={isEditing ? "Saving" : "Adding"} type="submit">{isEditing ? "Save" : "Add"}</LoadingButton>
-      {isEditing && <button className="link-button" disabled={busy} onClick={clearEditing} type="button">Cancel</button>}
-    </div>
-  );
-}
-
 function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
+  const [isAdding, setIsAdding] = useState(false);
   const isEditing = Boolean(editingItem);
+  const isOpen = isAdding || isEditing;
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editingItem) {
+      setIsAdding(false);
+    }
+  }, [editingItem]);
+
+  function openAddAccount() {
+    clearEditing?.();
+    setIsAdding(true);
+  }
+
+  function closeAccountModal() {
+    if (saving) {
+      return;
+    }
+    setIsAdding(false);
+    clearEditing?.();
+  }
+
   async function submit(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -383,6 +396,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
         await apiPost("/bank-accounts/", data);
       }
       form.reset();
+      setIsAdding(false);
       clearEditing?.();
       notify(isEditing ? "Account saved" : "Account added");
       await reloadAll();
@@ -393,15 +407,40 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
     }
   }
   return (
-    <form className="compact-form" key={editingItem?.id || "new-account"} onSubmit={submit}>
-      <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Account name" required /></FormField>
-      <FormField label="Account Number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Optional account number" /></FormField>
-      <FormField label="Bank"><input defaultValue={editingItem?.bank_name || ""} name="bank_name" placeholder="Bank name" /></FormField>
-      <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" placeholder="CZK" required /></FormField>
-      <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" required type="number" /></FormField>
-      <FormField label="Default CSV Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
-      <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
-    </form>
+    <>
+      <div className="definition-panel-actions">
+        <button className="primary-action" onClick={openAddAccount} type="button">Add Bank Account</button>
+      </div>
+      {isOpen ? (
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeAccountModal()} role="presentation">
+          <form aria-labelledby="account-modal-title" aria-modal="true" className="definition-modal" key={editingItem?.id || "new-account"} onSubmit={submit} role="dialog">
+            <div className="definition-modal-header">
+              <div>
+                <h3 id="account-modal-title">{isEditing ? "Edit Bank Account" : "Add Bank Account"}</h3>
+                <span>{editingItem?.name || "New bank account"}</span>
+              </div>
+              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeAccountModal} type="button">x</button>
+            </div>
+            <div className="definition-modal-body">
+              <div className="compact-form">
+                <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Account name" required /></FormField>
+                <FormField label="Account Number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Optional account number" /></FormField>
+                <FormField label="Bank"><input defaultValue={editingItem?.bank_name || ""} name="bank_name" placeholder="Bank name" /></FormField>
+                <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" placeholder="CZK" required /></FormField>
+                <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" required type="number" /></FormField>
+                <FormField label="Default CSV Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
+              </div>
+            </div>
+            <div className="definition-modal-actions">
+              <button className="link-button" disabled={saving} onClick={closeAccountModal} type="button">Cancel</button>
+              <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
+                {isEditing ? "Save Account" : "Create Account"}
+              </LoadingButton>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -866,9 +905,31 @@ function MappingSample({ detected }) {
   );
 }
 
-function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], notify, reloadAll }) {
+function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record", fields, items = [], notify, reloadAll }) {
+  const [isAdding, setIsAdding] = useState(false);
   const isEditing = Boolean(editingItem);
+  const isOpen = isAdding || isEditing;
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editingItem) {
+      setIsAdding(false);
+    }
+  }, [editingItem]);
+
+  function openAddItem() {
+    clearEditing?.();
+    setIsAdding(true);
+  }
+
+  function closeItemModal() {
+    if (saving) {
+      return;
+    }
+    setIsAdding(false);
+    clearEditing?.();
+  }
+
   async function submit(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -886,8 +947,9 @@ function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], n
         await apiPost(endpoint, data);
       }
       form.reset();
+      setIsAdding(false);
       clearEditing?.();
-      notify(isEditing ? "Record saved" : "Record added");
+      notify(isEditing ? `${entityLabel} saved` : `${entityLabel} added`);
       await reloadAll();
     } catch (error) {
       notify(error.message);
@@ -896,20 +958,67 @@ function SimpleForm({ clearEditing, editingItem, endpoint, fields, items = [], n
     }
   }
   return (
-    <form className="compact-form" key={editingItem?.id || `${endpoint}-new`} onSubmit={submit}>
-      {fields.map(([name, placeholder, required]) => (
-        name === "color"
-          ? <ColorInput initialValue={editingItem?.[name] || ""} key={name} label={placeholder} name={name} />
-          : <FormField key={name} label={placeholder}><input defaultValue={editingItem?.[name] || ""} name={name} placeholder={placeholder} required={required} /></FormField>
-      ))}
-      <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
-    </form>
+    <>
+      <div className="definition-panel-actions">
+        <button className="primary-action" onClick={openAddItem} type="button">Add {entityLabel}</button>
+      </div>
+      {isOpen ? (
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeItemModal()} role="presentation">
+          <form aria-labelledby={`${endpoint.replace(/\W/g, "")}-modal-title`} aria-modal="true" className="definition-modal" key={editingItem?.id || `${endpoint}-new`} onSubmit={submit} role="dialog">
+            <div className="definition-modal-header">
+              <div>
+                <h3 id={`${endpoint.replace(/\W/g, "")}-modal-title`}>{isEditing ? `Edit ${entityLabel}` : `Add ${entityLabel}`}</h3>
+                <span>{editingItem?.name || `New ${entityLabel.toLowerCase()}`}</span>
+              </div>
+              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeItemModal} type="button">x</button>
+            </div>
+            <div className="definition-modal-body">
+              <div className="compact-form">
+                {fields.map(([name, placeholder, required]) => (
+                  name === "color"
+                    ? <ColorInput initialValue={editingItem?.[name] || ""} key={name} label={placeholder} name={name} />
+                    : <FormField key={name} label={placeholder}><input defaultValue={editingItem?.[name] || ""} name={name} placeholder={placeholder} required={required} /></FormField>
+                ))}
+              </div>
+            </div>
+            <div className="definition-modal-actions">
+              <button className="link-button" disabled={saving} onClick={closeItemModal} type="button">Cancel</button>
+              <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
+                {isEditing ? `Save ${entityLabel}` : `Create ${entityLabel}`}
+              </LoadingButton>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </>
   );
 }
 
 function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
+  const [isAdding, setIsAdding] = useState(false);
   const isEditing = Boolean(editingItem);
+  const isOpen = isAdding || isEditing;
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (editingItem) {
+      setIsAdding(false);
+    }
+  }, [editingItem]);
+
+  function openAddSubcategory() {
+    clearEditing?.();
+    setIsAdding(true);
+  }
+
+  function closeSubcategoryModal() {
+    if (saving) {
+      return;
+    }
+    setIsAdding(false);
+    clearEditing?.();
+  }
+
   async function submit(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -930,6 +1039,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
         await apiPost("/subcategories/", data);
       }
       form.reset();
+      setIsAdding(false);
       clearEditing?.();
       notify(isEditing ? "Subcategory saved" : "Subcategory added");
       await reloadAll();
@@ -940,12 +1050,37 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
     }
   }
   return (
-    <form className="compact-form" key={editingItem?.id || "new-subcategory"} onSubmit={submit}>
-      <FormField label="Category"><Select defaultValue={editingItem?.category?.id || ""} name="category_id" options={refs.categories.map((item) => [item.id, item.name])} required /></FormField>
-      <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Subcategory name" required /></FormField>
-      <ColorInput initialValue={editingItem?.color || ""} label="Color" name="color" />
-      <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
-    </form>
+    <>
+      <div className="definition-panel-actions">
+        <button className="primary-action" onClick={openAddSubcategory} type="button">Add Subcategory</button>
+      </div>
+      {isOpen ? (
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeSubcategoryModal()} role="presentation">
+          <form aria-labelledby="subcategory-modal-title" aria-modal="true" className="definition-modal" key={editingItem?.id || "new-subcategory"} onSubmit={submit} role="dialog">
+            <div className="definition-modal-header">
+              <div>
+                <h3 id="subcategory-modal-title">{isEditing ? "Edit Subcategory" : "Add Subcategory"}</h3>
+                <span>{editingItem?.name || "New subcategory"}</span>
+              </div>
+              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeSubcategoryModal} type="button">x</button>
+            </div>
+            <div className="definition-modal-body">
+              <div className="compact-form">
+                <FormField label="Category"><Select defaultValue={editingItem?.category?.id || ""} name="category_id" options={refs.categories.map((item) => [item.id, item.name])} required /></FormField>
+                <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Subcategory name" required /></FormField>
+                <ColorInput initialValue={editingItem?.color || ""} label="Color" name="color" />
+              </div>
+            </div>
+            <div className="definition-modal-actions">
+              <button className="link-button" disabled={saving} onClick={closeSubcategoryModal} type="button">Cancel</button>
+              <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
+                {isEditing ? "Save Subcategory" : "Create Subcategory"}
+              </LoadingButton>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -1043,7 +1178,9 @@ function DefinitionCheckboxField({ className = "", helpText = "", label, onChang
 }
 
 function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
+  const [isAdding, setIsAdding] = useState(false);
   const isEditing = Boolean(editingItem);
+  const isOpen = isAdding || isEditing;
   const [tagIds, setTagIds] = useState(() => (editingItem?.tags || []).map((item) => item.id));
   const [previewResult, setPreviewResult] = useState(null);
   const [previewText, setPreviewText] = useState("");
@@ -1051,10 +1188,38 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (!editingItem) {
+      if (!isAdding) {
+        setTagIds([]);
+        setPreviewResult(null);
+        setPreviewText("");
+      }
+      return;
+    }
+    setIsAdding(false);
     setTagIds((editingItem?.tags || []).map((item) => item.id));
     setPreviewResult(null);
     setPreviewText("");
-  }, [editingItem]);
+  }, [editingItem, isAdding]);
+
+  function openAddKeyword() {
+    clearEditing?.();
+    setTagIds([]);
+    setPreviewResult(null);
+    setPreviewText("");
+    setIsAdding(true);
+  }
+
+  function closeKeywordModal() {
+    if (saving || previewing) {
+      return;
+    }
+    setIsAdding(false);
+    clearEditing?.();
+    setTagIds([]);
+    setPreviewResult(null);
+    setPreviewText("");
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -1078,7 +1243,11 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
         await apiPost("/keywords/", data);
       }
       form.reset();
+      setIsAdding(false);
       clearEditing?.();
+      setTagIds([]);
+      setPreviewResult(null);
+      setPreviewText("");
       notify(isEditing ? "Keyword saved" : "Keyword added");
       await reloadAll();
     } catch (error) {
@@ -1105,32 +1274,57 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   }
 
   return (
-    <form className="compact-form keyword-form" key={editingItem?.id || "new-keyword"} onSubmit={submit}>
-      <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Keyword name" required /></FormField>
-      <FormField label="Include Terms"><textarea defaultValue={(editingItem?.include_terms || []).join("\n")} name="include_terms" placeholder="One term per line" required rows="3" /></FormField>
-      <FormField label="Exclude Terms"><textarea defaultValue={(editingItem?.exclude_terms || []).join("\n")} name="exclude_terms" placeholder="One term per line" rows="3" /></FormField>
-      <FormField label="Subcategory"><Select blank="No subcategory" defaultValue={editingItem?.subcategory?.id || ""} name="subcategory_id" options={refs.subcategories.map((item) => [item.id, subLabel(item)])} /></FormField>
-      <FormField label="Want / Need / Investment"><Select blank="No WNI" defaultValue={editingItem?.want_need_investment || ""} name="want_need_investment" options={wniOptions} /></FormField>
-      <DefinitionCheckboxField label="Tags" onChange={setTagIds} options={refs.tags.map((item) => [item.id, item.name])} placeholder="No tags selected" value={tagIds} />
-      <FormField label="Priority"><input defaultValue={editingItem?.priority ?? "0"} name="priority" type="number" /></FormField>
-      <label className="check-row"><input defaultChecked={Boolean(editingItem?.is_ignored)} name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
-      <div className="keyword-preview-panel">
-        <FormField label="Preview Text"><textarea onChange={(event) => setPreviewText(event.target.value)} placeholder="Paste transaction text" rows="2" value={previewText} /></FormField>
-        <LoadingButton busy={previewing} busyLabel="Previewing" className="link-button" onClick={previewKeywordMatch} type="button">Preview Matches</LoadingButton>
-        {previewResult && (
-          <div className="keyword-preview-result">
-            <div className={`keyword-preview-status status-${previewResult.categorization.status}`}>
-              {titleCase(previewResult.categorization.status)}
-            </div>
-            {previewResult.categorization.conflict_reason && (
-              <div className="conflict-detail-reason">{previewResult.categorization.conflict_reason}</div>
-            )}
-            <KeywordMatchList matches={previewResult.categorization.matched_keywords || []} />
-          </div>
-        )}
+    <>
+      <div className="definition-panel-actions">
+        <button className="primary-action" onClick={openAddKeyword} type="button">Add Keyword</button>
       </div>
-      <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
-    </form>
+      {isOpen ? (
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeKeywordModal()} role="presentation">
+          <form aria-labelledby="keyword-modal-title" aria-modal="true" className="definition-modal keyword-modal" key={editingItem?.id || "new-keyword"} onSubmit={submit} role="dialog">
+            <div className="definition-modal-header">
+              <div>
+                <h3 id="keyword-modal-title">{isEditing ? "Edit Keyword" : "Add Keyword"}</h3>
+                <span>{editingItem?.name || "New keyword"}</span>
+              </div>
+              <button aria-label="Close" className="icon-button" disabled={saving || previewing} onClick={closeKeywordModal} type="button">x</button>
+            </div>
+            <div className="definition-modal-body">
+              <div className="compact-form keyword-form">
+                <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Keyword name" required /></FormField>
+                <FormField label="Include Terms"><textarea defaultValue={(editingItem?.include_terms || []).join("\n")} name="include_terms" placeholder="One term per line" required rows="3" /></FormField>
+                <FormField label="Exclude Terms"><textarea defaultValue={(editingItem?.exclude_terms || []).join("\n")} name="exclude_terms" placeholder="One term per line" rows="3" /></FormField>
+                <FormField label="Subcategory"><Select blank="No subcategory" defaultValue={editingItem?.subcategory?.id || ""} name="subcategory_id" options={refs.subcategories.map((item) => [item.id, subLabel(item)])} /></FormField>
+                <FormField label="Want / Need / Investment"><Select blank="No WNI" defaultValue={editingItem?.want_need_investment || ""} name="want_need_investment" options={wniOptions} /></FormField>
+                <DefinitionCheckboxField label="Tags" onChange={setTagIds} options={refs.tags.map((item) => [item.id, item.name])} placeholder="No tags selected" value={tagIds} />
+                <FormField label="Priority"><input defaultValue={editingItem?.priority ?? "0"} name="priority" type="number" /></FormField>
+                <label className="check-row"><input defaultChecked={Boolean(editingItem?.is_ignored)} name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
+                <div className="keyword-preview-panel">
+                  <FormField label="Preview Text"><textarea onChange={(event) => setPreviewText(event.target.value)} placeholder="Paste transaction text" rows="2" value={previewText} /></FormField>
+                  <LoadingButton busy={previewing} busyLabel="Previewing" className="link-button" onClick={previewKeywordMatch} type="button">Preview Matches</LoadingButton>
+                  {previewResult && (
+                    <div className="keyword-preview-result">
+                      <div className={`keyword-preview-status status-${previewResult.categorization.status}`}>
+                        {titleCase(previewResult.categorization.status)}
+                      </div>
+                      {previewResult.categorization.conflict_reason && (
+                        <div className="conflict-detail-reason">{previewResult.categorization.conflict_reason}</div>
+                      )}
+                      <KeywordMatchList matches={previewResult.categorization.matched_keywords || []} />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="definition-modal-actions">
+              <button className="link-button" disabled={saving || previewing} onClick={closeKeywordModal} type="button">Cancel</button>
+              <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" disabled={previewing} type="submit">
+                {isEditing ? "Save Keyword" : "Create Keyword"}
+              </LoadingButton>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </>
   );
 }
 
