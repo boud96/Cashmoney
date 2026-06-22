@@ -411,6 +411,269 @@ h2 {
   min-height: 38px;
 }
 
+.mapping-wizard-modal {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(1040px, calc(100vw - 32px));
+  max-height: min(900px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+}
+
+.mapping-wizard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mapping-wizard-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.mapping-wizard-header span {
+  display: block;
+  max-width: 720px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapping-wizard-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--subtle-bg);
+}
+
+.mapping-wizard-step {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 8px;
+}
+
+.mapping-wizard-step span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--field-bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.mapping-wizard-step strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapping-wizard-step.is-active {
+  border-color: color-mix(in srgb, var(--action) 48%, var(--border));
+  background: color-mix(in srgb, var(--action) 9%, var(--surface));
+  color: var(--text);
+}
+
+.mapping-wizard-step.is-active span,
+.mapping-wizard-step.is-complete span {
+  background: var(--action);
+  color: var(--action-contrast);
+}
+
+.mapping-wizard-body {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 360px;
+  min-width: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.mapping-wizard-body h4 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.mapping-wizard-step-panel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mapping-wizard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.mapping-wizard-grid .mapping-file-field {
+  grid-column: 1 / -1;
+}
+
+.mapping-detection-status {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.advanced-settings-grid.mapping-wizard-parsing-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 0;
+}
+
+.mapping-parser-action {
+  display: grid;
+  align-self: end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mapping-empty-state {
+  display: grid;
+  place-items: center;
+  min-height: 160px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mapping-wizard-actions {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 14px;
+  border-top: 1px solid var(--border);
+  background: var(--subtle-bg);
+}
+
+.mapping-wizard-actions button:first-child {
+  justify-self: start;
+}
+
+.mapping-wizard-actions button {
+  min-height: 38px;
+}
+
+.mapping-wizard-actions .mapping-back-button:disabled {
+  cursor: default;
+}
+
+.mapping-wizard-sample {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mapping-wizard-modal .mapping-sample-table {
+  overflow: auto;
+}
+
+.mapping-wizard-modal .mapping-sample-table table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.mapping-review {
+  display: grid;
+  gap: 14px;
+}
+
+.mapping-review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mapping-review-grid div,
+.mapping-review-list div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--field-bg);
+  padding: 10px;
+}
+
+.mapping-review-grid span,
+.mapping-review-section > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.mapping-review-grid strong,
+.mapping-review-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapping-review-section {
+  display: grid;
+  gap: 8px;
+}
+
+.mapping-review-list {
+  display: grid;
+  gap: 8px;
+}
+
+.mapping-review-list span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapping-review-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mapping-review-tags span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--field-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 720;
+  padding: 5px 9px;
+}
+
 .accent-custom-picker {
   display: grid;
   gap: 8px;
@@ -2300,6 +2563,12 @@ select option {
   padding: 0 9px;
 }
 
+.mapping-panel-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
 .mapping-form,
 .keyword-form {
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2797,7 +3066,9 @@ td {
   .maintenance-tool-grid,
   .recategorize-stats,
   .advanced-settings-grid,
+  .advanced-settings-grid.mapping-wizard-parsing-grid,
   .mapping-column-map,
+  .mapping-review-grid,
   .relative-range-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2865,12 +3136,24 @@ td {
   .maintenance-counts,
   .compact-form,
   .mapping-form,
+  .mapping-wizard-grid,
+  .mapping-review-grid,
   .keyword-form,
   .recategorize-stats,
   .advanced-settings-grid,
+  .advanced-settings-grid.mapping-wizard-parsing-grid,
   .mapping-column-map,
   .relative-range-form {
     grid-template-columns: 1fr;
+  }
+
+  .mapping-wizard-steps,
+  .mapping-wizard-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mapping-wizard-actions button:first-child {
+    justify-self: stretch;
   }
 
   .metrics-grid {

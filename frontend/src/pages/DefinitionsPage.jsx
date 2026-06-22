@@ -411,12 +411,22 @@ function bankAccountSubtitle(item) {
   return parts.join(" - ");
 }
 
+const mappingWizardSteps = ["Source", "Parsing", "Columns", "Confirm"];
+
 function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll, setDraft }) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [step, setStep] = useState(0);
+  const [mappingDetails, setMappingDetails] = useState({ name: "", default_currency: "CZK" });
+  const [sampleFile, setSampleFile] = useState(null);
+  const formRef = useRef(null);
+  const sampleFileRef = useRef(null);
   const headers = useMemo(
     () => mappedColumnOptions(draft.detected?.headers || draft.available_headers || [], draft.column_map),
     [draft.detected?.headers, draft.available_headers, draft.column_map],
   );
   const isEditing = Boolean(editingItem);
+  const isOpen = isAdding || isEditing;
+  const currentStep = Math.min(step, mappingWizardSteps.length - 1);
   const [parsingSettings, setParsingSettings] = useState(() => parsingSettingsFromMapping(editingItem));
   const [manualParsingSettings, setManualParsingSettings] = useState(Boolean(editingItem));
   const [detecting, setDetecting] = useState(false);
@@ -424,10 +434,17 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
 
   useEffect(() => {
     if (!editingItem) {
-      setParsingSettings(defaultParsingSettings);
-      setManualParsingSettings(false);
+      if (!isAdding) {
+        resetWizardState();
+      }
       return;
     }
+    setIsAdding(false);
+    setStep(0);
+    setMappingDetails({
+      name: editingItem.name || "",
+      default_currency: normalizeCurrencyCode(editingItem.default_currency || "CZK"),
+    });
     setParsingSettings(parsingSettingsFromMapping(editingItem));
     setManualParsingSettings(true);
     setDraft({
@@ -436,7 +453,41 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       available_headers: editingItem.available_headers || [],
       detected: null,
     });
-  }, [editingItem, setDraft]);
+  }, [editingItem, isAdding, setDraft]);
+
+  function resetWizardState() {
+    setStep(0);
+    setMappingDetails({ name: "", default_currency: "CZK" });
+    setSampleFile(null);
+    setParsingSettings(defaultParsingSettings);
+    setManualParsingSettings(false);
+    setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, available_headers: [], detected: null });
+    if (sampleFileRef.current) {
+      sampleFileRef.current.value = "";
+    }
+  }
+
+  function openAddWizard() {
+    clearEditing?.();
+    resetWizardState();
+    setIsAdding(true);
+  }
+
+  function closeWizard() {
+    if (saving || detecting) {
+      return;
+    }
+    setIsAdding(false);
+    clearEditing?.();
+    resetWizardState();
+  }
+
+  function updateMappingDetail(field, value) {
+    setMappingDetails((current) => ({
+      ...current,
+      [field]: field === "default_currency" ? normalizeCurrencyCode(value) : value,
+    }));
+  }
 
   function updateParsingSetting(field, value) {
     setParsingSettings((current) => ({ ...current, [field]: value }));
@@ -445,15 +496,14 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
 
   async function detectColumns(event) {
     event.preventDefault();
-    const form = event.currentTarget.form || event.currentTarget;
-    const file = form.elements.sample_csv.files[0];
+    const file = sampleFileRef.current?.files?.[0] || sampleFile;
     if (!file) {
       notify("Choose a sample CSV");
       return;
     }
     const formData = new FormData();
     formData.append("csv_file", file);
-    formData.append("default_currency", form.elements.default_currency?.value || "CZK");
+    formData.append("default_currency", mappingDetails.default_currency || "CZK");
     if (manualParsingSettings) {
       formData.append("manual_settings", "1");
       Object.entries(parsingSettings).forEach(([field, value]) => {
@@ -485,30 +535,103 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     }
   }
 
+  function validateSourceStep() {
+    const name = mappingDetails.name.trim();
+    const currency = normalizeCurrencyCode(mappingDetails.default_currency);
+    if (!name) {
+      setStep(0);
+      notify("Name is required");
+      formRef.current?.elements.name?.focus();
+      return false;
+    }
+    if (currency.length !== 3) {
+      setStep(0);
+      notify("Default currency must be a 3-letter code");
+      formRef.current?.elements.default_currency?.focus();
+      return false;
+    }
+    if (findDuplicate(refs.mappings, "name", name, editingItem?.id)) {
+      setStep(0);
+      notify("CSV mapping name already exists");
+      formRef.current?.elements.name?.focus();
+      return false;
+    }
+    return true;
+  }
+
+  function validateParsingStep() {
+    const requiredSettings = [
+      ["delimiter", "Delimiter"],
+      ["quotechar", "Quote character"],
+      ["encoding", "Encoding"],
+      ["date_format", "Date format"],
+      ["decimal_separator", "Decimal separator"],
+    ];
+    const missing = requiredSettings.find(([field]) => !String(parsingSettings[field] ?? "").trim());
+    if (missing) {
+      setStep(1);
+      notify(`${missing[1]} is required`);
+      return false;
+    }
+    if (!String(parsingSettings.header_row ?? "").trim()) {
+      setStep(1);
+      notify("Header row is required");
+      return false;
+    }
+    const headerRow = Number(parsingSettings.header_row);
+    if (!Number.isInteger(headerRow) || headerRow < 0) {
+      setStep(1);
+      notify("Header row must be zero or greater");
+      return false;
+    }
+    return true;
+  }
+
+  function validateColumnsStep() {
+    if (!validateRequiredColumnMap(draft.column_map, notify)) {
+      setStep(2);
+      return false;
+    }
+    if (!draft.categorization_fields.length) {
+      setStep(2);
+      notify("Choose at least one categorization field");
+      return false;
+    }
+    return true;
+  }
+
+  function goNext() {
+    const validators = [validateSourceStep, validateParsingStep, validateColumnsStep];
+    if (validators[currentStep]?.() === false) {
+      return;
+    }
+    setStep((value) => Math.min(value + 1, mappingWizardSteps.length - 1));
+  }
+
   async function submit(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    const data = formObject(form);
-    const duplicateMapping = findDuplicate(refs.mappings, "name", data.name, editingItem?.id);
-    data.header_row = Number(data.header_row || 0);
-    data.column_map = sanitizeColumnMap(draft.column_map);
-    data.categorization_fields = draft.categorization_fields;
-    data.fallback_date_formats = [];
-    if (duplicateMapping) {
-      notify("CSV mapping name already exists");
-      form.elements.name?.focus();
+    if (currentStep < mappingWizardSteps.length - 1) {
+      goNext();
       return;
     }
-    if (!validateRequiredFields(form, ["default_currency", "delimiter", "quotechar", "encoding", "date_format", "decimal_separator"], notify)) {
+    if (!validateSourceStep() || !validateParsingStep() || !validateColumnsStep()) {
       return;
     }
-    if (!validateRequiredColumnMap(draft.column_map, notify)) {
-      return;
-    }
-    if (!draft.categorization_fields.length) {
-      notify("Choose at least one categorization field");
-      return;
-    }
+    const data = {
+      name: mappingDetails.name.trim(),
+      default_currency: normalizeCurrencyCode(mappingDetails.default_currency),
+      delimiter: parsingSettings.delimiter,
+      quotechar: parsingSettings.quotechar,
+      encoding: parsingSettings.encoding,
+      header_row: Number(parsingSettings.header_row || 0),
+      date_format: parsingSettings.date_format,
+      decimal_separator: parsingSettings.decimal_separator,
+      thousands_separator: parsingSettings.thousands_separator || "",
+      column_map: sanitizeColumnMap(draft.column_map),
+      categorization_fields: draft.categorization_fields,
+      fallback_date_formats: [],
+    };
     setSaving(true);
     try {
       if (isEditing) {
@@ -517,10 +640,9 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
         await apiPost("/csv-mappings/", data);
       }
       form.reset();
+      setIsAdding(false);
       clearEditing?.();
-      setParsingSettings(defaultParsingSettings);
-      setManualParsingSettings(false);
-      setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, available_headers: [], detected: null });
+      resetWizardState();
       notify(isEditing ? "CSV mapping saved" : "CSV mapping added");
       await reloadAll();
     } catch (error) {
@@ -530,75 +652,198 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     }
   }
 
-  return (
-    <form className="compact-form mapping-form" key={editingItem?.id || "new-mapping"} onSubmit={submit}>
-      <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Mapping name" required /></FormField>
-      <FormField label="Default Currency"><input defaultValue={editingItem?.default_currency || "CZK"} maxLength="3" name="default_currency" placeholder="CZK" required /></FormField>
-      <label className="mapping-file-field"><span>Sample CSV</span><input accept=".csv,text/csv" name="sample_csv" type="file" /></label>
-      <LoadingButton busy={detecting} busyLabel="Detecting" className="link-button mapping-detect-button" disabled={saving} onClick={detectColumns} type="button">Detect Columns</LoadingButton>
-      <details className="advanced-settings" open={isEditing || Boolean(draft.detected)}>
-        <summary>Advanced parsing settings</summary>
-        <div className="advanced-settings-grid">
-          <FormField label="Delimiter"><input maxLength="1" name="delimiter" onChange={(event) => updateParsingSetting("delimiter", event.target.value)} placeholder="," required value={parsingSettings.delimiter} /></FormField>
-          <FormField label="Date Format"><input name="date_format" onChange={(event) => updateParsingSetting("date_format", event.target.value)} placeholder="%Y-%m-%d" required value={parsingSettings.date_format} /></FormField>
-          <FormField label="Encoding"><input name="encoding" onChange={(event) => updateParsingSetting("encoding", event.target.value)} placeholder="utf-8-sig" required value={parsingSettings.encoding} /></FormField>
-          <FormField label="Header Row"><input min="0" name="header_row" onChange={(event) => updateParsingSetting("header_row", event.target.value)} placeholder="0" required type="number" value={parsingSettings.header_row} /></FormField>
-          <FormField label="Quote Character"><input maxLength="1" name="quotechar" onChange={(event) => updateParsingSetting("quotechar", event.target.value)} placeholder={'"'} required value={parsingSettings.quotechar} /></FormField>
-          <FormField label="Decimal Separator"><input maxLength="1" name="decimal_separator" onChange={(event) => updateParsingSetting("decimal_separator", event.target.value)} placeholder="." required value={parsingSettings.decimal_separator} /></FormField>
-          <FormField label="Thousands Separator"><input name="thousands_separator" onChange={(event) => updateParsingSetting("thousands_separator", event.target.value)} placeholder="Optional" value={parsingSettings.thousands_separator} /></FormField>
+  function renderStepContent() {
+    if (currentStep === 0) {
+      return (
+        <div className="mapping-wizard-step-panel">
+          <div className="mapping-wizard-grid">
+            <FormField label="Name">
+              <input
+                name="name"
+                onChange={(event) => updateMappingDetail("name", event.target.value)}
+                placeholder="Mapping name"
+                value={mappingDetails.name}
+              />
+            </FormField>
+            <FormField label="Default Currency">
+              <input
+                maxLength="3"
+                name="default_currency"
+                onChange={(event) => updateMappingDetail("default_currency", event.target.value)}
+                placeholder="CZK"
+                value={mappingDetails.default_currency}
+              />
+            </FormField>
+            <label className="mapping-file-field">
+              <span>Sample CSV</span>
+              <input accept=".csv,text/csv" name="sample_csv" onChange={(event) => setSampleFile(event.target.files?.[0] || null)} ref={sampleFileRef} type="file" />
+            </label>
+          </div>
         </div>
-      </details>
-      {draft.detected?.warnings?.length ? (
-        <div className="mapping-warnings">
-          {draft.detected.warnings.map((warning) => <div key={warning}>{warning}</div>)}
+      );
+    }
+    if (currentStep === 1) {
+      return (
+        <div className="mapping-wizard-step-panel">
+          <div className="advanced-settings-grid mapping-wizard-parsing-grid">
+            <FormField label="Delimiter"><input maxLength="1" name="delimiter" onChange={(event) => updateParsingSetting("delimiter", event.target.value)} placeholder="," value={parsingSettings.delimiter} /></FormField>
+            <FormField label="Date Format"><input name="date_format" onChange={(event) => updateParsingSetting("date_format", event.target.value)} placeholder="%Y-%m-%d" value={parsingSettings.date_format} /></FormField>
+            <FormField label="Encoding"><input name="encoding" onChange={(event) => updateParsingSetting("encoding", event.target.value)} placeholder="utf-8-sig" value={parsingSettings.encoding} /></FormField>
+            <FormField label="Header Row"><input min="0" name="header_row" onChange={(event) => updateParsingSetting("header_row", event.target.value)} placeholder="0" type="number" value={parsingSettings.header_row} /></FormField>
+            <FormField label="Quote Character"><input maxLength="1" name="quotechar" onChange={(event) => updateParsingSetting("quotechar", event.target.value)} placeholder={'"'} value={parsingSettings.quotechar} /></FormField>
+            <FormField label="Decimal Separator"><input maxLength="1" name="decimal_separator" onChange={(event) => updateParsingSetting("decimal_separator", event.target.value)} placeholder="." value={parsingSettings.decimal_separator} /></FormField>
+            <FormField label="Thousands Separator"><input name="thousands_separator" onChange={(event) => updateParsingSetting("thousands_separator", event.target.value)} placeholder="Optional" value={parsingSettings.thousands_separator} /></FormField>
+            <div className="mapping-parser-action">
+              <LoadingButton busy={detecting} busyLabel="Detecting" className="link-button mapping-detect-button" disabled={saving} onClick={detectColumns} type="button">Detect Columns</LoadingButton>
+              {draft.detected ? <span className="mapping-detection-status">{draft.detected.headers?.length || 0} columns detected</span> : null}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (currentStep === 2) {
+      return (
+        <div className="mapping-wizard-step-panel">
+          <div className="mapping-column-map">
+            {mappingFields.map(([key, label]) => (
+              key === "description" ? (
+                <DefinitionCheckboxField
+                  key={key}
+                  label={label}
+                  onChange={(next) => setDraft((current) => ({ ...current, column_map: { ...current.column_map, [key]: next } }))}
+                  options={headers.map((header) => [header, header])}
+                  placeholder="No columns mapped"
+                  value={coerceArray(draft.column_map[key])}
+                />
+              ) : (
+                <label className="mapping-column-field" key={key}>
+                  <span>{label}</span>
+                  <select
+                    onChange={(event) => setDraft((current) => ({
+                      ...current,
+                      column_map: { ...current.column_map, [key]: event.target.value || "" },
+                    }))}
+                    value={draft.column_map[key] || ""}
+                  >
+                    <option value="">Not mapped</option>
+                    {headers.map((header) => <option key={header} value={header}>{header}</option>)}
+                  </select>
+                </label>
+              )
+            ))}
+          </div>
+          <DefinitionCheckboxField
+            className="mapping-categorization-field"
+            label="Categorization Fields"
+            helpText="Keywords and recategorization build their matching text from these transaction fields. Select every field that can contain useful merchant, counterparty, note, symbol, or transaction-type text."
+            onChange={(next) => setDraft((current) => ({ ...current, categorization_fields: next }))}
+            options={categorizationFieldOptions}
+            placeholder="No categorization fields selected"
+            value={draft.categorization_fields}
+          />
+        </div>
+      );
+    }
+    return (
+      <MappingReview
+        draft={draft}
+        headers={headers}
+        mappingDetails={mappingDetails}
+        parsingSettings={parsingSettings}
+      />
+    );
+  }
+
+  function renderSamplePreview() {
+    return (
+      <div className="mapping-wizard-sample">
+        {draft.detected?.warnings?.length ? (
+          <div className="mapping-warnings">
+            {draft.detected.warnings.map((warning) => <div key={warning}>{warning}</div>)}
+          </div>
+        ) : null}
+        {draft.detected ? <MappingSample detected={draft.detected} /> : <div className="mapping-empty-state">No sample data detected.</div>}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="mapping-panel-actions">
+        <button className="primary-action" onClick={openAddWizard} type="button">Add CSV Mapping</button>
+      </div>
+      {isOpen ? (
+        <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeWizard()} role="presentation">
+          <form aria-labelledby="mapping-wizard-title" aria-modal="true" className="mapping-wizard-modal" key={editingItem?.id || "new-mapping"} onSubmit={submit} ref={formRef} role="dialog">
+            <div className="mapping-wizard-header">
+              <div>
+                <h3 id="mapping-wizard-title">{isEditing ? "Edit CSV Mapping" : "Add CSV Mapping"}</h3>
+                <span>{mappingDetails.name || "New mapping"}</span>
+              </div>
+              <button aria-label="Close" className="icon-button" disabled={saving || detecting} onClick={closeWizard} type="button">x</button>
+            </div>
+            <div aria-label="CSV mapping steps" className="mapping-wizard-steps">
+              {mappingWizardSteps.map((label, index) => (
+                <div className={`mapping-wizard-step ${index === currentStep ? "is-active" : ""} ${index < currentStep ? "is-complete" : ""}`.trim()} key={label}>
+                  <span>{index + 1}</span>
+                  <strong>{label}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="mapping-wizard-body">
+              <h4>{mappingWizardSteps[currentStep]}</h4>
+              {renderStepContent()}
+              {renderSamplePreview()}
+            </div>
+            <div className="mapping-wizard-actions">
+              <button className="link-button" disabled={saving || detecting} onClick={closeWizard} type="button">Cancel</button>
+              <button className="link-button mapping-back-button" disabled={currentStep === 0 || saving || detecting} onClick={() => setStep((value) => Math.max(value - 1, 0))} type="button">Back</button>
+              {currentStep < mappingWizardSteps.length - 1 ? (
+                <button className="primary-action" disabled={saving || detecting} onClick={goNext} type="button">Next</button>
+              ) : (
+                <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" disabled={detecting} type="submit">
+                  {isEditing ? "Save Mapping" : "Create Mapping"}
+                </LoadingButton>
+              )}
+            </div>
+          </form>
         </div>
       ) : null}
-      <div className="mapping-column-map">
-        {mappingFields.map(([key, label]) => (
-          key === "description" ? (
-            <DefinitionCheckboxField
-              key={key}
-              label={label}
-              onChange={(next) => setDraft((current) => ({ ...current, column_map: { ...current.column_map, [key]: next } }))}
-              options={headers.map((header) => [header, header])}
-              placeholder="No columns mapped"
-              value={coerceArray(draft.column_map[key])}
-            />
-          ) : (
-            <label className="mapping-column-field" key={key}>
-              <span>{label}</span>
-              <select
-                required={["transaction_date", "amount"].includes(key)}
-                onChange={(event) => setDraft((current) => ({
-                  ...current,
-                  column_map: { ...current.column_map, [key]: event.target.value || "" },
-                }))}
-                value={draft.column_map[key] || ""}
-              >
-                <option value="">Not mapped</option>
-                {headers.map((header) => <option key={header} value={header}>{header}</option>)}
-              </select>
-            </label>
-          )
-        ))}
+    </>
+  );
+}
+
+function MappingReview({ draft, headers, mappingDetails, parsingSettings }) {
+  const mappedFields = mappingFields
+    .map(([key, label]) => [label, coerceArray(draft.column_map[key]).filter(Boolean).join(", ")])
+    .filter(([, value]) => value);
+  return (
+    <div className="mapping-review">
+      <div className="mapping-review-grid">
+        <div><span>Name</span><strong>{mappingDetails.name || "Unnamed"}</strong></div>
+        <div><span>Default currency</span><strong>{mappingDetails.default_currency || "CZK"}</strong></div>
+        <div><span>Detected columns</span><strong>{headers.length}</strong></div>
+        <div><span>Date format</span><strong>{parsingSettings.date_format}</strong></div>
+        <div><span>Delimiter</span><strong>{parsingSettings.delimiter}</strong></div>
+        <div><span>Encoding</span><strong>{parsingSettings.encoding}</strong></div>
       </div>
-      <DefinitionCheckboxField
-        className="mapping-categorization-field"
-        label="Categorization Fields"
-        helpText="Keywords and recategorization build their matching text from these transaction fields. Select every field that can contain useful merchant, counterparty, note, symbol, or transaction-type text."
-        onChange={(next) => setDraft((current) => ({ ...current, categorization_fields: next }))}
-        options={categorizationFieldOptions}
-        placeholder="No categorization fields selected"
-        value={draft.categorization_fields}
-      />
-      {draft.detected && <MappingSample detected={draft.detected} />}
-      <FormActions busy={saving} clearEditing={() => {
-        clearEditing?.();
-        setParsingSettings(defaultParsingSettings);
-        setManualParsingSettings(false);
-        setDraft({ column_map: {}, categorization_fields: defaultCategorizationFields, available_headers: [], detected: null });
-      }} isEditing={isEditing} />
-    </form>
+      <div className="mapping-review-section">
+        <span>Column map</span>
+        <div className="mapping-review-list">
+          {mappedFields.length ? mappedFields.map(([label, value]) => (
+            <div key={label}><strong>{label}</strong><span>{value}</span></div>
+          )) : <div className="muted">No columns mapped.</div>}
+        </div>
+      </div>
+      <div className="mapping-review-section">
+        <span>Categorization fields</span>
+        <div className="mapping-review-tags">
+          {draft.categorization_fields.length ? draft.categorization_fields.map((field) => (
+            <span key={field}>{fieldLabel(field)}</span>
+          )) : <span className="muted">None selected.</span>}
+        </div>
+      </div>
+    </div>
   );
 }
 
