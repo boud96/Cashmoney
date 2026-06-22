@@ -49,29 +49,26 @@ export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll,
   }
 
   return (
-    <div className="settings-grid">
-      <section className="panel wide-panel">
-        <div className="panel-header">
-          <h2>App Settings</h2>
-        </div>
+    <div className="definitions-grid">
+      <CollapsiblePanel defaultExpanded storageId="app-settings" subtitle="Currency, exchange rates, and transfer automation" title="App Settings" wide>
         <SettingsForm notify={notify} refs={refs} reloadAll={reloadAll} reloadDashboard={reloadDashboard} settings={refs.settings} />
-      </section>
-      <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} title="CSV Mappings" wide>
+      </CollapsiblePanel>
+      <DefinitionPanel defaultExpanded endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} subtitle="CSV import parsers" title="CSV Mappings" wide>
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, bankAccountSubtitle(item)]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} title="Bank Accounts">
+      <DefinitionPanel defaultExpanded endpoint="/bank-accounts/" formatter={(item) => [item.name, bankAccountSubtitle(item)]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} subtitle="Accounts available for imports" title="Bank Accounts">
         <AccountForm clearEditing={() => clearEditing("/bank-accounts/")} editingItem={editingItems["/bank-accounts/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} title="Categories">
+      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} subtitle="Top-level reporting buckets" title="Categories">
         <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" entityLabel="Category" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.categories} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} notify={notify} onDeleted={() => clearEditing("/subcategories/")} onEdit={(item) => editItem("/subcategories/", item)} reloadAll={reloadAll} title="Subcategories">
+      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} notify={notify} onDeleted={() => clearEditing("/subcategories/")} onEdit={(item) => editItem("/subcategories/", item)} reloadAll={reloadAll} subtitle="Assignable category detail" title="Subcategories">
         <SubcategoryForm clearEditing={() => clearEditing("/subcategories/")} editingItem={editingItems["/subcategories/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} notify={notify} onDeleted={() => clearEditing("/tags/")} onEdit={(item) => editItem("/tags/", item)} reloadAll={reloadAll} title="Tags">
+      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} notify={notify} onDeleted={() => clearEditing("/tags/")} onEdit={(item) => editItem("/tags/", item)} reloadAll={reloadAll} subtitle="Flexible transaction labels" title="Tags">
         <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" entityLabel="Tag" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.tags} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} notify={notify} onDeleted={() => clearEditing("/keywords/")} onEdit={(item) => editItem("/keywords/", item)} reloadAll={reloadAll} title="Keywords" wide>
+      <DefinitionPanel defaultExpanded endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} notify={notify} onDeleted={() => clearEditing("/keywords/")} onEdit={(item) => editItem("/keywords/", item)} reloadAll={reloadAll} subtitle="Categorization rules" title="Keywords" wide>
         <KeywordForm clearEditing={() => clearEditing("/keywords/")} editingItem={editingItems["/keywords/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
     </div>
@@ -273,13 +270,72 @@ function formatExchangeRateStatus(status) {
   return `${count} cached rates through ${status.latest_cached_rate_date}`;
 }
 
-function DefinitionPanel({ children, endpoint, formatter, helpText, items, notify, onDeleted, onEdit, reloadAll, title, wide = false }) {
+function panelStorageKey(storageId) {
+  return `cashmoney.definitions.panel.${storageId}`;
+}
+
+function readStoredPanelState(storageId, defaultExpanded) {
+  if (typeof window === "undefined") {
+    return defaultExpanded;
+  }
+  try {
+    const stored = window.localStorage.getItem(panelStorageKey(storageId));
+    return stored === null ? defaultExpanded : stored === "1";
+  } catch {
+    return defaultExpanded;
+  }
+}
+
+function useStoredPanelState(storageId, defaultExpanded = false) {
+  const [expanded, setExpanded] = useState(() => readStoredPanelState(storageId, defaultExpanded));
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(panelStorageKey(storageId), expanded ? "1" : "0");
+    } catch {
+      // Ignore unavailable storage; the UI still works for this session.
+    }
+  }, [expanded, storageId]);
+
+  return [expanded, setExpanded];
+}
+
+function CollapsiblePanel({ children, count, defaultExpanded = false, helpText, storageId, subtitle, title, wide = false }) {
+  const [expanded, setExpanded] = useStoredPanelState(storageId, defaultExpanded);
   return (
-    <section className={`panel ${wide ? "wide-panel" : ""}`}>
-      <div className="panel-header">
-        <h2>{title}</h2>
+    <section className={`panel definition-panel ${wide ? "wide-panel" : ""} ${expanded ? "is-expanded" : "is-collapsed"}`.trim()}>
+      <div className="definition-panel-header">
+        <button
+          aria-expanded={expanded}
+          className="definition-panel-toggle"
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
+        >
+          <span className="definition-panel-heading">
+            <span className="definition-panel-title-line">
+              <span className="definition-panel-title">{title}</span>
+              {typeof count === "number" ? <span className="definition-panel-count">{count.toLocaleString()}</span> : null}
+            </span>
+            {subtitle ? <span className="definition-panel-subtitle">{subtitle}</span> : null}
+          </span>
+          <span aria-hidden="true" className="definition-panel-state">{expanded ? "Hide" : "Show"}</span>
+        </button>
         {helpText && <HelpTooltip text={helpText} />}
       </div>
+      <div className="definition-panel-body">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function DefinitionPanel({ children, defaultExpanded = false, endpoint, formatter, helpText, items, notify, onDeleted, onEdit, reloadAll, subtitle, title, wide = false }) {
+  const storageId = endpoint.replace(/(^\/|\/$)/g, "").replace(/\W+/g, "-");
+  return (
+    <CollapsiblePanel count={items.length} defaultExpanded={defaultExpanded} helpText={helpText} storageId={storageId} subtitle={subtitle} title={title} wide={wide}>
       {children}
       <div className="item-list">
         {items.length ? items.map((item) => {
@@ -299,7 +355,7 @@ function DefinitionPanel({ children, endpoint, formatter, helpText, items, notif
           );
         }) : <div className="muted">No records yet.</div>}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }
 
@@ -409,7 +465,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   return (
     <>
       <div className="definition-panel-actions">
-        <button className="primary-action" onClick={openAddAccount} type="button">Add Bank Account</button>
+        <button className="primary-action" onClick={openAddAccount} type="button">Add</button>
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeAccountModal()} role="presentation">
@@ -809,7 +865,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
   return (
     <>
       <div className="mapping-panel-actions">
-        <button className="primary-action" onClick={openAddWizard} type="button">Add CSV Mapping</button>
+        <button className="primary-action" onClick={openAddWizard} type="button">Add</button>
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeWizard()} role="presentation">
@@ -960,7 +1016,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record
   return (
     <>
       <div className="definition-panel-actions">
-        <button className="primary-action" onClick={openAddItem} type="button">Add {entityLabel}</button>
+        <button className="primary-action" onClick={openAddItem} type="button">Add</button>
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeItemModal()} role="presentation">
@@ -1052,7 +1108,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
   return (
     <>
       <div className="definition-panel-actions">
-        <button className="primary-action" onClick={openAddSubcategory} type="button">Add Subcategory</button>
+        <button className="primary-action" onClick={openAddSubcategory} type="button">Add</button>
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeSubcategoryModal()} role="presentation">
@@ -1276,7 +1332,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   return (
     <>
       <div className="definition-panel-actions">
-        <button className="primary-action" onClick={openAddKeyword} type="button">Add Keyword</button>
+        <button className="primary-action" onClick={openAddKeyword} type="button">Add</button>
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeKeywordModal()} role="presentation">
