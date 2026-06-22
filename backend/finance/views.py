@@ -469,9 +469,7 @@ class BankAccountCollectionView(JsonView):
         data = parse_json_body(request)
         account = BankAccount.objects.create(
             name=clean_text(require_field(data, "name"), "name", required=True),
-            account_number=clean_text(
-                require_field(data, "account_number"), "account_number", required=True
-            ),
+            account_number=clean_text(data.get("account_number"), "account_number"),
             bank_name=clean_text(data.get("bank_name"), "bank_name"),
             currency=clean_text(data.get("currency", "CZK"), "currency")[:3].upper(),
             owners=clean_int(data.get("owners"), "owners", default=1, minimum=1),
@@ -489,7 +487,13 @@ class BankAccountDetailView(JsonView):
         for field in ["name", "account_number", "bank_name"]:
             if field in data:
                 setattr(
-                    account, field, clean_text(data[field], field, field != "bank_name")
+                    account,
+                    field,
+                    clean_text(
+                        data[field],
+                        field,
+                        field == "name",
+                    ),
                 )
         if "currency" in data:
             account.currency = clean_text(data["currency"], "currency", required=True)[

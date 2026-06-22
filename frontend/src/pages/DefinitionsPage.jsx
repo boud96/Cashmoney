@@ -59,7 +59,7 @@ export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll,
       <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} title="CSV Mappings" wide>
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, `${item.bank_name || "Bank"} - ${item.account_number}`]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} title="Bank Accounts">
+      <DefinitionPanel endpoint="/bank-accounts/" formatter={(item) => [item.name, bankAccountSubtitle(item)]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} title="Bank Accounts">
         <AccountForm clearEditing={() => clearEditing("/bank-accounts/")} editingItem={editingItems["/bank-accounts/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
       <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} title="Categories">
@@ -358,19 +358,21 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = formObject(form);
-    if (!validateRequiredFields(form, ["name", "account_number", "currency", "owners"], notify)) {
+    if (!validateRequiredFields(form, ["name", "currency", "owners"], notify)) {
       return;
     }
-    const accountConflict = findDuplicate(
-      refs.accounts,
-      "account_number",
-      data.account_number,
-      editingItem?.id,
-    );
-    if (accountConflict) {
-      notify("Account number already exists");
-      form.elements.account_number?.focus();
-      return;
+    if (data.account_number) {
+      const accountConflict = findDuplicate(
+        refs.accounts,
+        "account_number",
+        data.account_number,
+        editingItem?.id,
+      );
+      if (accountConflict) {
+        notify("Account number already exists");
+        form.elements.account_number?.focus();
+        return;
+      }
     }
     data.owners = Number(data.owners || 1);
     setSaving(true);
@@ -393,7 +395,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
   return (
     <form className="compact-form" key={editingItem?.id || "new-account"} onSubmit={submit}>
       <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Account name" required /></FormField>
-      <FormField label="Account Number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Account number" required /></FormField>
+      <FormField label="Account Number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Optional account number" /></FormField>
       <FormField label="Bank"><input defaultValue={editingItem?.bank_name || ""} name="bank_name" placeholder="Bank name" /></FormField>
       <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" placeholder="CZK" required /></FormField>
       <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" required type="number" /></FormField>
@@ -401,6 +403,12 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       <FormActions busy={saving} clearEditing={clearEditing} isEditing={isEditing} />
     </form>
   );
+}
+
+function bankAccountSubtitle(item) {
+  const parts = [item.bank_name || "Bank"];
+  parts.push(item.account_number || "No account number");
+  return parts.join(" - ");
 }
 
 function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll, setDraft }) {

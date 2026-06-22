@@ -131,7 +131,7 @@ class CSVMapping(TimestampedModel):
 
 class BankAccount(TimestampedModel):
     name = models.CharField(max_length=128)
-    account_number = models.CharField(max_length=128, unique=True)
+    account_number = models.CharField(max_length=128, blank=True, default="")
     bank_name = models.CharField(max_length=128, blank=True)
     currency = models.CharField(max_length=3, default="CZK")
     owners = models.PositiveIntegerField(default=1)
@@ -145,6 +145,13 @@ class BankAccount(TimestampedModel):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["account_number"],
+                condition=~Q(account_number=""),
+                name="unique_nonblank_bank_account_number",
+            )
+        ]
 
     def __str__(self):
         return self.name

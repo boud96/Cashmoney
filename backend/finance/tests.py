@@ -120,6 +120,16 @@ class ModelTests(FinanceTestCase):
         self.assertEqual(income.direction, Direction.INCOME)
         self.assertEqual(expense.direction, Direction.EXPENSE)
 
+    def test_bank_account_number_is_optional_but_unique_when_provided(self):
+        first_blank = BankAccount.objects.create(name="Cash Wallet")
+        second_blank = BankAccount.objects.create(name="Savings Jar")
+
+        self.assertEqual(first_blank.account_number, "")
+        self.assertEqual(second_blank.account_number, "")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            BankAccount.objects.create(name="Duplicate", account_number="123/0100")
+
     def test_frankfurter_provider_sends_json_headers_and_parses_flat_rows(self):
         captured_requests = []
 
@@ -155,7 +165,7 @@ class ModelTests(FinanceTestCase):
         request, timeout = captured_requests[0]
         self.assertEqual(timeout, 30)
         self.assertEqual(request.get_header("Accept"), "application/json")
-        self.assertIn("CashmoneyDjango", request.get_header("User-agent"))
+        self.assertEqual(request.get_header("User-agent"), provider.user_agent)
         self.assertEqual(rows[0]["date"], date(2024, 1, 2))
         self.assertEqual(rows[0]["base_currency"], "EUR")
         self.assertEqual(rows[0]["quote_currency"], "CZK")
@@ -566,6 +576,36 @@ class APITests(FinanceTestCase):
         payload = json_body(response)
         self.assertEqual(payload["error"], "Missing required field")
         self.assertEqual(payload["details"]["field"], "name")
+
+    def test_bank_account_api_allows_blank_account_number(self):
+        first = self.post_json(
+            "/api/bank-accounts/",
+            {"name": "Cash Wallet", "currency": "CZK", "owners": 1},
+        )
+        second = self.post_json(
+            "/api/bank-accounts/",
+            {
+                "name": "Savings Jar",
+                "account_number": "",
+                "currency": "CZK",
+                "owners": 1,
+            },
+        )
+        duplicate = self.post_json(
+            "/api/bank-accounts/",
+            {
+                "name": "Duplicate",
+                "account_number": "123/0100",
+                "currency": "CZK",
+                "owners": 1,
+            },
+        )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(json_body(first)["account_number"], "")
+        self.assertEqual(json_body(second)["account_number"], "")
+        self.assertEqual(duplicate.status_code, 409)
 
     def test_color_api_generates_when_missing_and_rejects_non_hex_values(self):
         created = self.post_json("/api/categories/", {"name": "Auto Color"})

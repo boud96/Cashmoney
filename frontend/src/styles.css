@@ -2034,6 +2034,11 @@ select option {
   gap: 12px;
 }
 
+.import-report-content {
+  display: grid;
+  gap: 12px;
+}
+
 .import-preview-summary,
 .report-grid {
   display: grid;
@@ -2102,6 +2107,12 @@ select option {
   white-space: nowrap;
 }
 
+.import-duplicate-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .import-sample-status {
   flex: 0 0 auto;
   border: 1px solid var(--border);
@@ -2114,6 +2125,41 @@ select option {
   border-color: color-mix(in srgb, var(--red) 40%, var(--border));
   background: color-mix(in srgb, var(--red) 9%, var(--surface));
   color: var(--red);
+}
+
+.import-duplicate-list {
+  display: grid;
+  gap: 8px;
+}
+
+.import-duplicate-list-title {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.import-duplicate-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--field-bg);
+  padding: 9px 10px;
+}
+
+.import-duplicate-item span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.import-duplicate-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .import-empty-state {

@@ -23,7 +23,7 @@ const troubleshootingItems = [
   ["CSV preview has errors", "Check the CSV mapping delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
   ["No transactions are shown", "A checklist filter with no selected items means show nothing. Use Select all or load a saved filter."],
   ["A row did not recategorize", "It may be locked. Enable Include locked before recategorizing if you intentionally want to reset locked rows."],
-  ["Internal transfers are not detected", "Check App Settings, bank account numbers, and whether the relevant account-number field is selected in CSV Mapping categorization fields."],
+  ["Internal transfers are not detected", "Check App Settings, bank account numbers on accounts that should be detected, and whether the relevant account-number field is selected in CSV Mapping categorization fields."],
   ["Charts look wrong", "Review date range, ignored/locked inclusion, direction, account, category, subcategory, WNI, tag, and saved filter state."],
 ];
 
@@ -179,7 +179,7 @@ export default function HelpPage() {
             <li><strong>Conflicts:</strong> more than one matching rule points to incompatible categorization. Inspect the matching keywords and adjust priority, include terms, or exclude terms.</li>
             <li><strong>Uncategorized:</strong> no rule assigned a subcategory. Add or improve Keywords, then recategorize the filtered transactions.</li>
             <li><strong>Updated / unchanged:</strong> result sections show readable transaction labels so IDs are not the only clue.</li>
-            <li><strong>Ignored internal transfers:</strong> App Settings can automatically ignore transactions that mention another configured account number and optionally assign a transfer subcategory.</li>
+            <li><strong>Ignored internal transfers:</strong> App Settings can automatically ignore transactions that mention another configured account number and optionally assign a transfer subcategory. Accounts without numbers are skipped by this detection.</li>
           </ul>
         </HelpCard>
 
