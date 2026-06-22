@@ -1135,6 +1135,15 @@ select option {
   gap: 12px;
 }
 
+.dashboard-warning {
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 0.9rem;
+}
+
 .dashboard-stats-section {
   min-width: 0;
 }
@@ -2171,7 +2180,7 @@ select option {
 }
 
 .app-settings-form {
-  grid-template-columns: minmax(300px, 1.15fr) minmax(260px, 1fr) auto;
+  grid-template-columns: minmax(130px, 0.45fr) minmax(300px, 1.15fr) minmax(260px, 1fr) auto auto;
   align-items: end;
 }
 
@@ -2184,6 +2193,25 @@ select option {
 .app-settings-form > button {
   min-height: 38px;
   white-space: nowrap;
+}
+
+.exchange-rate-status {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.exchange-rate-status strong {
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.warning-text {
+  color: var(--warning);
 }
 
 .compact-form button {

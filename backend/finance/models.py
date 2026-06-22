@@ -53,6 +53,11 @@ class FinanceSettings(TimestampedModel):
     singleton_key = models.PositiveSmallIntegerField(
         default=1, unique=True, editable=False
     )
+    default_currency = models.CharField(
+        max_length=3,
+        default="CZK",
+        help_text="Currency used for dashboard totals and converted transaction amounts.",
+    )
     ignore_internal_account_references = models.BooleanField(
         default=True,
         help_text=(
@@ -77,6 +82,10 @@ class FinanceSettings(TimestampedModel):
 
     def __str__(self):
         return "Finance settings"
+
+    def save(self, *args, **kwargs):
+        self.default_currency = str(self.default_currency or "CZK").upper()[:3]
+        super().save(*args, **kwargs)
 
     @classmethod
     def load(cls):
@@ -259,7 +268,53 @@ class CSVImport(TimestampedModel):
         return self.source_filename or str(self.id)
 
 
+class ExchangeRate(TimestampedModel):
+    SOURCE_FRANKFURTER = "frankfurter"
+
+    date = models.DateField()
+    base_currency = models.CharField(max_length=3)
+    quote_currency = models.CharField(max_length=3)
+    rate = models.DecimalField(max_digits=20, decimal_places=10)
+    source = models.CharField(max_length=64, default=SOURCE_FRANKFURTER)
+    fetched_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "base_currency", "quote_currency"]
+        indexes = [
+            models.Index(fields=["source", "base_currency", "quote_currency", "date"]),
+            models.Index(fields=["date"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["source", "base_currency", "quote_currency", "date"],
+                name="unique_exchange_rate_per_source_pair_date",
+            )
+        ]
+
+    def save(self, *args, **kwargs):
+        self.base_currency = str(self.base_currency or "").upper()[:3]
+        self.quote_currency = str(self.quote_currency or "").upper()[:3]
+        self.source = str(self.source or self.SOURCE_FRANKFURTER).lower()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return (
+            f"{self.date} {self.base_currency}/{self.quote_currency} "
+            f"{self.rate} ({self.source})"
+        )
+
+
 class Transaction(TimestampedModel):
+    CONVERSION_STATUS_NATIVE = "native"
+    CONVERSION_STATUS_CONVERTED = "converted"
+    CONVERSION_STATUS_MISSING_RATE = "missing_rate"
+
+    CONVERSION_STATUS_CHOICES = [
+        (CONVERSION_STATUS_NATIVE, "Native currency"),
+        (CONVERSION_STATUS_CONVERTED, "Converted"),
+        (CONVERSION_STATUS_MISSING_RATE, "Missing rate"),
+    ]
+
     original_id = models.CharField(max_length=128, blank=True)
     import_batch = models.ForeignKey(
         CSVImport,
@@ -280,6 +335,20 @@ class Transaction(TimestampedModel):
     description = models.TextField(blank=True)
     amount = models.DecimalField(max_digits=14, decimal_places=2)
     currency = models.CharField(max_length=3, default="CZK")
+    converted_amount = models.DecimalField(
+        max_digits=18, decimal_places=2, null=True, blank=True
+    )
+    converted_currency = models.CharField(max_length=3, blank=True, default="")
+    conversion_rate = models.DecimalField(
+        max_digits=20, decimal_places=10, null=True, blank=True
+    )
+    conversion_rate_date = models.DateField(null=True, blank=True)
+    conversion_status = models.CharField(
+        max_length=32,
+        choices=CONVERSION_STATUS_CHOICES,
+        blank=True,
+        default="",
+    )
     direction = models.CharField(
         max_length=16, choices=Direction.CHOICES, editable=False
     )
@@ -313,6 +382,8 @@ class Transaction(TimestampedModel):
             models.Index(fields=["transaction_date"]),
             models.Index(fields=["direction"]),
             models.Index(fields=["amount"]),
+            models.Index(fields=["converted_currency"]),
+            models.Index(fields=["conversion_status"]),
             models.Index(fields=["bank_account", "transaction_date"]),
             models.Index(fields=["subcategory"]),
             models.Index(fields=["want_need_investment"]),
@@ -327,6 +398,8 @@ class Transaction(TimestampedModel):
         ]
 
     def save(self, *args, **kwargs):
+        self.currency = str(self.currency or "").upper()[:3]
+        self.converted_currency = str(self.converted_currency or "").upper()[:3]
         self.direction = Direction.INCOME if self.amount >= 0 else Direction.EXPENSE
         super().save(*args, **kwargs)
 

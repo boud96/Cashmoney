@@ -27,6 +27,7 @@ from .models import (
     CSVImport,
     CSVMapping,
     Category,
+    ExchangeRate,
     FinanceSettings,
     HEX_COLOR_VALIDATOR,
     Keyword,
@@ -56,10 +57,17 @@ from .serializers import (
 from .services import (
     CSVImportService,
     CategorizationService,
+    ExchangeRateProviderError,
+    available_currency_options,
     build_dashboard_summary,
     detect_csv_columns,
+    exchange_rate_status,
+    fallback_currency_options,
+    normalize_currency_code,
     recategorize_transactions,
+    recalculate_transaction_conversions,
     serialize_categorization_result,
+    sync_missing_exchange_rates,
 )
 
 
@@ -73,6 +81,7 @@ REQUIRED_BACKUP_TABLES = {
     "finance_bankaccount",
     "finance_category",
     "finance_csvmapping",
+    "finance_exchangerate",
     "finance_financesettings",
     "finance_keyword",
     "finance_savedfilter",
@@ -146,6 +155,16 @@ def clean_text(value, field_name, required=False):
             raise APIValidationError("Missing required field", {"field": field_name})
         return ""
     return str(value).strip()
+
+
+def clean_currency_code(value, field_name, default="CZK"):
+    try:
+        return normalize_currency_code(value or default)
+    except ValueError as exc:
+        raise APIValidationError(
+            "Invalid currency",
+            {"field": field_name, "expected": "Three-letter currency code"},
+        ) from exc
 
 
 def clean_color(value, field_name="color"):
@@ -353,6 +372,11 @@ class FinanceSettingsView(JsonView):
     def patch(self, request):
         data = parse_json_body(request)
         settings_obj = FinanceSettings.load()
+        old_default_currency = settings_obj.default_currency
+        if "default_currency" in data:
+            settings_obj.default_currency = clean_currency_code(
+                data["default_currency"], "default_currency"
+            )
         if "ignore_internal_account_references" in data:
             settings_obj.ignore_internal_account_references = parse_bool(
                 data["ignore_internal_account_references"]
@@ -364,7 +388,35 @@ class FinanceSettingsView(JsonView):
                 "internal_transfer_subcategory_id",
             )
         settings_obj.save()
+        if settings_obj.default_currency != old_default_currency:
+            recalculate_transaction_conversions(
+                default_currency=settings_obj.default_currency
+            )
         return json_response(serialize_finance_settings(settings_obj))
+
+
+class ExchangeRateStatusView(JsonView):
+    def get(self, request):
+        return json_response(exchange_rate_status())
+
+
+class ExchangeRateCurrenciesView(JsonView):
+    def get(self, request):
+        try:
+            return json_response(available_currency_options())
+        except ExchangeRateProviderError as exc:
+            return json_response(fallback_currency_options(exc))
+
+
+class ExchangeRateSyncView(JsonView):
+    def post(self, request):
+        try:
+            return json_response(sync_missing_exchange_rates())
+        except ExchangeRateProviderError as exc:
+            return json_response(
+                {"error": str(exc), "details": {"source": "frankfurter"}},
+                status=502,
+            )
 
 
 class SavedFilterCollectionView(JsonView):
@@ -923,6 +975,7 @@ def filtered_transactions(request):
 class TransactionCollectionView(JsonView):
     def get(self, request):
         queryset = filtered_transactions(request)
+        settings_obj = FinanceSettings.load()
         split_by_owners = parse_bool(request.GET.get("split_by_owners"), default=False)
         limit = min(
             clean_int(request.GET.get("limit"), "limit", default=500, minimum=1), 10000
@@ -939,7 +992,11 @@ class TransactionCollectionView(JsonView):
                 "next_offset": offset + limit if offset + limit < count else None,
                 "previous_offset": max(offset - limit, 0) if offset else None,
                 "results": [
-                    serialize_transaction(transaction, split_by_owners)
+                    serialize_transaction(
+                        transaction,
+                        split_by_owners,
+                        default_currency=settings_obj.default_currency,
+                    )
                     for transaction in items
                 ],
             }
@@ -958,9 +1015,7 @@ class TransactionCollectionView(JsonView):
             posted_date=parse_date_value(data.get("posted_date"), "posted_date"),
             description=clean_text(data.get("description"), "description"),
             amount=parse_decimal(require_field(data, "amount")),
-            currency=clean_text(data.get("currency", "CZK"), "currency", required=True)[
-                :3
-            ].upper(),
+            currency=clean_currency_code(data.get("currency", "CZK"), "currency"),
             counterparty_account_number=clean_text(
                 data.get("counterparty_account_number"), "counterparty_account_number"
             ),
@@ -991,7 +1046,19 @@ class TransactionCollectionView(JsonView):
         )
         if "tag_ids" in data:
             set_tags(transaction_obj, data["tag_ids"])
-        return json_response(serialize_transaction(transaction_obj), status=201)
+        settings_obj = FinanceSettings.load()
+        recalculate_transaction_conversions(
+            Transaction.objects.filter(id=transaction_obj.id),
+            default_currency=settings_obj.default_currency,
+        )
+        transaction_obj.refresh_from_db()
+        return json_response(
+            serialize_transaction(
+                transaction_obj,
+                default_currency=settings_obj.default_currency,
+            ),
+            status=201,
+        )
 
 
 class TransactionFilterMetadataView(JsonView):
@@ -1059,7 +1126,7 @@ class TransactionDetailView(JsonView):
                     setattr(
                         transaction,
                         field,
-                        clean_text(data[field], field, required=True)[:3].upper(),
+                        clean_currency_code(data[field], field),
                     )
                 else:
                     setattr(transaction, field, clean_text(data[field], field))
@@ -1082,7 +1149,18 @@ class TransactionDetailView(JsonView):
         transaction.save()
         if "tag_ids" in data:
             set_tags(transaction, data["tag_ids"])
-        return json_response(serialize_transaction(transaction))
+        settings_obj = FinanceSettings.load()
+        recalculate_transaction_conversions(
+            Transaction.objects.filter(id=transaction.id),
+            default_currency=settings_obj.default_currency,
+        )
+        transaction.refresh_from_db()
+        return json_response(
+            serialize_transaction(
+                transaction,
+                default_currency=settings_obj.default_currency,
+            )
+        )
 
     def delete(self, request, pk):
         get_object_or_404(Transaction, id=pk).delete()
@@ -1236,8 +1314,25 @@ class ImportTransactionsView(JsonView):
         )
         if dry_run:
             return json_response({"dry_run": True, "preview": report})
+        exchange_rate_sync = {"attempted": False}
+        if csv_import.status != csv_import.STATUS_FAILED and csv_import.created_count:
+            exchange_rate_sync["attempted"] = True
+            try:
+                exchange_rate_sync.update(sync_missing_exchange_rates())
+                exchange_rate_sync["synced"] = True
+            except ExchangeRateProviderError as exc:
+                exchange_rate_sync.update(
+                    {
+                        "synced": False,
+                        "error": str(exc),
+                    }
+                )
         return json_response(
-            {"import": serialize_csv_import(csv_import), "report": report},
+            {
+                "import": serialize_csv_import(csv_import),
+                "report": report,
+                "exchange_rate_sync": exchange_rate_sync,
+            },
             status=201 if csv_import.status != csv_import.STATUS_FAILED else 400,
         )
 
@@ -1275,8 +1370,13 @@ class KeywordPreviewView(JsonView):
 class DashboardSummaryView(JsonView):
     def get(self, request):
         split_by_owners = parse_bool(request.GET.get("split_by_owners"), default=False)
+        settings_obj = FinanceSettings.load()
         return json_response(
-            build_dashboard_summary(filtered_transactions(request), split_by_owners)
+            build_dashboard_summary(
+                filtered_transactions(request),
+                split_by_owners,
+                default_currency=settings_obj.default_currency,
+            )
         )
 
 
@@ -1284,6 +1384,7 @@ def maintenance_counts():
     return {
         "transactions": Transaction.objects.count(),
         "imports": CSVImport.objects.count(),
+        "exchange_rates": ExchangeRate.objects.count(),
         "sample_transactions": Transaction.objects.filter(
             import_batch__source_filename=SAMPLE_IMPORT_SOURCE
         ).count(),
@@ -1343,6 +1444,7 @@ def delete_all_finance_data():
         CSVImport.objects.all().delete()
         Keyword.objects.all().delete()
         SavedFilter.objects.all().delete()
+        ExchangeRate.objects.all().delete()
         BankAccount.objects.all().delete()
         CSVMapping.objects.all().delete()
         Tag.objects.all().delete()

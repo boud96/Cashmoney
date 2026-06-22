@@ -5,6 +5,7 @@ from .models import (
     CSVImport,
     CSVMapping,
     Category,
+    ExchangeRate,
     FinanceSettings,
     Keyword,
     SavedFilter,
@@ -131,9 +132,25 @@ class CSVImportAdmin(admin.ModelAdmin):
     list_filter = ("status", "bank_account", "csv_mapping")
 
 
+@admin.register(ExchangeRate)
+class ExchangeRateAdmin(admin.ModelAdmin):
+    list_display = (
+        "date",
+        "base_currency",
+        "quote_currency",
+        "rate",
+        "source",
+        "fetched_at",
+    )
+    list_filter = ("source", "base_currency", "quote_currency")
+    search_fields = ("base_currency", "quote_currency", "source")
+    date_hierarchy = "date"
+
+
 @admin.register(FinanceSettings)
 class FinanceSettingsAdmin(admin.ModelAdmin):
     list_display = (
+        "default_currency",
         "ignore_internal_account_references",
         "internal_transfer_subcategory",
         "updated_at",

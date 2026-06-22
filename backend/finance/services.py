@@ -1,15 +1,29 @@
 import csv
 import io
+import json
 import re
+from bisect import bisect_right
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from django.db import IntegrityError, transaction
+from django.db.models import Max, Min, Q
+from django.utils import timezone
 
 from .constants import DEFAULT_CATEGORIZATION_FIELDS
-from .models import BankAccount, CSVImport, FinanceSettings, Keyword, Transaction
+from .models import (
+    BankAccount,
+    CSVImport,
+    ExchangeRate,
+    FinanceSettings,
+    Keyword,
+    Transaction,
+)
 from .serializers import (
     model_ref,
     serialize_tag,
@@ -20,6 +34,19 @@ from .serializers import (
 ENCODING_CANDIDATES = ["utf-8-sig", "utf-8", "cp1250", "windows-1250", "latin-1"]
 DELIMITER_CANDIDATES = [",", ";", "\t", "|"]
 DATE_FORMAT_CANDIDATES = ["%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%m/%d/%Y"]
+CANONICAL_RATE_BASE_CURRENCY = "EUR"
+FRANKFURTER_SOURCE = ExchangeRate.SOURCE_FRANKFURTER
+MONEY_QUANT = Decimal("0.01")
+RATE_QUANT = Decimal("0.0000000001")
+COMMON_CURRENCY_OPTIONS = [
+    {"code": "CZK", "name": "Czech Koruna"},
+    {"code": "EUR", "name": "Euro"},
+    {"code": "USD", "name": "United States Dollar"},
+    {"code": "GBP", "name": "British Pound"},
+    {"code": "PLN", "name": "Polish Zloty"},
+    {"code": "HUF", "name": "Hungarian Forint"},
+    {"code": "CHF", "name": "Swiss Franc"},
+]
 RECATEGORIZABLE_TRANSACTION_FIELDS = (
     "description",
     "counterparty_account_number",
@@ -59,6 +86,546 @@ def coerce_list(value):
     if isinstance(value, str):
         return [value] if value else []
     return [value]
+
+
+def normalize_currency_code(value, default="CZK"):
+    currency = re.sub(r"[^A-Za-z]", "", str(value or default)).upper()[:3]
+    if len(currency) != 3:
+        raise ValueError("Currency must be a three-letter code.")
+    return currency
+
+
+class ExchangeRateProviderError(Exception):
+    pass
+
+
+class FrankfurterExchangeRateProvider:
+    api_base_url = "https://api.frankfurter.dev/v2"
+    user_agent = "Cashmoney"
+
+    def fetch_rates(self, base_currency, quote_currencies, start_date, end_date):
+        quotes = sorted(
+            {
+                normalize_currency_code(currency)
+                for currency in quote_currencies
+                if currency and currency != base_currency
+            }
+        )
+        if not quotes or not start_date or not end_date:
+            return []
+
+        params = {
+            "from": start_date.isoformat(),
+            "to": end_date.isoformat(),
+            "base": normalize_currency_code(base_currency),
+            "quotes": ",".join(quotes),
+        }
+        url = f"{self.api_base_url}/rates?{urlencode(params)}"
+        payload = self._fetch_json(url)
+        return self._parse_rates_payload(payload, params["base"])
+
+    def fetch_currencies(self):
+        payload = self._fetch_json(f"{self.api_base_url}/currencies")
+        return self._parse_currencies_payload(payload)
+
+    def _fetch_json(self, url):
+        request = Request(
+            url,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": self.user_agent,
+            },
+        )
+        try:
+            with urlopen(request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            message = self._error_message(exc)
+            raise ExchangeRateProviderError(
+                f"Could not fetch Frankfurter data: {message}"
+            ) from exc
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            raise ExchangeRateProviderError(
+                f"Could not fetch Frankfurter data: {exc}"
+            ) from exc
+        return payload
+
+    def _error_message(self, exc):
+        try:
+            raw = exc.read().decode("utf-8")
+        except Exception:
+            raw = ""
+        if raw:
+            try:
+                payload = json.loads(raw)
+                if isinstance(payload, dict) and payload.get("message"):
+                    return f"{exc.code} {payload['message']}"
+            except json.JSONDecodeError:
+                pass
+        return f"{exc.code} {exc.reason}"
+
+    def _parse_rates_payload(self, payload, fallback_base):
+        if isinstance(payload, list):
+            return [self._normalize_rate_row(row, fallback_base) for row in payload]
+
+        if not isinstance(payload, dict):
+            raise ExchangeRateProviderError("Exchange-rate response was not JSON data.")
+
+        rates = payload.get("rates")
+        if isinstance(rates, dict):
+            rows = []
+            for date_key, date_rates in rates.items():
+                if not isinstance(date_rates, dict):
+                    continue
+                for quote, rate in date_rates.items():
+                    rows.append(
+                        {
+                            "date": date_key,
+                            "base": payload.get("base", fallback_base),
+                            "quote": quote,
+                            "rate": rate,
+                        }
+                    )
+            return [self._normalize_rate_row(row, fallback_base) for row in rows]
+
+        if {"date", "base", "quote", "rate"} <= set(payload.keys()):
+            return [self._normalize_rate_row(payload, fallback_base)]
+
+        raise ExchangeRateProviderError("Exchange-rate response had an unknown shape.")
+
+    def _parse_currencies_payload(self, payload):
+        if isinstance(payload, list):
+            rows = payload
+        elif isinstance(payload, dict):
+            rows = [{"iso_code": code, "name": name} for code, name in payload.items()]
+        else:
+            raise ExchangeRateProviderError("Currency response had an unknown shape.")
+
+        currencies = []
+        seen = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            try:
+                code = normalize_currency_code(
+                    row.get("iso_code") or row.get("code") or row.get("currency")
+                )
+            except ValueError:
+                continue
+            if code in seen:
+                continue
+            seen.add(code)
+            currencies.append(
+                {
+                    "code": code,
+                    "name": str(row.get("name") or code),
+                }
+            )
+        return sorted(currencies, key=lambda item: item["code"])
+
+    def _normalize_rate_row(self, row, fallback_base):
+        try:
+            return {
+                "date": datetime.strptime(str(row["date"]), "%Y-%m-%d").date(),
+                "base_currency": normalize_currency_code(
+                    row.get("base", fallback_base)
+                ),
+                "quote_currency": normalize_currency_code(row["quote"]),
+                "rate": Decimal(str(row["rate"])),
+                "source": FRANKFURTER_SOURCE,
+            }
+        except (KeyError, TypeError, ValueError, InvalidOperation) as exc:
+            raise ExchangeRateProviderError(
+                "Exchange-rate response included an invalid row."
+            ) from exc
+
+
+def merge_currency_options(*option_lists):
+    options_by_code = {}
+    for option_list in option_lists:
+        for option in option_list:
+            try:
+                code = normalize_currency_code(option.get("code"))
+            except ValueError:
+                continue
+            name = str(option.get("name") or code)
+            options_by_code.setdefault(code, {"code": code, "name": name})
+    return [options_by_code[code] for code in sorted(options_by_code)]
+
+
+def configured_currency_options():
+    settings = FinanceSettings.load()
+    currencies = {settings.default_currency}
+    currencies.update(
+        currency
+        for currency in Transaction.objects.exclude(currency="").values_list(
+            "currency", flat=True
+        )
+        if currency
+    )
+    currencies.update(
+        currency
+        for currency in BankAccount.objects.exclude(currency="").values_list(
+            "currency", flat=True
+        )
+        if currency
+    )
+    return [
+        {
+            "code": normalize_currency_code(currency),
+            "name": normalize_currency_code(currency),
+        }
+        for currency in currencies
+    ]
+
+
+def available_currency_options(provider=None):
+    provider = provider or FrankfurterExchangeRateProvider()
+    currencies = provider.fetch_currencies()
+    return {
+        "source": FRANKFURTER_SOURCE,
+        "fallback": False,
+        "currencies": merge_currency_options(currencies, configured_currency_options()),
+    }
+
+
+def fallback_currency_options(error=None):
+    return {
+        "source": FRANKFURTER_SOURCE,
+        "fallback": True,
+        "error": str(error) if error else "",
+        "currencies": merge_currency_options(
+            COMMON_CURRENCY_OPTIONS,
+            configured_currency_options(),
+        ),
+    }
+
+
+def transaction_date_range(queryset=None):
+    if queryset is None:
+        queryset = Transaction.objects.all()
+    return queryset.aggregate(
+        start_date=Min("transaction_date"),
+        end_date=Max("transaction_date"),
+    )
+
+
+def transaction_currencies(queryset=None, default_currency=None):
+    if queryset is None:
+        queryset = Transaction.objects.all()
+    currencies = {
+        normalize_currency_code(currency)
+        for currency in queryset.exclude(currency="").values_list("currency", flat=True)
+        if currency
+    }
+    currencies.add(
+        normalize_currency_code(
+            default_currency or FinanceSettings.load().default_currency
+        )
+    )
+    return sorted(currencies)
+
+
+def required_rate_quote_currencies(queryset=None, default_currency=None):
+    default_currency = normalize_currency_code(
+        default_currency or FinanceSettings.load().default_currency
+    )
+    if queryset is None:
+        queryset = Transaction.objects.all()
+    foreign_currencies = {
+        normalize_currency_code(currency)
+        for currency in queryset.exclude(currency="")
+        .exclude(currency=default_currency)
+        .values_list("currency", flat=True)
+        if currency
+    }
+    if not foreign_currencies:
+        return []
+
+    currencies = set(foreign_currencies)
+    currencies.add(default_currency)
+    return sorted(
+        currency for currency in currencies if currency != CANONICAL_RATE_BASE_CURRENCY
+    )
+
+
+def chunk_date_range(start_date, end_date, max_days=370):
+    cursor = start_date
+    while cursor <= end_date:
+        chunk_end = min(cursor + timedelta(days=max_days - 1), end_date)
+        yield cursor, chunk_end
+        cursor = chunk_end + timedelta(days=1)
+
+
+def cache_exchange_rate_rows(rows):
+    rates = [
+        ExchangeRate(
+            date=row["date"],
+            base_currency=normalize_currency_code(row["base_currency"]),
+            quote_currency=normalize_currency_code(row["quote_currency"]),
+            rate=Decimal(str(row["rate"])).quantize(RATE_QUANT),
+            source=str(row.get("source") or FRANKFURTER_SOURCE).lower(),
+        )
+        for row in rows
+        if row.get("base_currency") != row.get("quote_currency")
+    ]
+    if not rates:
+        return 0
+
+    before = ExchangeRate.objects.count()
+    ExchangeRate.objects.bulk_create(rates, ignore_conflicts=True)
+    return ExchangeRate.objects.count() - before
+
+
+def build_rate_lookup(currencies, end_date):
+    quote_currencies = [
+        currency for currency in currencies if currency != CANONICAL_RATE_BASE_CURRENCY
+    ]
+    lookup = {}
+    if not quote_currencies or not end_date:
+        return lookup
+
+    rates = (
+        ExchangeRate.objects.filter(
+            source=FRANKFURTER_SOURCE,
+            base_currency=CANONICAL_RATE_BASE_CURRENCY,
+            quote_currency__in=quote_currencies,
+            date__lte=end_date,
+        )
+        .order_by("quote_currency", "date")
+        .values_list("quote_currency", "date", "rate")
+    )
+    for quote_currency, rate_date, rate in rates:
+        bucket = lookup.setdefault(quote_currency, {"dates": [], "rates": []})
+        bucket["dates"].append(rate_date)
+        bucket["rates"].append(rate)
+    return lookup
+
+
+def rate_on_or_before(lookup, currency, target_date):
+    currency = normalize_currency_code(currency)
+    if currency == CANONICAL_RATE_BASE_CURRENCY:
+        return Decimal("1"), target_date
+    bucket = lookup.get(currency)
+    if not bucket:
+        return None, None
+    index = bisect_right(bucket["dates"], target_date) - 1
+    if index < 0:
+        return None, None
+    return bucket["rates"][index], bucket["dates"][index]
+
+
+def calculate_converted_amount(
+    amount, source_currency, target_currency, target_date, lookup
+):
+    source_currency = normalize_currency_code(source_currency)
+    target_currency = normalize_currency_code(target_currency)
+    if source_currency == target_currency:
+        return {
+            "amount": amount.quantize(MONEY_QUANT),
+            "rate": Decimal("1").quantize(RATE_QUANT),
+            "rate_date": target_date,
+            "status": Transaction.CONVERSION_STATUS_NATIVE,
+        }
+
+    source_rate, source_rate_date = rate_on_or_before(
+        lookup, source_currency, target_date
+    )
+    target_rate, target_rate_date = rate_on_or_before(
+        lookup, target_currency, target_date
+    )
+    if source_rate is None or target_rate is None:
+        return {
+            "amount": None,
+            "rate": None,
+            "rate_date": None,
+            "status": Transaction.CONVERSION_STATUS_MISSING_RATE,
+        }
+
+    conversion_rate = (target_rate / source_rate).quantize(RATE_QUANT)
+    rate_dates = []
+    if source_currency != CANONICAL_RATE_BASE_CURRENCY:
+        rate_dates.append(source_rate_date)
+    if target_currency != CANONICAL_RATE_BASE_CURRENCY:
+        rate_dates.append(target_rate_date)
+    return {
+        "amount": (amount * conversion_rate).quantize(MONEY_QUANT),
+        "rate": conversion_rate,
+        "rate_date": max(rate_dates) if rate_dates else target_date,
+        "status": Transaction.CONVERSION_STATUS_CONVERTED,
+    }
+
+
+def recalculate_transaction_conversions(queryset=None, default_currency=None):
+    default_currency = normalize_currency_code(
+        default_currency or FinanceSettings.load().default_currency
+    )
+    if queryset is None:
+        queryset = Transaction.objects.all()
+    date_range = transaction_date_range(queryset)
+    end_date = date_range["end_date"]
+    if not end_date:
+        return {
+            "default_currency": default_currency,
+            "processed": 0,
+            "updated": 0,
+            "missing_rates": 0,
+        }
+
+    currencies = transaction_currencies(queryset, default_currency)
+    lookup = build_rate_lookup(currencies, end_date)
+    processed = 0
+    missing_rates = 0
+    changed = []
+
+    for transaction_obj in queryset:
+        processed += 1
+        result = calculate_converted_amount(
+            transaction_obj.amount,
+            transaction_obj.currency,
+            default_currency,
+            transaction_obj.transaction_date,
+            lookup,
+        )
+        if result["status"] == Transaction.CONVERSION_STATUS_MISSING_RATE:
+            missing_rates += 1
+        next_values = {
+            "converted_amount": result["amount"],
+            "converted_currency": default_currency,
+            "conversion_rate": result["rate"],
+            "conversion_rate_date": result["rate_date"],
+            "conversion_status": result["status"],
+        }
+        if any(
+            getattr(transaction_obj, field) != value
+            for field, value in next_values.items()
+        ):
+            for field, value in next_values.items():
+                setattr(transaction_obj, field, value)
+            transaction_obj.updated_at = timezone.now()
+            changed.append(transaction_obj)
+
+    if changed:
+        Transaction.objects.bulk_update(
+            changed,
+            [
+                "converted_amount",
+                "converted_currency",
+                "conversion_rate",
+                "conversion_rate_date",
+                "conversion_status",
+                "updated_at",
+            ],
+        )
+
+    return {
+        "default_currency": default_currency,
+        "processed": processed,
+        "updated": len(changed),
+        "missing_rates": missing_rates,
+    }
+
+
+def exchange_rate_status(default_currency=None):
+    default_currency = normalize_currency_code(
+        default_currency or FinanceSettings.load().default_currency
+    )
+    date_range = transaction_date_range()
+    quote_currencies = required_rate_quote_currencies(default_currency=default_currency)
+    cached_rates = ExchangeRate.objects.filter(
+        source=FRANKFURTER_SOURCE,
+        base_currency=CANONICAL_RATE_BASE_CURRENCY,
+        quote_currency__in=quote_currencies,
+    )
+    cache_dates = cached_rates.aggregate(
+        earliest_cached_rate_date=Min("date"),
+        latest_cached_rate_date=Max("date"),
+    )
+    converted_filter = Q(converted_amount__isnull=True) | ~Q(
+        converted_currency=default_currency
+    )
+    missing_converted_transactions = (
+        Transaction.objects.exclude(currency=default_currency)
+        .filter(converted_filter)
+        .count()
+    )
+    return {
+        "source": FRANKFURTER_SOURCE,
+        "rate_base_currency": CANONICAL_RATE_BASE_CURRENCY,
+        "default_currency": default_currency,
+        "transaction_currencies": transaction_currencies(
+            default_currency=default_currency
+        ),
+        "required_rate_currencies": quote_currencies,
+        "transaction_date_from": date_range["start_date"],
+        "transaction_date_to": date_range["end_date"],
+        "cached_rate_count": cached_rates.count(),
+        "earliest_cached_rate_date": cache_dates["earliest_cached_rate_date"],
+        "latest_cached_rate_date": cache_dates["latest_cached_rate_date"],
+        "missing_converted_transactions": missing_converted_transactions,
+    }
+
+
+def exchange_rate_fetch_plan(start_date, end_date, quote_currencies):
+    plan = defaultdict(list)
+    if not start_date or not end_date:
+        return plan
+
+    for quote_currency in quote_currencies:
+        quote_currency = normalize_currency_code(quote_currency)
+        cached_dates = ExchangeRate.objects.filter(
+            source=FRANKFURTER_SOURCE,
+            base_currency=CANONICAL_RATE_BASE_CURRENCY,
+            quote_currency=quote_currency,
+        ).aggregate(first_date=Min("date"), last_date=Max("date"))
+        first_date = cached_dates["first_date"]
+        last_date = cached_dates["last_date"]
+        if not first_date or not last_date:
+            plan[(start_date, end_date)].append(quote_currency)
+            continue
+        if first_date > start_date:
+            plan[(start_date, first_date - timedelta(days=1))].append(quote_currency)
+        if last_date < end_date:
+            plan[(last_date + timedelta(days=1), end_date)].append(quote_currency)
+    return plan
+
+
+def sync_missing_exchange_rates(provider=None, default_currency=None):
+    default_currency = normalize_currency_code(
+        default_currency or FinanceSettings.load().default_currency
+    )
+    queryset = Transaction.objects.all()
+    date_range = transaction_date_range(queryset)
+    start_date = date_range["start_date"]
+    end_date = date_range["end_date"]
+    quotes = required_rate_quote_currencies(queryset, default_currency)
+    created_rates = 0
+    fetched_rows = 0
+
+    fetch_plan = exchange_rate_fetch_plan(start_date, end_date, quotes)
+    if fetch_plan:
+        provider = provider or FrankfurterExchangeRateProvider()
+        for (range_start, range_end), range_quotes in fetch_plan.items():
+            for chunk_start, chunk_end in chunk_date_range(range_start, range_end):
+                rows = provider.fetch_rates(
+                    CANONICAL_RATE_BASE_CURRENCY,
+                    range_quotes,
+                    chunk_start,
+                    chunk_end,
+                )
+                fetched_rows += len(rows)
+                created_rates += cache_exchange_rate_rows(rows)
+
+    recalculation = recalculate_transaction_conversions(
+        queryset, default_currency=default_currency
+    )
+    return {
+        "default_currency": default_currency,
+        "fetched_rows": fetched_rows,
+        "created_rates": created_rates,
+        "recalculation": recalculation,
+        "status": exchange_rate_status(default_currency),
+    }
 
 
 def mapped_transaction_values_from_raw_data(transaction_obj, csv_mapping):
@@ -1159,8 +1726,13 @@ def recategorize_transactions(queryset, include_locked=False):
     return stats
 
 
-def build_dashboard_summary(queryset, split_by_owners=False):
+def build_dashboard_summary(queryset, split_by_owners=False, default_currency=None):
+    default_currency = normalize_currency_code(
+        default_currency or FinanceSettings.load().default_currency
+    )
     summary = {
+        "default_currency": default_currency,
+        "missing_conversions": 0,
         "monthly": [],
         "income_categories": [],
         "expense_categories": [],
@@ -1176,7 +1748,15 @@ def build_dashboard_summary(queryset, split_by_owners=False):
         "bank_account", "subcategory", "subcategory__category"
     ):
         month_key = transaction_obj.transaction_date.strftime("%Y-%m")
-        amount = transaction_display_amount(transaction_obj, split_by_owners)
+        amount = transaction_display_amount(
+            transaction_obj,
+            split_by_owners,
+            default_currency=default_currency,
+            converted=True,
+        )
+        if amount is None:
+            summary["missing_conversions"] += 1
+            continue
         category = (
             transaction_obj.subcategory.category
             if transaction_obj.subcategory

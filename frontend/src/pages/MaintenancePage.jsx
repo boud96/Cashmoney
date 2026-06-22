@@ -13,6 +13,7 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
   const snapshot = [
     ["Transactions", counts.transactions],
     ["Imports", counts.imports],
+    ["Exchange Rates", counts.exchange_rates],
     ["Sample Transactions", counts.sample_transactions],
     ["Accounts", counts.bank_accounts],
     ["CSV Mappings", counts.csv_mappings],
@@ -25,6 +26,7 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
   const financeObjectCount = [
     counts.transactions,
     counts.imports,
+    counts.exchange_rates,
     counts.bank_accounts,
     counts.csv_mappings,
     counts.categories,

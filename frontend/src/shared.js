@@ -237,17 +237,18 @@ export function buildFilterParams(filters) {
   return params;
 }
 
-export function buildMetrics(summary, transactionPage, hideAmounts = false) {
+export function buildMetrics(summary, transactionPage, hideAmounts = false, defaultCurrency = "") {
   const monthly = summary?.monthly || [];
+  const currency = defaultCurrency || summary?.default_currency || "";
   const monthCount = monthly.length || 1;
   const income = monthly.reduce((acc, row) => acc + Number(row.income || 0), 0);
   const expense = monthly.reduce((acc, row) => acc + Number(row.expense || 0), 0);
   const net = income - expense;
   const uncategorized = (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
   return [
-    ["Income", formatMoneyValue(income, hideAmounts), "positive", { value: formatMoneyValue(income / monthCount, hideAmounts), tone: "positive" }],
-    ["Expenses", formatMoneyValue(expense, hideAmounts), "negative", { value: formatMoneyValue(expense / monthCount, hideAmounts), tone: "negative" }],
-    ["Net", formatMoneyValue(net, hideAmounts), "metric-blue", { value: formatMoneyValue(net / monthCount, hideAmounts), tone: "metric-blue" }],
+    ["Income", formatMoneyWithCurrency(income, currency, hideAmounts), "positive", { value: formatMoneyWithCurrency(income / monthCount, currency, hideAmounts), tone: "positive" }],
+    ["Expenses", formatMoneyWithCurrency(expense, currency, hideAmounts), "negative", { value: formatMoneyWithCurrency(expense / monthCount, currency, hideAmounts), tone: "negative" }],
+    ["Net", formatMoneyWithCurrency(net, currency, hideAmounts), "metric-blue", { value: formatMoneyWithCurrency(net / monthCount, currency, hideAmounts), tone: "metric-blue" }],
     ["Transactions", `${transactionPage.count.toLocaleString()} / ${(transactionPage.total_count ?? transactionPage.count).toLocaleString()}`, ""],
     ["Uncategorized", uncategorized.toLocaleString(), ""],
   ];
@@ -600,6 +601,16 @@ export function formatMoneyValue(value, hideAmounts = false) {
 
 export function formatAmountValue(value, hideAmounts = false) {
   return hideAmounts ? HIDDEN_AMOUNT : amountNumber(value);
+}
+
+export function formatMoneyWithCurrency(value, currency, hideAmounts = false) {
+  const formatted = formatMoneyValue(value, hideAmounts);
+  return hideAmounts || !currency ? formatted : `${formatted} ${currency}`;
+}
+
+export function formatAmountWithCurrency(value, currency, hideAmounts = false) {
+  const formatted = formatAmountValue(value, hideAmounts);
+  return hideAmounts || !currency ? formatted : `${formatted} ${currency}`;
 }
 
 export function formatNumber(value, options = {}) {

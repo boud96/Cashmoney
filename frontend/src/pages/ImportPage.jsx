@@ -4,7 +4,7 @@ import { apiGet } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
 import { formatAmountValue } from "../shared.js";
 
-export default function ImportPage({ hideAmounts = false, importReport, notify, refs, reloadAll, setImportReport }) {
+export default function ImportPage({ hideAmounts = false, importReport, notify, refs, reloadAll, reloadDashboard, setImportReport }) {
   const [dragActive, setDragActive] = useState(false);
   const [importing, setImporting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -98,8 +98,16 @@ export default function ImportPage({ hideAmounts = false, importReport, notify, 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      notify("CSV imported");
-      await Promise.all([reloadAll(), loadRecentImports()]);
+      if (payload.exchange_rate_sync?.synced === false) {
+        notify("CSV imported, but exchange rates need retry");
+      } else {
+        notify("CSV imported");
+      }
+      await Promise.all([
+        reloadAll(),
+        reloadDashboard ? reloadDashboard() : Promise.resolve(),
+        loadRecentImports(),
+      ]);
     } catch (error) {
       notify(error.message);
     } finally {

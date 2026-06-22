@@ -7,6 +7,21 @@ urlpatterns = [
     path("health/", views.HealthView.as_view(), name="health"),
     path("settings/", views.FinanceSettingsView.as_view(), name="finance-settings"),
     path(
+        "exchange-rates/status/",
+        views.ExchangeRateStatusView.as_view(),
+        name="exchange-rate-status",
+    ),
+    path(
+        "exchange-rates/currencies/",
+        views.ExchangeRateCurrenciesView.as_view(),
+        name="exchange-rate-currencies",
+    ),
+    path(
+        "exchange-rates/sync/",
+        views.ExchangeRateSyncView.as_view(),
+        name="exchange-rate-sync",
+    ),
+    path(
         "saved-filters/",
         views.SavedFilterCollectionView.as_view(),
         name="saved-filters",

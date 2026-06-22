@@ -16,6 +16,7 @@ import {
   countActiveFilters,
   cssVar,
   estimateVisibleTagCount,
+  formatAmountWithCurrency,
   formatAmountValue,
   formatDateInput,
   formatMoneyValue,
@@ -91,9 +92,10 @@ export default function DashboardPage({
   transactionPage,
   updateTransaction,
 }) {
+  const defaultCurrency = summary?.default_currency || refs.settings?.default_currency || "CZK";
   const metrics = useMemo(
-    () => buildMetrics(summary, transactionPage, hideAmounts),
-    [hideAmounts, summary, transactionPage],
+    () => buildMetrics(summary, transactionPage, hideAmounts, defaultCurrency),
+    [defaultCurrency, hideAmounts, summary, transactionPage],
   );
   const conflictIds = useMemo(
     () => new Set(recategorizeResult?.conflict_transaction_ids || []),
@@ -490,6 +492,11 @@ export default function DashboardPage({
         />
       )}
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
+      {summary?.missing_conversions ? (
+        <div className="dashboard-warning">
+          {Number(summary.missing_conversions).toLocaleString()} filtered transactions are missing exchange rates and are excluded from converted totals.
+        </div>
+      ) : null}
 
       <div className="dashboard-charts">
         <ChartPanel className="chart-panel-wide" title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
@@ -504,7 +511,7 @@ export default function DashboardPage({
           <h2>Transactions</h2>
           <span className="muted">{transactionPage.count.toLocaleString()} shown</span>
         </div>
-        <TransactionGrid conflictIds={conflictIds} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
@@ -612,7 +619,7 @@ function LockIcon({ locked }) {
   );
 }
 
-function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateTransaction }) {
+function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, refs, rows, updateTransaction }) {
   const subcategoryOptions = useMemo(() => ["", ...refs.subcategories.map((item) => item.id)], [refs.subcategories]);
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
@@ -630,10 +637,14 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
     { field: "description", headerName: "Description", flex: 2, minWidth: 260, wrapText: true, autoHeight: true },
     {
       cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
-      field: "amount",
+      field: "converted_amount",
       headerName: "Amount",
-      valueFormatter: (params) => formatAmountValue(params.value, hideAmounts),
-      width: 130,
+      valueFormatter: (params) => (
+        params.value === null || params.value === undefined
+          ? "Missing rate"
+          : formatAmountWithCurrency(params.value, params.data?.converted_currency || defaultCurrency, hideAmounts)
+      ),
+      width: 150,
     },
     {
       field: "account_id",
@@ -756,7 +767,7 @@ function TransactionGrid({ conflictIds, hideAmounts, notify, refs, rows, updateT
       valueFormatter: (params) => (params.value ? "Locked" : "Unlocked"),
       width: 96,
     },
-  ], [accountLookup, categoryLookup, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, updateTransaction]);
+  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, updateTransaction]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {

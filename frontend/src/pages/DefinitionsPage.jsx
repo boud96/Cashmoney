@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { apiDelete, apiPatch, apiPost } from "../api.js";
+import { apiDelete, apiGet, apiPatch, apiPost } from "../api.js";
 import { LoadingButton, Select } from "../components.jsx";
 import {
   categorizationFieldOptions,
@@ -26,7 +26,14 @@ import {
   wniOptions,
 } from "../shared.js";
 
-export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, setMappingDraft }) {
+const defaultCurrencyOptions = [
+  { code: "CZK", name: "Czech Koruna" },
+  { code: "EUR", name: "Euro" },
+  { code: "USD", name: "United States Dollar" },
+  { code: "GBP", name: "British Pound" },
+];
+
+export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, reloadDashboard, setMappingDraft }) {
   const [editingItems, setEditingItems] = useState({});
 
   function editItem(endpoint, item) {
@@ -47,7 +54,7 @@ export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll,
         <div className="panel-header">
           <h2>App Settings</h2>
         </div>
-        <SettingsForm notify={notify} refs={refs} reloadAll={reloadAll} settings={refs.settings} />
+        <SettingsForm notify={notify} refs={refs} reloadAll={reloadAll} reloadDashboard={reloadDashboard} settings={refs.settings} />
       </section>
       <DefinitionPanel endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} title="CSV Mappings" wide>
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
@@ -71,30 +78,113 @@ export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll,
   );
 }
 
-function SettingsForm({ notify, refs, reloadAll, settings }) {
+function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
   const [saving, setSaving] = useState(false);
+  const [syncingRates, setSyncingRates] = useState(false);
+  const [rateStatus, setRateStatus] = useState(null);
+  const [currencyOptions, setCurrencyOptions] = useState(defaultCurrencyOptions);
+  const [currencyOptionsFallback, setCurrencyOptionsFallback] = useState(false);
+  const [defaultCurrency, setDefaultCurrency] = useState(settings?.default_currency || "CZK");
   const [ignoreInternalAccounts, setIgnoreInternalAccounts] = useState(
     settings?.ignore_internal_account_references ?? true,
   );
   const [internalTransferSubcategoryId, setInternalTransferSubcategoryId] = useState(
     settings?.internal_transfer_subcategory?.id || "",
   );
+  const missingRateCount = Number(rateStatus?.missing_converted_transactions || 0);
 
   useEffect(() => {
+    const nextCurrency = settings?.default_currency || "CZK";
+    setDefaultCurrency(nextCurrency);
+    setCurrencyOptions((current) => ensureCurrencyOption(current, nextCurrency));
     setIgnoreInternalAccounts(settings?.ignore_internal_account_references ?? true);
     setInternalTransferSubcategoryId(settings?.internal_transfer_subcategory?.id || "");
   }, [settings]);
 
+  async function loadRateStatus() {
+    try {
+      setRateStatus(await apiGet("/exchange-rates/status/"));
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+
+  useEffect(() => {
+    loadRateStatus();
+    loadCurrencyOptions();
+  }, []);
+
+  async function loadCurrencyOptions() {
+    try {
+      const payload = await apiGet("/exchange-rates/currencies/");
+      const currentCode = normalizeCurrencyCode(settings?.default_currency || defaultCurrency || "CZK");
+      const options = payload.currencies || [];
+      setCurrencyOptions(ensureCurrencyOption(options, currentCode));
+      setCurrencyOptionsFallback(Boolean(payload.fallback));
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+
+  async function refreshAfterCurrencyChange() {
+    await Promise.all([
+      reloadAll(),
+      reloadDashboard ? reloadDashboard() : Promise.resolve(),
+      loadRateStatus(),
+    ]);
+  }
+
+  async function syncExchangeRates(showNotification = true) {
+    setSyncingRates(true);
+    try {
+      const result = await apiPost("/exchange-rates/sync/");
+      const createdRates = Number(result.created_rates || 0).toLocaleString();
+      const recalculated = Number(result.recalculation?.updated || 0).toLocaleString();
+      if (showNotification) {
+        notify(`${createdRates} rates downloaded, ${recalculated} transactions recalculated`);
+      }
+      await refreshAfterCurrencyChange();
+      return result;
+    } finally {
+      setSyncingRates(false);
+    }
+  }
+
+  async function handleSyncExchangeRates() {
+    try {
+      await syncExchangeRates();
+    } catch (error) {
+      notify(error.message);
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
+    const nextDefaultCurrency = normalizeCurrencyCode(defaultCurrency);
+    if (nextDefaultCurrency.length !== 3) {
+      notify("Default currency must be a three-letter code");
+      return;
+    }
+    const previousDefaultCurrency = settings?.default_currency || "CZK";
     setSaving(true);
     try {
       await apiPatch("/settings/", {
+        default_currency: nextDefaultCurrency,
         ignore_internal_account_references: ignoreInternalAccounts,
         internal_transfer_subcategory_id: internalTransferSubcategoryId,
       });
-      notify("Settings saved");
-      await reloadAll();
+      if (nextDefaultCurrency !== previousDefaultCurrency) {
+        try {
+          const result = await syncExchangeRates(false);
+          notify(`${Number(result.created_rates || 0).toLocaleString()} rates downloaded, default currency changed to ${nextDefaultCurrency}`);
+        } catch (error) {
+          notify(`Settings saved, but rate sync failed: ${error.message}`);
+          await refreshAfterCurrencyChange();
+        }
+      } else {
+        notify("Settings saved");
+        await refreshAfterCurrencyChange();
+      }
     } catch (error) {
       notify(error.message);
     } finally {
@@ -104,6 +194,18 @@ function SettingsForm({ notify, refs, reloadAll, settings }) {
 
   return (
     <form className="compact-form app-settings-form" onSubmit={submit}>
+      <FormField label="Default Currency">
+        <Select
+          name="default_currency"
+          onChange={(event) => setDefaultCurrency(normalizeCurrencyCode(event.target.value))}
+          options={currencyOptions.map((currency) => [
+            currency.code,
+            `${currency.code} - ${currency.name}`,
+          ])}
+          required
+          value={defaultCurrency}
+        />
+      </FormField>
       <label className="check-row">
         <input
           checked={ignoreInternalAccounts}
@@ -122,8 +224,53 @@ function SettingsForm({ notify, refs, reloadAll, settings }) {
         />
       </FormField>
       <LoadingButton busy={saving} busyLabel="Saving" type="submit">Save</LoadingButton>
+      {missingRateCount ? (
+        <LoadingButton busy={syncingRates} busyLabel="Retrying" onClick={handleSyncExchangeRates} type="button">
+          Retry Rate Sync
+        </LoadingButton>
+      ) : null}
+      <div className="exchange-rate-status">
+        <span>FX cache</span>
+        <strong>{formatExchangeRateStatus(rateStatus)}</strong>
+        {missingRateCount ? (
+          <span className="warning-text">
+            {missingRateCount.toLocaleString()} transactions need rates
+          </span>
+        ) : currencyOptionsFallback ? (
+          <span className="warning-text">Currency list is using fallback options.</span>
+        ) : (
+          <span className="muted">Rates sync automatically after imports and default currency changes.</span>
+        )}
+      </div>
     </form>
   );
+}
+
+function normalizeCurrencyCode(value) {
+  return String(value || "").replace(/[^a-z]/gi, "").toUpperCase().slice(0, 3);
+}
+
+function ensureCurrencyOption(options, code) {
+  const normalizedCode = normalizeCurrencyCode(code || "CZK");
+  const normalizedOptions = (options || []).map((option) => ({
+    code: normalizeCurrencyCode(option.code),
+    name: option.name || option.code,
+  })).filter((option) => option.code);
+  if (normalizedOptions.some((option) => option.code === normalizedCode)) {
+    return normalizedOptions;
+  }
+  return [{ code: normalizedCode, name: normalizedCode }, ...normalizedOptions];
+}
+
+function formatExchangeRateStatus(status) {
+  if (!status) {
+    return "Loading";
+  }
+  const count = Number(status.cached_rate_count || 0).toLocaleString();
+  if (!status.latest_cached_rate_date) {
+    return `${count} cached rates`;
+  }
+  return `${count} cached rates through ${status.latest_cached_rate_date}`;
 }
 
 function DefinitionPanel({ children, endpoint, formatter, helpText, items, notify, onDeleted, onEdit, reloadAll, title, wide = false }) {

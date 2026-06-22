@@ -9,6 +9,7 @@ const workflowSteps = [
 const conceptItems = [
   ["Bank Account", "Groups imported transactions and decides which CSV mapping is used during import."],
   ["CSV Mapping", "Describes how a bank export is parsed: dates, separators, columns, currency, and categorization fields."],
+  ["Default Currency", "The reporting currency used by dashboard totals, charts, and converted transaction amounts."],
   ["Category", "The top-level reporting bucket. It is derived from the assigned subcategory."],
   ["Subcategory", "The main assignable classification value for a transaction."],
   ["WNI", "Want, Need, or Investment. Useful for expense analysis beyond category."],
@@ -64,7 +65,7 @@ export default function HelpPage() {
             categorization.
           </p>
           <ul>
-            <li><strong>App Settings:</strong> enable automatic internal-transfer handling and choose the subcategory used for those transfers.</li>
+            <li><strong>App Settings:</strong> set the dashboard default currency, review FX cache status, and configure automatic internal-transfer handling.</li>
             <li><strong>CSV Mappings:</strong> map CSV columns to transaction fields and choose categorization fields used by Keywords.</li>
             <li><strong>Bank Accounts:</strong> store account details and set the default CSV mapping used by Import.</li>
             <li><strong>Categories and Subcategories:</strong> define the reporting hierarchy shown in filters, charts, and the table.</li>
@@ -102,6 +103,10 @@ export default function HelpPage() {
             Recent Imports shows the latest import batches. Import Report shows loaded, created,
             duplicate, and error counts for the last import in the session.
           </p>
+          <p>
+            Exchange rates sync automatically after imported transactions are saved. If the provider
+            is unavailable, App Settings shows a retry action.
+          </p>
         </HelpCard>
 
         <HelpCard title="Dashboard Filters">
@@ -126,8 +131,9 @@ export default function HelpPage() {
             filters.
           </p>
           <ul>
-            <li><strong>Stats:</strong> Income, Expenses, Net, Transactions, and Uncategorized reflect the current filters.</li>
+            <li><strong>Stats:</strong> Income, Expenses, Net, Transactions, and Uncategorized reflect the current filters in the app default currency.</li>
             <li><strong>Charts:</strong> Monthly Flow, Income Categories, Expense Categories, Want / Need / Investment, and Top Expense Subcategories.</li>
+            <li><strong>Exchange rates:</strong> original imported amounts stay unchanged; converted totals use cached rates that sync after imports and default currency changes.</li>
             <li><strong>Hide amounts:</strong> the eye button hides amount values in the dashboard and import preview.</li>
             <li><strong>Accent and theme:</strong> use the sidebar footer controls for accent color and light/dark mode.</li>
           </ul>
