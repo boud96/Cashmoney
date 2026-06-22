@@ -821,7 +821,7 @@ h2 {
 .primary-action:disabled,
 .link-button:disabled,
 .compact-form button:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.65;
 }
 
@@ -2460,10 +2460,6 @@ select option {
   cursor: default;
 }
 
-.import-action-row button.is-loading:disabled {
-  cursor: wait;
-}
-
 .import-preview-content {
   display: grid;
   gap: 12px;
@@ -3049,7 +3045,7 @@ td {
 }
 
 .danger-button:disabled {
-  cursor: wait;
+  cursor: default;
   opacity: 0.55;
 }
 
