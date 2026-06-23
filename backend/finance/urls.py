@@ -93,6 +93,11 @@ urlpatterns = [
         name="bulk-assign-transactions",
     ),
     path(
+        "transactions/uncategorized-suggestions/",
+        views.UncategorizedSuggestionView.as_view(),
+        name="uncategorized-suggestions",
+    ),
+    path(
         "transactions/<uuid:pk>/",
         views.TransactionDetailView.as_view(),
         name="transaction-detail",

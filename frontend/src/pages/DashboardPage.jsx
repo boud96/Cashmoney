@@ -75,6 +75,17 @@ const transactionGridTheme = themeQuartz
     wrapperBorderRadius: "8px",
   }, "light");
 
+const emptyKeywordDraft = {
+  name: "",
+  include_terms: "",
+  exclude_terms: "",
+  subcategory_id: "",
+  want_need_investment: "",
+  tag_ids: [],
+  priority: 0,
+  is_ignored: false,
+};
+
 export default function DashboardPage({
   filters,
   filterParams,
@@ -85,6 +96,7 @@ export default function DashboardPage({
   onToggleHideAmounts,
   recategorizeResult,
   refs,
+  reloadAll,
   reloadDashboard,
   setFilters,
   setRecategorizeResult,
@@ -110,6 +122,14 @@ export default function DashboardPage({
   const [savedFilterName, setSavedFilterName] = useState("");
   const [savedFilters, setSavedFilters] = useState([]);
   const [savedFiltersBusy, setSavedFiltersBusy] = useState(false);
+  const [uncategorizedReviewOpen, setUncategorizedReviewOpen] = useState(false);
+  const [uncategorizedSuggestions, setUncategorizedSuggestions] = useState([]);
+  const [uncategorizedSuggestionMeta, setUncategorizedSuggestionMeta] = useState({ count: 0, transaction_count: 0 });
+  const [uncategorizedSuggestionsLoading, setUncategorizedSuggestionsLoading] = useState(false);
+  const [selectedSuggestionId, setSelectedSuggestionId] = useState("");
+  const [keywordDraft, setKeywordDraft] = useState(emptyKeywordDraft);
+  const [keywordDraftBusy, setKeywordDraftBusy] = useState("");
+  const [uncategorizedReviewError, setUncategorizedReviewError] = useState("");
   const localFilterPresetsMigrated = useRef(false);
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
   const subcategoryFilterOptions = useMemo(() => {
@@ -255,6 +275,33 @@ export default function DashboardPage({
     }
     return bulkAssignOptions[bulkAssignModal]?.find(([value]) => value === bulkAssignValue)?.[1] || "";
   }, [bulkAssignModal, bulkAssignOptions, bulkAssignValue]);
+  const selectedSuggestion = useMemo(
+    () => uncategorizedSuggestions.find((item) => item.id === selectedSuggestionId) || uncategorizedSuggestions[0] || null,
+    [selectedSuggestionId, uncategorizedSuggestions],
+  );
+
+  async function loadUncategorizedSuggestions(preferredSuggestionId = selectedSuggestionId) {
+    setUncategorizedSuggestionsLoading(true);
+    try {
+      const payload = await apiGet("/transactions/uncategorized-suggestions/", { ...filterParams, limit: 8 });
+      const suggestions = payload.suggestions || [];
+      setUncategorizedSuggestions(suggestions);
+      setUncategorizedSuggestionMeta({ count: payload.count || 0, transaction_count: payload.transaction_count || 0 });
+      const nextSelected = suggestions.find((item) => item.id === preferredSuggestionId) || suggestions[0] || null;
+      setSelectedSuggestionId(nextSelected?.id || "");
+      setKeywordDraft(keywordDraftFromSuggestion(nextSelected));
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setUncategorizedSuggestionsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (uncategorizedReviewOpen) {
+      loadUncategorizedSuggestions();
+    }
+  }, [filterParams, uncategorizedReviewOpen]);
 
   function openBulkAssignModal(type) {
     setBulkAssignModal(type);
@@ -293,6 +340,65 @@ export default function DashboardPage({
       notify(error.message);
     } finally {
       setBulkAssignBusy(false);
+    }
+  }
+
+  function selectUncategorizedSuggestion(suggestion) {
+    setSelectedSuggestionId(suggestion.id);
+    setKeywordDraft(keywordDraftFromSuggestion(suggestion));
+    setUncategorizedReviewError("");
+  }
+
+  async function createKeywordFromSuggestion(applyToGroup = false) {
+    if (!selectedSuggestion) {
+      setUncategorizedReviewError("Choose a suggestion first");
+      return;
+    }
+    const includeTerms = textLines(keywordDraft.include_terms);
+    if (!includeTerms.length) {
+      setUncategorizedReviewError("Add at least one include term");
+      return;
+    }
+    const hasAssignment = Boolean(
+      keywordDraft.subcategory_id
+      || keywordDraft.want_need_investment
+      || keywordDraft.tag_ids.length
+      || keywordDraft.is_ignored,
+    );
+    if (!hasAssignment) {
+      setUncategorizedReviewError("Choose a category, WNI, tag, or ignore action");
+      return;
+    }
+    setUncategorizedReviewError("");
+    setKeywordDraftBusy(applyToGroup ? "create-apply" : "create");
+    try {
+      await apiPost("/keywords/", {
+        name: keywordDraft.name.trim() || selectedSuggestion.sample_description,
+        include_terms: includeTerms,
+        exclude_terms: textLines(keywordDraft.exclude_terms),
+        subcategory_id: keywordDraft.subcategory_id || "",
+        want_need_investment: keywordDraft.want_need_investment || "",
+        tag_ids: keywordDraft.tag_ids,
+        is_ignored: keywordDraft.is_ignored,
+        priority: Number(keywordDraft.priority || 0),
+        is_active: true,
+      });
+      await reloadAll();
+      if (applyToGroup) {
+        const result = await apiPost("/transactions/recategorize/", {
+          transaction_ids: selectedSuggestion.transaction_ids || [],
+        });
+        setRecategorizeResult(result);
+        notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
+        await Promise.all([reloadDashboard(), loadUncategorizedSuggestions()]);
+      } else {
+        notify("Keyword added");
+        await loadUncategorizedSuggestions();
+      }
+    } catch (error) {
+      setUncategorizedReviewError(error.message);
+    } finally {
+      setKeywordDraftBusy("");
     }
   }
 
@@ -482,9 +588,51 @@ export default function DashboardPage({
                 </button>
               </div>
             </div>
+            <div className="dashboard-action-subsection dashboard-uncategorized-action">
+              <div className="metric-label">Uncategorized review</div>
+              <LoadingButton
+                busy={uncategorizedSuggestionsLoading && uncategorizedReviewOpen}
+                busyLabel="Loading"
+                className="link-button"
+                disabled={importBusy}
+                onClick={() => {
+                  setUncategorizedReviewError("");
+                  setUncategorizedReviewOpen(true);
+                }}
+                type="button"
+              >
+                Review Uncategorized
+              </LoadingButton>
+            </div>
           </div>
         </section>
       </div>
+      {uncategorizedReviewOpen && (
+        <UncategorizedReviewPanel
+          busy={uncategorizedSuggestionsLoading}
+          defaultCurrency={defaultCurrency}
+          draft={keywordDraft}
+          error={uncategorizedReviewError}
+          hideAmounts={hideAmounts}
+          meta={uncategorizedSuggestionMeta}
+          onClearError={() => setUncategorizedReviewError("")}
+          onCreateKeyword={() => createKeywordFromSuggestion(false)}
+          onCreateKeywordAndApply={() => createKeywordFromSuggestion(true)}
+          onClose={() => {
+            if (!keywordDraftBusy) {
+              setUncategorizedReviewError("");
+              setUncategorizedReviewOpen(false);
+            }
+          }}
+          onDraftChange={setKeywordDraft}
+          onRefresh={() => loadUncategorizedSuggestions()}
+          onSelectSuggestion={selectUncategorizedSuggestion}
+          refs={refs}
+          selectedSuggestion={selectedSuggestion}
+          submitting={keywordDraftBusy}
+          suggestions={uncategorizedSuggestions}
+        />
+      )}
       {bulkAssignModal && (
         <BulkAssignModal
           busy={bulkAssignBusy}
@@ -522,6 +670,30 @@ export default function DashboardPage({
       </section>
     </>
   );
+}
+
+function keywordDraftFromSuggestion(suggestion) {
+  if (!suggestion) {
+    return { ...emptyKeywordDraft, tag_ids: [] };
+  }
+  const keyword = suggestion.suggested_keyword || {};
+  return {
+    name: keyword.name || "",
+    include_terms: (keyword.include_terms || []).join("\n"),
+    exclude_terms: (keyword.exclude_terms || []).join("\n"),
+    subcategory_id: "",
+    want_need_investment: "",
+    tag_ids: [],
+    priority: keyword.priority ?? 0,
+    is_ignored: Boolean(keyword.is_ignored),
+  };
+}
+
+function textLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 }
 
 function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, options, selectedLabel, type, value }) {
@@ -581,6 +753,269 @@ function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, option
           </LoadingButton>
         </div>
       </div>
+    </div>
+  );
+}
+
+function UncategorizedReviewPanel({
+  busy,
+  defaultCurrency,
+  draft,
+  error,
+  hideAmounts,
+  meta,
+  onClearError,
+  onCreateKeyword,
+  onCreateKeywordAndApply,
+  onClose,
+  onDraftChange,
+  onRefresh,
+  onSelectSuggestion,
+  refs,
+  selectedSuggestion,
+  submitting,
+  suggestions,
+}) {
+  function updateDraft(patch) {
+    onClearError();
+    onDraftChange((current) => ({ ...current, ...patch }));
+  }
+
+  function toggleTag(tagId) {
+    onClearError();
+    onDraftChange((current) => {
+      const selectedTags = new Set(current.tag_ids || []);
+      if (selectedTags.has(tagId)) {
+        selectedTags.delete(tagId);
+      } else {
+        selectedTags.add(tagId);
+      }
+      return { ...current, tag_ids: [...selectedTags] };
+    });
+  }
+
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(event) => event.target === event.currentTarget && !submitting && onClose()}
+      role="presentation"
+    >
+      <section
+        aria-labelledby="uncategorized-review-title"
+        aria-modal="true"
+        className="uncategorized-review-modal"
+        onMouseDown={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <div className="uncategorized-review-modal-header">
+          <div>
+            <h2 id="uncategorized-review-title">Uncategorized Review</h2>
+            <span>
+              {Number(meta.transaction_count || 0).toLocaleString()} transactions in{" "}
+              {Number(meta.count || 0).toLocaleString()} groups
+            </span>
+          </div>
+          <div className="uncategorized-review-modal-header-actions">
+            <LoadingButton
+              busy={busy}
+              busyLabel="Refreshing"
+              className="link-button"
+              onClick={onRefresh}
+              type="button"
+            >
+              Refresh
+            </LoadingButton>
+            <button
+              aria-label="Close uncategorized review"
+              className="icon-button"
+              disabled={Boolean(submitting)}
+              onClick={onClose}
+              type="button"
+            >
+              x
+            </button>
+          </div>
+        </div>
+        <div className="uncategorized-review-layout">
+          {error ? <div className="uncategorized-review-error">{error}</div> : null}
+          <div className="uncategorized-suggestion-list">
+          {busy && !suggestions.length ? (
+            <div className="uncategorized-empty-state">Loading suggestions...</div>
+          ) : suggestions.length ? (
+            suggestions.map((suggestion) => (
+              <button
+                className={`uncategorized-suggestion-card ${
+                  selectedSuggestion?.id === suggestion.id ? "is-active" : ""
+                }`}
+                key={suggestion.id}
+                onClick={() => onSelectSuggestion(suggestion)}
+                type="button"
+              >
+                <span className="suggestion-card-title">{suggestion.sample_description}</span>
+                <span className="suggestion-card-meta">
+                  {suggestion.reason} | {suggestion.transaction_count.toLocaleString()} transactions
+                </span>
+                <span className="suggestion-card-amount">
+                  {formatAmountWithCurrency(
+                    suggestion.total_amount,
+                    suggestion.currency || defaultCurrency,
+                    hideAmounts,
+                  )}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="uncategorized-empty-state">
+              No uncategorized suggestions for the current filters.
+            </div>
+          )}
+        </div>
+
+          <div className="uncategorized-detail-panel">
+          {selectedSuggestion ? (
+            <>
+              <div className="uncategorized-detail-header">
+                <div>
+                  <h3>{selectedSuggestion.sample_description}</h3>
+                  <span>{selectedSuggestion.date_from} - {selectedSuggestion.date_to}</span>
+                </div>
+                <strong>
+                  {formatAmountWithCurrency(
+                    selectedSuggestion.total_amount,
+                    selectedSuggestion.currency || defaultCurrency,
+                    hideAmounts,
+                  )}
+                </strong>
+              </div>
+              <div className="uncategorized-keyword-form">
+                <label className="form-field">
+                  <span>Keyword name</span>
+                  <input
+                    onChange={(event) => updateDraft({ name: event.target.value })}
+                    type="text"
+                    value={draft.name}
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Include terms</span>
+                  <textarea
+                    onChange={(event) => updateDraft({ include_terms: event.target.value })}
+                    rows="3"
+                    value={draft.include_terms}
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Exclude terms</span>
+                  <textarea
+                    onChange={(event) => updateDraft({ exclude_terms: event.target.value })}
+                    rows="3"
+                    value={draft.exclude_terms}
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Subcategory</span>
+                  <select
+                    onChange={(event) => updateDraft({ subcategory_id: event.target.value })}
+                    value={draft.subcategory_id}
+                  >
+                    <option value="">No subcategory</option>
+                    {refs.subcategories.map((item) => (
+                      <option key={item.id} value={item.id}>{subLabel(item)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>WNI</span>
+                  <select
+                    onChange={(event) => updateDraft({ want_need_investment: event.target.value })}
+                    value={draft.want_need_investment}
+                  >
+                    <option value="">No WNI</option>
+                    {wniOptions.map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="form-field">
+                  <span>Priority</span>
+                  <input
+                    onChange={(event) => updateDraft({ priority: event.target.value })}
+                    type="number"
+                    value={draft.priority}
+                  />
+                </label>
+                <div className="uncategorized-tag-field">
+                  <span>Tags</span>
+                  <div className="uncategorized-tag-list">
+                    {refs.tags.length ? refs.tags.map((tag) => (
+                      <label className="check-row" key={tag.id}>
+                        <input
+                          checked={(draft.tag_ids || []).includes(tag.id)}
+                          onChange={() => toggleTag(tag.id)}
+                          type="checkbox"
+                        />
+                        <span>{tag.name}</span>
+                      </label>
+                    )) : <span className="muted">No tags</span>}
+                  </div>
+                </div>
+                <label className="check-row uncategorized-ignore-row">
+                  <input
+                    checked={draft.is_ignored}
+                    onChange={(event) => updateDraft({ is_ignored: event.target.checked })}
+                    type="checkbox"
+                  />
+                  <span>Ignore matches</span>
+                </label>
+              </div>
+              <div className="uncategorized-sample-table">
+                <div className="uncategorized-sample-header">
+                  <span>Sample transactions</span>
+                  <span>{selectedSuggestion.transaction_count.toLocaleString()} total</span>
+                </div>
+                {selectedSuggestion.sample_transactions.map((transaction) => (
+                  <div className="uncategorized-sample-row" key={transaction.id}>
+                    <span>{transaction.transaction_date}</span>
+                    <span>{transaction.description}</span>
+                    <strong>
+                      {formatAmountWithCurrency(
+                        transaction.converted_amount ?? transaction.amount,
+                        transaction.converted_currency || transaction.currency || defaultCurrency,
+                        hideAmounts,
+                      )}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+              <div className="uncategorized-review-actions">
+                <LoadingButton
+                  busy={submitting === "create"}
+                  busyLabel="Creating"
+                  className="link-button"
+                  disabled={Boolean(submitting)}
+                  onClick={onCreateKeyword}
+                  type="button"
+                >
+                  Create Keyword
+                </LoadingButton>
+                <LoadingButton
+                  busy={submitting === "create-apply"}
+                  busyLabel="Applying"
+                  className="primary-action"
+                  disabled={Boolean(submitting)}
+                  onClick={onCreateKeywordAndApply}
+                  type="button"
+                >
+                  Create & Apply
+                </LoadingButton>
+              </div>
+            </>
+          ) : (
+            <div className="uncategorized-empty-state">Choose a suggestion</div>
+          )}
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

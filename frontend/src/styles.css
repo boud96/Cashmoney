@@ -1616,6 +1616,20 @@ select option {
   padding-top: 12px;
 }
 
+.dashboard-uncategorized-action {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.dashboard-uncategorized-action .link-button {
+  justify-content: center;
+  min-height: 36px;
+  width: 100%;
+}
+
 .bulk-assign-buttons {
   display: grid;
   gap: 8px;
@@ -1658,6 +1672,244 @@ select option {
 
 .metric-blue {
   color: var(--blue);
+}
+
+.uncategorized-review-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1180px, calc(100vw - 32px));
+  max-height: min(900px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+}
+
+.uncategorized-review-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+  padding: 14px;
+}
+
+.uncategorized-review-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.uncategorized-review-modal-header span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.uncategorized-review-modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.uncategorized-review-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 1.5fr);
+  gap: 14px;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px;
+}
+
+.uncategorized-review-error {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(179, 69, 69, 0.35);
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.uncategorized-suggestion-list {
+  display: grid;
+  align-content: start;
+  align-self: stretch;
+  gap: 8px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.uncategorized-suggestion-card {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--subtle-bg);
+  color: var(--text);
+  padding: 12px;
+  text-align: left;
+}
+
+.uncategorized-suggestion-card:hover,
+.uncategorized-suggestion-card.is-active {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+}
+
+.suggestion-card-title {
+  font-size: 14px;
+  font-weight: 760;
+  overflow-wrap: anywhere;
+}
+
+.suggestion-card-meta,
+.suggestion-card-amount {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.suggestion-card-amount {
+  color: var(--text);
+}
+
+.uncategorized-detail-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.uncategorized-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--subtle-bg);
+  padding: 12px;
+}
+
+.uncategorized-detail-header h3 {
+  margin: 0;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.uncategorized-detail-header span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.uncategorized-keyword-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.uncategorized-keyword-form textarea {
+  min-height: 82px;
+}
+
+.uncategorized-keyword-form .form-field:nth-child(2),
+.uncategorized-keyword-form .form-field:nth-child(3),
+.uncategorized-tag-field {
+  grid-column: span 3;
+}
+
+.uncategorized-tag-field {
+  display: grid;
+  gap: 6px;
+}
+
+.uncategorized-tag-field > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.uncategorized-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.uncategorized-tag-list .check-row {
+  min-height: 34px;
+}
+
+.uncategorized-ignore-row {
+  align-self: end;
+  min-height: 38px;
+}
+
+.uncategorized-sample-table {
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.uncategorized-sample-header,
+.uncategorized-sample-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) minmax(110px, auto);
+  gap: 10px;
+  align-items: center;
+  padding: 9px 12px;
+}
+
+.uncategorized-sample-header {
+  background: var(--subtle-bg);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.uncategorized-sample-row {
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.uncategorized-sample-row span:nth-child(2) {
+  overflow-wrap: anywhere;
+}
+
+.uncategorized-sample-row strong {
+  text-align: right;
+}
+
+.uncategorized-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.uncategorized-empty-state {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--subtle-bg);
+  color: var(--muted);
+  padding: 14px;
 }
 
 .recategorize-panel {
@@ -3331,6 +3583,7 @@ td {
   .dashboard-summary-row,
   .help-grid,
   .help-hero,
+  .uncategorized-review-layout,
   .settings-grid,
   .import-workspace {
     grid-template-columns: 1fr;
@@ -3364,6 +3617,7 @@ td {
   .filter-basics-card,
   .filter-category-row,
   .filter-support-row,
+  .uncategorized-keyword-form,
   .maintenance-counts,
   .compact-form,
   .mapping-form,
@@ -3404,8 +3658,35 @@ td {
   }
 
   .dashboard-action-row,
-  .bulk-assign-buttons {
+  .bulk-assign-buttons,
+  .uncategorized-sample-header,
+  .uncategorized-sample-row {
     grid-template-columns: 1fr;
+  }
+
+  .uncategorized-keyword-form .form-field:nth-child(2),
+  .uncategorized-keyword-form .form-field:nth-child(3),
+  .uncategorized-tag-field {
+    grid-column: auto;
+  }
+
+  .uncategorized-detail-header,
+  .uncategorized-review-modal-header,
+  .uncategorized-review-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .uncategorized-review-modal-header-actions {
+    justify-content: stretch;
+  }
+
+  .uncategorized-review-modal-header-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .uncategorized-sample-row strong {
+    text-align: left;
   }
 
   .dashboard-privacy-action {

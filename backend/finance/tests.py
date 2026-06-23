@@ -1401,6 +1401,70 @@ class APITests(FinanceTestCase):
         self.assertEqual(transaction_obj.description, "McDonalds Prague")
         self.assertEqual(transaction_obj.subcategory, self.subcategory)
 
+    def test_uncategorized_suggestions_group_and_rank_current_filter_scope(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Coffee Shop",
+            amount=Decimal("-10.00"),
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-03",
+            description="coffee   shop",
+            amount=Decimal("-12.00"),
+        )
+        large_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-04",
+            description="Annual Insurance",
+            amount=Decimal("-500.00"),
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-05",
+            description="Already categorized",
+            amount=Decimal("-20.00"),
+            subcategory=self.subcategory,
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-06",
+            description="Ignored uncategorized",
+            amount=Decimal("-200.00"),
+            is_ignored=True,
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-07",
+            description="Locked uncategorized",
+            amount=Decimal("-250.00"),
+            is_categorization_locked=True,
+        )
+
+        response = self.client.get(
+            "/api/transactions/uncategorized-suggestions/?date_from=2026-01-01"
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["transaction_count"], 3)
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(
+            [suggestion["reason"] for suggestion in payload["suggestions"]],
+            ["Large uncategorized transaction", "Repeated description"],
+        )
+        self.assertEqual(
+            payload["suggestions"][0]["transaction_ids"],
+            [str(large_transaction.id)],
+        )
+        repeated = payload["suggestions"][1]
+        self.assertEqual(repeated["transaction_count"], 2)
+        self.assertEqual(
+            repeated["suggested_keyword"]["include_terms"], ["Coffee Shop"]
+        )
+        self.assertEqual(len(repeated["sample_transactions"]), 2)
+
     def test_dashboard_summary_uses_derived_categories_and_excludes_ignored(self):
         Transaction.objects.create(
             bank_account=self.account,

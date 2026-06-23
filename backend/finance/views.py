@@ -60,6 +60,7 @@ from .services import (
     ExchangeRateProviderError,
     available_currency_options,
     build_dashboard_summary,
+    build_uncategorized_suggestions,
     detect_csv_columns,
     exchange_rate_status,
     fallback_currency_options,
@@ -1063,6 +1064,32 @@ class TransactionCollectionView(JsonView):
                 default_currency=settings_obj.default_currency,
             ),
             status=201,
+        )
+
+
+class UncategorizedSuggestionView(JsonView):
+    def get(self, request):
+        settings_obj = FinanceSettings.load()
+        limit = min(
+            clean_int(request.GET.get("limit"), "limit", default=8, minimum=1),
+            25,
+        )
+        queryset = (
+            filtered_transactions(request)
+            .filter(
+                subcategory__isnull=True,
+                is_ignored=False,
+                is_categorization_locked=False,
+            )
+            .select_related("bank_account", "subcategory", "subcategory__category")
+            .prefetch_related("tags")
+        )
+        return json_response(
+            build_uncategorized_suggestions(
+                queryset,
+                default_currency=settings_obj.default_currency,
+                limit=limit,
+            )
         )
 
 

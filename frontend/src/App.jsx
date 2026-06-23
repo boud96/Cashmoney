@@ -271,6 +271,7 @@ export default function App() {
               onFilterChange={updateFilter}
               refs={refs}
               recategorizeResult={recategorizeResult}
+              reloadAll={loadAll}
               setFilters={setFilters}
               setRecategorizeResult={setRecategorizeResult}
               summary={summary}

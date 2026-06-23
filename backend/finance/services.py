@@ -26,8 +26,10 @@ from .models import (
 )
 from .serializers import (
     model_ref,
+    money,
     serialize_tag,
     serialize_transaction,
+    transaction_converted_amount,
     transaction_display_amount,
 )
 
@@ -47,6 +49,8 @@ COMMON_CURRENCY_OPTIONS = [
     {"code": "HUF", "name": "Hungarian Forint"},
     {"code": "CHF", "name": "Swiss Franc"},
 ]
+UNCATEGORIZED_SUGGESTION_SAMPLE_SIZE = 5
+UNCATEGORIZED_SUGGESTION_COUNT_WEIGHT = Decimal("25.00")
 RECATEGORIZABLE_TRANSACTION_FIELDS = (
     "description",
     "counterparty_account_number",
@@ -1547,6 +1551,130 @@ class CSVImportService:
             transaction_obj.tags.set(categorization.tags)
 
         return transaction_obj, categorization
+
+
+def normalized_uncategorized_group_key(transaction_obj):
+    text = transaction_obj.description or transaction_obj.counterparty_name or ""
+    normalized = re.sub(r"[^\w]+", " ", str(text).casefold())
+    normalized = normalized.replace("_", " ")
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized or "__no_description__"
+
+
+def transaction_suggestion_label(transaction_obj):
+    label = (
+        transaction_obj.description
+        or transaction_obj.counterparty_name
+        or transaction_obj.transaction_type
+        or "No description"
+    )
+    return re.sub(r"\s+", " ", str(label)).strip() or "No description"
+
+
+def group_suggestion_label(transactions):
+    labels = [
+        transaction_suggestion_label(transaction_obj)
+        for transaction_obj in transactions
+    ]
+    return sorted(labels, key=lambda label: (label.casefold(), label))[0]
+
+
+def transaction_priority_amount(transaction_obj, default_currency):
+    converted_amount = transaction_converted_amount(transaction_obj, default_currency)
+    return converted_amount if converted_amount is not None else transaction_obj.amount
+
+
+def suggested_keyword_name(label):
+    clean_label = str(label or "Uncategorized").strip() or "Uncategorized"
+    name = f"Categorize {clean_label}"
+    return name[:128]
+
+
+def build_uncategorized_suggestions(queryset, default_currency, limit=8):
+    groups = defaultdict(list)
+    for transaction_obj in queryset:
+        groups[normalized_uncategorized_group_key(transaction_obj)].append(
+            transaction_obj
+        )
+
+    suggestions = []
+    for group_key, transactions in groups.items():
+        sorted_transactions = sorted(
+            transactions,
+            key=lambda item: (
+                abs(transaction_priority_amount(item, default_currency)),
+                item.transaction_date,
+            ),
+            reverse=True,
+        )
+        label = group_suggestion_label(transactions)
+        amount_values = [
+            transaction_priority_amount(transaction_obj, default_currency)
+            for transaction_obj in transactions
+        ]
+        total_amount = sum(amount_values, Decimal("0.00"))
+        absolute_total_amount = sum(
+            (abs(amount) for amount in amount_values),
+            Decimal("0.00"),
+        )
+        transaction_count = len(transactions)
+        reason = (
+            "Repeated description"
+            if transaction_count > 1
+            else "Large uncategorized transaction"
+        )
+        score = absolute_total_amount + (
+            Decimal(transaction_count) * UNCATEGORIZED_SUGGESTION_COUNT_WEIGHT
+        )
+        date_values = [
+            transaction_obj.transaction_date for transaction_obj in transactions
+        ]
+        transaction_ids = [str(transaction_obj.id) for transaction_obj in transactions]
+        suggestions.append(
+            {
+                "id": group_key,
+                "reason": reason,
+                "score": money(score),
+                "transaction_count": transaction_count,
+                "total_amount": money(total_amount),
+                "absolute_total_amount": money(absolute_total_amount),
+                "currency": default_currency,
+                "sample_description": label,
+                "date_from": min(date_values).isoformat(),
+                "date_to": max(date_values).isoformat(),
+                "transaction_ids": transaction_ids,
+                "suggested_keyword": {
+                    "name": suggested_keyword_name(label),
+                    "include_terms": [label],
+                    "exclude_terms": [],
+                    "priority": 0,
+                    "is_ignored": False,
+                },
+                "sample_transactions": [
+                    serialize_transaction(
+                        transaction_obj,
+                        default_currency=default_currency,
+                    )
+                    for transaction_obj in sorted_transactions[
+                        :UNCATEGORIZED_SUGGESTION_SAMPLE_SIZE
+                    ]
+                ],
+            }
+        )
+
+    suggestions.sort(
+        key=lambda item: (
+            item["score"],
+            item["transaction_count"],
+            item["absolute_total_amount"],
+        ),
+        reverse=True,
+    )
+    return {
+        "count": len(suggestions),
+        "transaction_count": sum(len(transactions) for transactions in groups.values()),
+        "suggestions": suggestions[:limit],
+    }
 
 
 def recategorize_transactions(queryset, include_locked=False):
