@@ -8,21 +8,15 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
   const [deleting, setDeleting] = useState("");
   const [restoreFile, setRestoreFile] = useState(null);
   const [safeBusy, setSafeBusy] = useState("");
-  const [refreshingCounts, setRefreshingCounts] = useState(false);
   const counts = summary || {};
-  const snapshot = [
-    ["Transactions", counts.transactions],
-    ["Imports", counts.imports],
-    ["Exchange Rates", counts.exchange_rates],
-    ["Sample Transactions", counts.sample_transactions],
-    ["Accounts", counts.bank_accounts],
-    ["CSV Mappings", counts.csv_mappings],
-    ["Categories", counts.categories],
-    ["Subcategories", counts.subcategories],
-    ["Tags", counts.tags],
-    ["Keywords", counts.keywords],
-    ["Saved filters", counts.saved_filters],
-  ];
+  const definitionObjectCount = [
+    counts.bank_accounts,
+    counts.csv_mappings,
+    counts.categories,
+    counts.subcategories,
+    counts.tags,
+    counts.keywords,
+  ].reduce((total, value) => total + Number(value || 0), 0);
   const financeObjectCount = [
     counts.transactions,
     counts.imports,
@@ -45,15 +39,23 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
     counts.sample_tags,
     counts.sample_keywords,
   ].reduce((total, value) => total + Number(value || 0), 0);
+  const snapshot = [
+    ["Transactions", counts.transactions],
+    ["Imports", counts.imports],
+    ["Definitions", definitionObjectCount],
+    ["Exchange Rates", counts.exchange_rates],
+    ["Saved Filters", counts.saved_filters],
+    ["Sample Data", sampleObjectCount],
+  ];
   const transactionObjectCount = Number(counts.transactions || 0) + Number(counts.imports || 0);
-  const actions = [
-    {
-      count: sampleObjectCount,
-      description: "Remove only objects created by the first-launch demo dataset.",
-      endpoint: "/maintenance/sample-data/",
-      phrase: "DELETE SAMPLE DATA",
-      title: "Delete sample data",
-    },
+  const sampleDataAction = {
+    count: sampleObjectCount,
+    description: "Remove only objects created by the first-launch demo dataset.",
+    endpoint: "/maintenance/sample-data/",
+    phrase: "DELETE SAMPLE DATA",
+    title: "Delete sample data",
+  };
+  const dangerActions = [
     {
       count: transactionObjectCount,
       description: "Remove every transaction and all CSV import history. Definitions stay intact.",
@@ -83,15 +85,6 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
       notify(error.message);
     } finally {
       setDeleting("");
-    }
-  }
-
-  async function refreshCounts() {
-    setRefreshingCounts(true);
-    try {
-      await reloadMaintenance();
-    } finally {
-      setRefreshingCounts(false);
     }
   }
 
@@ -171,7 +164,7 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
       <section className="panel maintenance-snapshot">
         <div className="panel-header">
           <h2>Database Snapshot</h2>
-          <LoadingButton busy={refreshingCounts} busyLabel="Refreshing" className="link-button" onClick={refreshCounts} type="button">Refresh Counts</LoadingButton>
+          <span className="muted">Current local database totals.</span>
         </div>
         <div className="maintenance-counts">
           {snapshot.map(([label, value]) => (
@@ -180,11 +173,7 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
         </div>
       </section>
 
-      <section className="panel maintenance-tools">
-        <div className="panel-header">
-          <h2>Safe Tools</h2>
-          <span className="muted">Useful before or after cleanup.</span>
-        </div>
+      <MaintenanceSection defaultExpanded storageId="backups" subtitle="Export or restore the complete local SQLite database." title="Backups">
         <div className="maintenance-tool-grid">
           <article className="maintenance-tool-card">
             <div>
@@ -202,26 +191,10 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
               Export Backup
             </LoadingButton>
           </article>
-          <article className="maintenance-tool-card">
-            <div>
-              <h3>Recreate sample data</h3>
-              <p>Reset only the sample dataset and create the demo records again.</p>
-            </div>
-            <LoadingButton
-              busy={safeBusy === "samples"}
-              busyLabel="Recreating"
-              className="link-button"
-              disabled={Boolean(safeBusy)}
-              onClick={recreateSampleData}
-              type="button"
-            >
-              Recreate Samples
-            </LoadingButton>
-          </article>
           <article className="maintenance-tool-card restore-card">
             <div>
               <h3>Restore database backup</h3>
-              <p>Replace the current local database from a Cashmoney SQLite backup. A pre-restore backup is saved automatically.</p>
+              <p>Replace the current local database from a Cashmoney SQLite backup. The app saves a pre-restore backup first.</p>
             </div>
             <form className="restore-form" onSubmit={restoreDatabase}>
               <label>
@@ -244,15 +217,49 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
             </form>
           </article>
         </div>
-      </section>
+      </MaintenanceSection>
 
-      <section className="danger-zone">
-        <div className="danger-zone-header">
-          <h2>Danger Zone</h2>
-          <p>These actions permanently remove local finance data from this database.</p>
+      <MaintenanceSection storageId="sample-data" subtitle="Recreate or remove the demo records used for first-run exploration." title="Sample Data">
+        <div className="maintenance-tool-grid">
+          <article className="maintenance-tool-card">
+            <div>
+              <h3>Recreate sample data</h3>
+              <p>Reset only the sample dataset and create the demo records again.</p>
+            </div>
+            <LoadingButton
+              busy={safeBusy === "samples"}
+              busyLabel="Recreating"
+              className="link-button"
+              disabled={Boolean(safeBusy) || Boolean(deleting)}
+              onClick={recreateSampleData}
+              type="button"
+            >
+              Recreate Samples
+            </LoadingButton>
+          </article>
+          <article className="maintenance-tool-card danger-tool-card">
+            <div>
+              <h3>{sampleDataAction.title}</h3>
+              <p>{sampleDataAction.description}</p>
+              <div className="danger-count">{formatCount(sampleDataAction.count)} affected</div>
+            </div>
+            <LoadingButton
+              busy={deleting === sampleDataAction.phrase}
+              busyLabel="Deleting"
+              className="danger-button"
+              disabled={Boolean(deleting) || Boolean(safeBusy)}
+              onClick={() => deleteMaintenanceData(sampleDataAction)}
+              type="button"
+            >
+              Delete Samples
+            </LoadingButton>
+          </article>
         </div>
-        <div className="danger-action-grid">
-          <article className="danger-card">
+      </MaintenanceSection>
+
+      <MaintenanceSection danger storageId="danger-zone" subtitle="Permanent cleanup and direct database access." title="Danger Zone">
+        <div className="maintenance-tool-grid">
+          <article className="maintenance-tool-card danger-tool-card">
             <div>
               <h3>Django admin</h3>
               <p>Open the raw Django admin interface for direct database maintenance.</p>
@@ -261,8 +268,8 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
               Admin
             </a>
           </article>
-          {actions.map((action) => (
-            <article className="danger-card" key={action.phrase}>
+          {dangerActions.map((action) => (
+            <article className="maintenance-tool-card danger-tool-card" key={action.phrase}>
               <div>
                 <h3>{action.title}</h3>
                 <p>{action.description}</p>
@@ -281,7 +288,63 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
             </article>
           ))}
         </div>
-      </section>
+      </MaintenanceSection>
     </>
+  );
+}
+
+function maintenancePanelStorageKey(storageId) {
+  return `cashmoney.maintenance.panel.${storageId}`;
+}
+
+function readStoredMaintenancePanelState(storageId, defaultExpanded) {
+  if (typeof window === "undefined") {
+    return defaultExpanded;
+  }
+  try {
+    const stored = window.localStorage.getItem(maintenancePanelStorageKey(storageId));
+    return stored === null ? defaultExpanded : stored === "1";
+  } catch {
+    return defaultExpanded;
+  }
+}
+
+function MaintenanceSection({ children, danger = false, defaultExpanded = false, storageId, subtitle, title }) {
+  const [expanded, setExpanded] = useState(() => readStoredMaintenancePanelState(storageId, defaultExpanded));
+
+  function toggleExpanded() {
+    setExpanded((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(maintenancePanelStorageKey(storageId), next ? "1" : "0");
+      } catch {
+        // Storage is optional; the section can still toggle for this session.
+      }
+      return next;
+    });
+  }
+
+  return (
+    <section className={`panel definition-panel maintenance-section ${danger ? "danger-maintenance-section" : ""} ${expanded ? "is-expanded" : "is-collapsed"}`.trim()}>
+      <div className="definition-panel-header">
+        <button
+          aria-expanded={expanded}
+          className="definition-panel-toggle"
+          onClick={toggleExpanded}
+          type="button"
+        >
+          <span className="definition-panel-heading">
+            <span className="definition-panel-title-line">
+              <span className="definition-panel-title">{title}</span>
+            </span>
+            {subtitle ? <span className="definition-panel-subtitle">{subtitle}</span> : null}
+          </span>
+          <span aria-hidden="true" className="definition-panel-state">{expanded ? "Hide" : "Show"}</span>
+        </button>
+      </div>
+      <div className="definition-panel-body">
+        {children}
+      </div>
+    </section>
   );
 }
