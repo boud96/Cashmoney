@@ -87,6 +87,7 @@ const emptyKeywordDraft = {
 };
 
 export default function DashboardPage({
+  confirmAction,
   filters,
   filterParams,
   hideAmounts,
@@ -247,7 +248,12 @@ export default function DashboardPage({
       return;
     }
     const lockedText = recategorizeLocked ? " Locked transactions included by the current filters will be reset and recategorized." : "";
-    if (!window.confirm(`Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?${lockedText}`)) {
+    const confirmed = await confirmAction({
+      confirmLabel: "Recategorize",
+      message: `Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?${lockedText}`,
+      title: "Recategorize Transactions",
+    });
+    if (!confirmed) {
       return;
     }
     setRecategorizing(true);

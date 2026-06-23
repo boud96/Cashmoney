@@ -4,7 +4,7 @@ import { apiDelete, apiGet, apiPost } from "../api.js";
 import { LoadingButton, Metric } from "../components.jsx";
 import { formatCount } from "../shared.js";
 
-export default function MaintenancePage({ notify, reloadAll, reloadDashboard, reloadMaintenance, summary }) {
+export default function MaintenancePage({ confirmAction, notify, reloadAll, reloadDashboard, reloadMaintenance, summary }) {
   const [deleting, setDeleting] = useState("");
   const [restoreFile, setRestoreFile] = useState(null);
   const [safeBusy, setSafeBusy] = useState("");
@@ -96,7 +96,13 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
   }
 
   async function deleteMaintenanceData(action) {
-    if (!window.confirm(`${action.title}?\n\n${action.description}`)) {
+    const confirmed = await confirmAction({
+      confirmLabel: "Delete",
+      danger: true,
+      message: `${action.title}?\n\n${action.description}`,
+      title: action.title,
+    });
+    if (!confirmed) {
       return;
     }
     setDeleting(action.phrase);
@@ -153,12 +159,13 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
   }
 
   async function restoreSavedBackup(backup) {
-    if (
-      !window.confirm(
-        `Restore ${backup.filename}?\n\nThis replaces the current local database. `
-          + "A pre-restore backup will be saved automatically."
-      )
-    ) {
+    const confirmed = await confirmAction({
+      confirmLabel: "Restore",
+      danger: true,
+      message: `Restore ${backup.filename}?\n\nThis replaces the current local database. A pre-restore backup will be saved automatically.`,
+      title: "Restore Backup",
+    });
+    if (!confirmed) {
       return;
     }
     setBackupAction(`restore:${backup.filename}`);
@@ -178,11 +185,13 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
   }
 
   async function deleteSavedBackup(backup) {
-    if (
-      !window.confirm(
-        `Delete ${backup.filename}?\n\nThis removes the saved backup file. The current database is not changed.`
-      )
-    ) {
+    const confirmed = await confirmAction({
+      confirmLabel: "Delete",
+      danger: true,
+      message: `Delete ${backup.filename}?\n\nThis removes the saved backup file. The current database is not changed.`,
+      title: "Delete Backup",
+    });
+    if (!confirmed) {
       return;
     }
     setBackupAction(`delete:${backup.filename}`);
@@ -205,12 +214,13 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
     if (!restoreFile) {
       return;
     }
-    if (
-      !window.confirm(
-        "Restore database backup?\n\nThis replaces the current local database. "
-          + "A pre-restore backup will be saved automatically."
-      )
-    ) {
+    const confirmed = await confirmAction({
+      confirmLabel: "Restore",
+      danger: true,
+      message: "Restore database backup?\n\nThis replaces the current local database. A pre-restore backup will be saved automatically.",
+      title: "Restore Database",
+    });
+    if (!confirmed) {
       return;
     }
     setSafeBusy("restore");

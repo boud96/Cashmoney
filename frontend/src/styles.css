@@ -411,6 +411,43 @@ h2 {
   min-height: 38px;
 }
 
+.confirm-modal {
+  width: min(460px, 100%);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+  padding: 16px;
+}
+
+.confirm-modal.is-danger {
+  border-color: color-mix(in srgb, var(--red) 44%, var(--border));
+}
+
+.confirm-modal-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.confirm-modal-message {
+  margin: 12px 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+  white-space: pre-line;
+}
+
+.confirm-modal-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.confirm-modal-actions button {
+  min-height: 38px;
+}
+
 .definition-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
