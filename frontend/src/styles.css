@@ -895,6 +895,11 @@ h2 {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.filter-side-stack > .saved-filters-card {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .filter-card,
 .filter-group {
   min-width: 0;
@@ -920,13 +925,28 @@ h2 {
 
 .filter-basics-card {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto auto;
+  grid-template-columns: minmax(240px, 1fr);
   align-items: end;
   gap: 12px;
 }
 
 .filter-search-field {
   min-width: 0;
+}
+
+.filter-display-card {
+  display: grid;
+  align-content: start;
+}
+
+.filter-display-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-display-options .check-row {
+  flex: 1 1 180px;
 }
 
 .filter-category-row {
@@ -1397,7 +1417,9 @@ select option {
 .saved-filters-card {
   display: grid;
   gap: 10px;
-  align-content: start;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .saved-filter-form {
@@ -1407,9 +1429,14 @@ select option {
 
 .saved-filter-list {
   display: grid;
+  align-content: start;
   gap: 6px;
-  max-height: 98px;
-  overflow: auto;
+  min-height: 0;
+  max-height: 216px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
 }
 
 .saved-filter-row {
@@ -3203,7 +3230,7 @@ td {
   }
 
   .filter-basics-card {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -3256,7 +3283,6 @@ td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .filter-basics-card,
   .filter-support-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

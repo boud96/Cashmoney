@@ -120,8 +120,8 @@ export default function HelpPage() {
             <li><strong>Checklist filters:</strong> empty means show nothing. On startup, all checklist options are selected.</li>
             <li><strong>Category/Subcategory/WNI:</strong> subcategory options narrow automatically when categories are selected.</li>
             <li><strong>Direction:</strong> Incomes are positive transactions and Expenses are negative transactions.</li>
-            <li><strong>Include ignored / Include locked:</strong> control whether those rows appear in the filtered data.</li>
-            <li><strong>Split by owners:</strong> divides shared-account amounts by the account owner count.</li>
+            <li><strong>Ignored / Locked:</strong> control whether those rows appear in the filtered data.</li>
+            <li><strong>Divide amounts by owners:</strong> divides shared-account amounts by the account owner count.</li>
           </ul>
         </HelpCard>
 
@@ -131,7 +131,7 @@ export default function HelpPage() {
             filters.
           </p>
           <ul>
-            <li><strong>Stats:</strong> Income, Expenses, Net, Transactions, and Uncategorized reflect the current filters in the app default currency.</li>
+            <li><strong>Stats:</strong> Incomes, Expenses, Net, Transactions, and Uncategorized reflect the current filters in the app default currency.</li>
             <li><strong>Charts:</strong> Monthly Flow, Income Categories, Expense Categories, Want / Need / Investment, and Top Expense Subcategories.</li>
             <li><strong>Exchange rates:</strong> original imported amounts stay unchanged; converted totals use cached rates that sync after imports and default currency changes.</li>
             <li><strong>Hide amounts:</strong> the eye button hides amount values in the dashboard and import preview.</li>

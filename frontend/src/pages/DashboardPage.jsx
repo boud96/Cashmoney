@@ -340,18 +340,25 @@ export default function DashboardPage({
                   <span>Search</span>
                   <input onChange={(event) => onFilterChange("q", event.target.value)} placeholder="Description, note, counterparty" type="search" value={filters.q} />
                 </label>
-                <label className="check-row">
-                  <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
-                  <span>Include ignored</span>
-                </label>
-                <label className="check-row">
-                  <input checked={filters.include_locked} onChange={(event) => onFilterChange("include_locked", event.target.checked)} type="checkbox" />
-                  <span>Include locked</span>
-                </label>
-                <label className="check-row">
-                  <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
-                  <span>Split by owners</span>
-                </label>
+              </div>
+              <div className="filter-card filter-display-card">
+                <div className="filter-card-header">
+                  <span className="filter-label">Display</span>
+                </div>
+                <div className="filter-display-options">
+                  <label className="check-row">
+                    <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
+                    <span>Divide amounts by owners</span>
+                  </label>
+                  <label className="check-row">
+                    <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
+                    <span>Ignored</span>
+                  </label>
+                  <label className="check-row">
+                    <input checked={filters.include_locked} onChange={(event) => onFilterChange("include_locked", event.target.checked)} type="checkbox" />
+                    <span>Locked</span>
+                  </label>
+                </div>
               </div>
               <div className="filter-group filter-category-group">
                 <div className="filter-group-header">
@@ -822,9 +829,9 @@ function MonthlyChart({ hideAmounts, rows }) {
       data={[
         {
           customdata: monthlyRows.map((row) => [row.expense, row.net]),
-          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Income: %{y:,.0f}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Incomes: %{y:,.0f}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
           marker: { color: cssVar("--green", "#2f8f65") },
-          name: "Income",
+          name: "Incomes",
           type: "bar",
           width: barWidth,
           x: months,
@@ -842,7 +849,7 @@ function MonthlyChart({ hideAmounts, rows }) {
         },
         {
           customdata: monthlyRows.map((row) => [row.income, row.expense]),
-          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Net: %{y:,.0f}<br>Income: %{customdata[0]:,.0f}<br>Expenses: %{customdata[1]:,.0f}<extra></extra>",
+          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Net: %{y:,.0f}<br>Incomes: %{customdata[0]:,.0f}<br>Expenses: %{customdata[1]:,.0f}<extra></extra>",
           marker: {
             color: netColors,
             line: { width: 0 },
