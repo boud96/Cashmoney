@@ -35,7 +35,6 @@
     ],
     "win": {
       "icon": "../backend/finance/static/favicon.ico",
-      "signAndEditExecutable": false,
       "target": [
         "nsis",
         "portable"
@@ -43,7 +42,9 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "../backend/finance/static/favicon.ico",
+      "uninstallerIcon": "../backend/finance/static/favicon.ico"
     }
   }
 }
