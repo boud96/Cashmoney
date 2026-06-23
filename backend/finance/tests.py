@@ -1,7 +1,10 @@
 import json
-from datetime import timedelta
-from io import StringIO
+import tempfile
+from datetime import date, timedelta
 from decimal import Decimal
+from io import StringIO
+from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -18,6 +21,7 @@ from .models import (
     CSVImport,
     CSVMapping,
     Category,
+    ExchangeRate,
     FinanceSettings,
     Keyword,
     SavedFilter,
@@ -27,7 +31,14 @@ from .models import (
     TransactionTag,
 )
 from .sample_data import SAMPLE_IMPORT_SOURCE, SAMPLE_PREFIX, delete_sample_data
-from .services import CSVImportService, CategorizationService
+from .services import (
+    CSVImportService,
+    CategorizationService,
+    ExchangeRateProviderError,
+    FrankfurterExchangeRateProvider,
+    recalculate_transaction_conversions,
+    sync_missing_exchange_rates,
+)
 
 
 def json_body(response):
@@ -110,6 +121,93 @@ class ModelTests(FinanceTestCase):
 
         self.assertEqual(income.direction, Direction.INCOME)
         self.assertEqual(expense.direction, Direction.EXPENSE)
+
+    def test_bank_account_number_is_optional_but_unique_when_provided(self):
+        first_blank = BankAccount.objects.create(name="Cash Wallet")
+        second_blank = BankAccount.objects.create(name="Savings Jar")
+
+        self.assertEqual(first_blank.account_number, "")
+        self.assertEqual(second_blank.account_number, "")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            BankAccount.objects.create(name="Duplicate", account_number="123/0100")
+
+    def test_frankfurter_provider_sends_json_headers_and_parses_flat_rows(self):
+        captured_requests = []
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    [
+                        {
+                            "date": "2024-01-02",
+                            "base": "EUR",
+                            "quote": "CZK",
+                            "rate": 24.726,
+                        }
+                    ]
+                ).encode("utf-8")
+
+        def fake_urlopen(request, timeout):
+            captured_requests.append((request, timeout))
+            return FakeResponse()
+
+        provider = FrankfurterExchangeRateProvider()
+        with patch("finance.services.urlopen", fake_urlopen):
+            rows = provider.fetch_rates(
+                "EUR", ["CZK"], date(2024, 1, 2), date(2024, 1, 2)
+            )
+
+        request, timeout = captured_requests[0]
+        self.assertEqual(timeout, 30)
+        self.assertEqual(request.get_header("Accept"), "application/json")
+        self.assertEqual(request.get_header("User-agent"), provider.user_agent)
+        self.assertEqual(rows[0]["date"], date(2024, 1, 2))
+        self.assertEqual(rows[0]["base_currency"], "EUR")
+        self.assertEqual(rows[0]["quote_currency"], "CZK")
+        self.assertEqual(rows[0]["rate"], Decimal("24.726"))
+
+    def test_frankfurter_provider_parses_currency_rows(self):
+        captured_requests = []
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    [
+                        {"iso_code": "CZK", "name": "Czech Koruna"},
+                        {"iso_code": "EUR", "name": "Euro"},
+                    ]
+                ).encode("utf-8")
+
+        def fake_urlopen(request, timeout):
+            captured_requests.append((request, timeout))
+            return FakeResponse()
+
+        provider = FrankfurterExchangeRateProvider()
+        with patch("finance.services.urlopen", fake_urlopen):
+            currencies = provider.fetch_currencies()
+
+        request, _timeout = captured_requests[0]
+        self.assertIn("/v2/currencies", request.full_url)
+        self.assertEqual(
+            currencies,
+            [
+                {"code": "CZK", "name": "Czech Koruna"},
+                {"code": "EUR", "name": "Euro"},
+            ],
+        )
 
     def test_subcategory_derives_category_and_unique_tag_constraint(self):
         transaction_obj = Transaction.objects.create(
@@ -481,6 +579,36 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["error"], "Missing required field")
         self.assertEqual(payload["details"]["field"], "name")
 
+    def test_bank_account_api_allows_blank_account_number(self):
+        first = self.post_json(
+            "/api/bank-accounts/",
+            {"name": "Cash Wallet", "currency": "CZK", "owners": 1},
+        )
+        second = self.post_json(
+            "/api/bank-accounts/",
+            {
+                "name": "Savings Jar",
+                "account_number": "",
+                "currency": "CZK",
+                "owners": 1,
+            },
+        )
+        duplicate = self.post_json(
+            "/api/bank-accounts/",
+            {
+                "name": "Duplicate",
+                "account_number": "123/0100",
+                "currency": "CZK",
+                "owners": 1,
+            },
+        )
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(second.status_code, 201)
+        self.assertEqual(json_body(first)["account_number"], "")
+        self.assertEqual(json_body(second)["account_number"], "")
+        self.assertEqual(duplicate.status_code, 409)
+
     def test_color_api_generates_when_missing_and_rejects_non_hex_values(self):
         created = self.post_json("/api/categories/", {"name": "Auto Color"})
         invalid = self.post_json("/api/tags/", {"name": "Bad Color", "color": "red"})
@@ -496,11 +624,13 @@ class APITests(FinanceTestCase):
         self.assertTrue(
             json_body(default_response)["ignore_internal_account_references"]
         )
+        self.assertEqual(json_body(default_response)["default_currency"], "CZK")
         self.assertIsNone(json_body(default_response)["internal_transfer_subcategory"])
 
         updated = self.patch_json(
             "/api/settings/",
             {
+                "default_currency": "eur",
                 "ignore_internal_account_references": False,
                 "internal_transfer_subcategory_id": str(self.subcategory.id),
             },
@@ -508,9 +638,46 @@ class APITests(FinanceTestCase):
         self.assertEqual(updated.status_code, 200)
         payload = json_body(updated)
         self.assertFalse(payload["ignore_internal_account_references"])
+        self.assertEqual(payload["default_currency"], "EUR")
         self.assertEqual(
             payload["internal_transfer_subcategory"]["id"], str(self.subcategory.id)
         )
+
+    def test_exchange_rate_currencies_api_returns_provider_options(self):
+        with patch("finance.views.available_currency_options") as options:
+            options.return_value = {
+                "source": "frankfurter",
+                "fallback": False,
+                "currencies": [
+                    {"code": "CZK", "name": "Czech Koruna"},
+                    {"code": "EUR", "name": "Euro"},
+                ],
+            }
+            response = self.client.get("/api/exchange-rates/currencies/")
+
+        payload = json_body(response)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(payload["fallback"])
+        self.assertEqual(payload["currencies"][0]["code"], "CZK")
+
+    def test_exchange_rate_currencies_api_falls_back_when_provider_fails(self):
+        with (
+            patch("finance.views.available_currency_options") as options,
+            patch("finance.views.fallback_currency_options") as fallback,
+        ):
+            options.side_effect = ExchangeRateProviderError("provider unavailable")
+            fallback.return_value = {
+                "source": "frankfurter",
+                "fallback": True,
+                "error": "provider unavailable",
+                "currencies": [{"code": "CZK", "name": "Czech Koruna"}],
+            }
+            response = self.client.get("/api/exchange-rates/currencies/")
+
+        payload = json_body(response)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["fallback"])
+        self.assertEqual(payload["currencies"][0]["code"], "CZK")
 
     def test_saved_filter_api_persists_updates_and_deletes_presets(self):
         created = self.post_json(
@@ -892,16 +1059,48 @@ class APITests(FinanceTestCase):
         self.assertEqual(dry_run.status_code, 200)
         self.assertFalse(Transaction.objects.exists())
 
-        committed = self.client.post(
-            "/api/imports/",
-            {
-                "bank_account_id": str(self.account.id),
-                "csv_mapping_id": str(self.mapping.id),
-                "csv_file": self.csv_file(body),
-            },
-        )
+        with patch("finance.views.sync_missing_exchange_rates") as sync_rates:
+            sync_rates.return_value = {
+                "created_rates": 0,
+                "recalculation": {"updated": 1},
+            }
+            committed = self.client.post(
+                "/api/imports/",
+                {
+                    "bank_account_id": str(self.account.id),
+                    "csv_mapping_id": str(self.mapping.id),
+                    "csv_file": self.csv_file(body),
+                },
+            )
+        committed_payload = json_body(committed)
         self.assertEqual(committed.status_code, 201)
         self.assertEqual(Transaction.objects.count(), 1)
+        self.assertTrue(committed_payload["exchange_rate_sync"]["attempted"])
+        self.assertTrue(committed_payload["exchange_rate_sync"]["synced"])
+        sync_rates.assert_called_once()
+
+    def test_import_commit_does_not_fail_when_exchange_rate_sync_fails(self):
+        body = (
+            "ID,Date,Description,Amount,Currency\napi-1,2026-01-02,Lunch,-12.50,USD\n"
+        )
+
+        with patch("finance.views.sync_missing_exchange_rates") as sync_rates:
+            sync_rates.side_effect = ExchangeRateProviderError("provider unavailable")
+            committed = self.client.post(
+                "/api/imports/",
+                {
+                    "bank_account_id": str(self.account.id),
+                    "csv_mapping_id": str(self.mapping.id),
+                    "csv_file": self.csv_file(body),
+                },
+            )
+        payload = json_body(committed)
+
+        self.assertEqual(committed.status_code, 201)
+        self.assertEqual(Transaction.objects.count(), 1)
+        self.assertTrue(payload["exchange_rate_sync"]["attempted"])
+        self.assertFalse(payload["exchange_rate_sync"]["synced"])
+        self.assertIn("provider unavailable", payload["exchange_rate_sync"]["error"])
 
     def test_imports_api_lists_recent_imports(self):
         older = CSVImport.objects.create(
@@ -1202,6 +1401,70 @@ class APITests(FinanceTestCase):
         self.assertEqual(transaction_obj.description, "McDonalds Prague")
         self.assertEqual(transaction_obj.subcategory, self.subcategory)
 
+    def test_uncategorized_suggestions_group_and_rank_current_filter_scope(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Coffee Shop",
+            amount=Decimal("-10.00"),
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-03",
+            description="coffee   shop",
+            amount=Decimal("-12.00"),
+        )
+        large_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-04",
+            description="Annual Insurance",
+            amount=Decimal("-500.00"),
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-05",
+            description="Already categorized",
+            amount=Decimal("-20.00"),
+            subcategory=self.subcategory,
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-06",
+            description="Ignored uncategorized",
+            amount=Decimal("-200.00"),
+            is_ignored=True,
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-07",
+            description="Locked uncategorized",
+            amount=Decimal("-250.00"),
+            is_categorization_locked=True,
+        )
+
+        response = self.client.get(
+            "/api/transactions/uncategorized-suggestions/?date_from=2026-01-01"
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["transaction_count"], 3)
+        self.assertEqual(payload["count"], 2)
+        self.assertEqual(
+            [suggestion["reason"] for suggestion in payload["suggestions"]],
+            ["Large uncategorized transaction", "Repeated description"],
+        )
+        self.assertEqual(
+            payload["suggestions"][0]["transaction_ids"],
+            [str(large_transaction.id)],
+        )
+        repeated = payload["suggestions"][1]
+        self.assertEqual(repeated["transaction_count"], 2)
+        self.assertEqual(
+            repeated["suggested_keyword"]["include_terms"], ["Coffee Shop"]
+        )
+        self.assertEqual(len(repeated["sample_transactions"]), 2)
+
     def test_dashboard_summary_uses_derived_categories_and_excludes_ignored(self):
         Transaction.objects.create(
             bank_account=self.account,
@@ -1288,6 +1551,118 @@ class APITests(FinanceTestCase):
         self.assertEqual(summary["want_need_investment"][0]["amount"], 45.0)
         self.assertEqual(transactions["results"][0]["amount"], -45.0)
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
+
+    def test_dashboard_summary_uses_converted_default_currency_amounts(self):
+        settings_obj = FinanceSettings.load()
+        settings_obj.default_currency = "CZK"
+        settings_obj.save()
+        ExchangeRate.objects.create(
+            date="2024-01-01",
+            base_currency="EUR",
+            quote_currency="USD",
+            rate=Decimal("1.2500000000"),
+        )
+        ExchangeRate.objects.create(
+            date="2024-01-01",
+            base_currency="EUR",
+            quote_currency="CZK",
+            rate=Decimal("25.0000000000"),
+        )
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2024-01-02",
+            description="Foreign lunch",
+            amount=Decimal("-10.00"),
+            currency="USD",
+            subcategory=self.subcategory,
+            want_need_investment=WantNeedInvestment.WANT,
+        )
+
+        result = recalculate_transaction_conversions(default_currency="CZK")
+        summary_response = self.client.get("/api/dashboard/summary/")
+        transactions_response = self.client.get("/api/transactions/", {"limit": "1"})
+        transaction_obj.refresh_from_db()
+
+        summary = json_body(summary_response)
+        transactions = json_body(transactions_response)
+        self.assertEqual(result["missing_rates"], 0)
+        self.assertEqual(transaction_obj.converted_amount, Decimal("-200.00"))
+        self.assertEqual(transaction_obj.conversion_rate, Decimal("20.0000000000"))
+        self.assertEqual(transaction_obj.conversion_rate_date, date(2024, 1, 1))
+        self.assertEqual(summary["default_currency"], "CZK")
+        self.assertEqual(summary["monthly"][0]["expense"], 200.0)
+        self.assertEqual(summary["expense_categories"][0]["amount"], 200.0)
+        self.assertEqual(summary["missing_conversions"], 0)
+        self.assertEqual(transactions["results"][0]["amount"], -10.0)
+        self.assertEqual(transactions["results"][0]["currency"], "USD")
+        self.assertEqual(transactions["results"][0]["converted_amount"], -200.0)
+        self.assertEqual(transactions["results"][0]["converted_currency"], "CZK")
+
+    def test_dashboard_summary_reports_missing_exchange_rates(self):
+        settings_obj = FinanceSettings.load()
+        settings_obj.default_currency = "CZK"
+        settings_obj.save()
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2024-01-02",
+            description="Foreign lunch",
+            amount=Decimal("-10.00"),
+            currency="USD",
+            subcategory=self.subcategory,
+        )
+
+        recalculate_transaction_conversions(default_currency="CZK")
+        response = self.client.get("/api/dashboard/summary/")
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["monthly"], [])
+        self.assertEqual(payload["missing_conversions"], 1)
+
+    def test_exchange_rate_sync_caches_flat_provider_rows_and_recalculates(self):
+        settings_obj = FinanceSettings.load()
+        settings_obj.default_currency = "CZK"
+        settings_obj.save()
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2024-01-02",
+            description="Euro lunch",
+            amount=Decimal("-10.00"),
+            currency="EUR",
+            subcategory=self.subcategory,
+        )
+
+        class FakeProvider:
+            def fetch_rates(
+                self, base_currency, quote_currencies, start_date, end_date
+            ):
+                self.call = (base_currency, quote_currencies, start_date, end_date)
+                return [
+                    {
+                        "date": date(2024, 1, 2),
+                        "base_currency": "EUR",
+                        "quote_currency": "CZK",
+                        "rate": Decimal("25.0000000000"),
+                        "source": "frankfurter",
+                    }
+                ]
+
+        provider = FakeProvider()
+        result = sync_missing_exchange_rates(
+            provider=provider,
+            default_currency="CZK",
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(provider.call[0], "EUR")
+        self.assertIn("CZK", provider.call[1])
+        self.assertEqual(result["created_rates"], 1)
+        self.assertEqual(ExchangeRate.objects.count(), 1)
+        self.assertEqual(transaction_obj.converted_amount, Decimal("-250.00"))
+        self.assertEqual(
+            transaction_obj.conversion_status,
+            Transaction.CONVERSION_STATUS_CONVERTED,
+        )
 
     def test_maintenance_summary_returns_counts(self):
         csv_import = CSVImport.objects.create(
@@ -1468,6 +1843,58 @@ class APITests(FinanceTestCase):
         self.assertIn("cashmoney-backup-", response["Content-Disposition"])
         self.assertTrue(response.content.startswith(b"SQLite format 3"))
 
+    def test_maintenance_saved_backups_can_be_listed_exported_and_deleted(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Saved backup test",
+            amount=Decimal("-12.50"),
+        )
+        connection.ensure_connection()
+
+        with tempfile.TemporaryDirectory() as temp_dir, self.settings(
+            DATA_DIR=Path(temp_dir)
+        ):
+            backup_dir = Path(temp_dir) / "backups"
+            backup_dir.mkdir()
+            backup_path = backup_dir / "pre-restore-20260102-030405.sqlite3"
+            backup_path.write_bytes(connection.connection.serialize())
+
+            list_response = self.client.get("/api/maintenance/backups/")
+            list_payload = json_body(list_response)
+
+            self.assertEqual(list_response.status_code, 200)
+            self.assertEqual(len(list_payload["backups"]), 1)
+            self.assertEqual(
+                list_payload["backups"][0]["filename"],
+                "pre-restore-20260102-030405.sqlite3",
+            )
+            self.assertEqual(list_payload["backups"][0]["label"], "Pre-restore")
+
+            export_response = self.client.get(
+                "/api/maintenance/backups/"
+                "pre-restore-20260102-030405.sqlite3/export/"
+            )
+
+            self.assertEqual(export_response.status_code, 200)
+            self.assertEqual(export_response["Content-Type"], "application/x-sqlite3")
+            self.assertIn(
+                "pre-restore-20260102-030405.sqlite3",
+                export_response["Content-Disposition"],
+            )
+            self.assertTrue(export_response.content.startswith(b"SQLite format 3"))
+
+            delete_response = self.delete_json(
+                "/api/maintenance/backups/pre-restore-20260102-030405.sqlite3/",
+                {"confirmation": "DELETE BACKUP"},
+            )
+            delete_payload = json_body(delete_response)
+
+            self.assertEqual(delete_response.status_code, 200)
+            self.assertTrue(delete_payload["deleted"])
+            self.assertFalse(backup_path.exists())
+            self.assertEqual(delete_payload["backups"], [])
+
     def test_maintenance_database_restore_rejects_invalid_upload(self):
         response = self.client.post(
             "/api/maintenance/database-restore/",
@@ -1549,3 +1976,54 @@ class MaintenanceRestoreTests(TransactionTestCase):
         self.assertFalse(
             Transaction.objects.filter(description="Current transaction").exists()
         )
+
+    def test_saved_backup_restore_replaces_current_database_and_keeps_backup_visible(
+        self,
+    ):
+        restored_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Restored saved backup transaction",
+            amount=Decimal("-12.50"),
+        )
+        connection.ensure_connection()
+        backup_bytes = connection.connection.serialize()
+
+        Transaction.objects.filter(id=restored_transaction.id).delete()
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-02-02",
+            description="Current saved backup transaction",
+            amount=Decimal("-8.00"),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir, self.settings(
+            DATA_DIR=Path(temp_dir)
+        ):
+            backup_dir = Path(temp_dir) / "backups"
+            backup_dir.mkdir()
+            backup_path = backup_dir / "saved-restore.sqlite3"
+            backup_path.write_bytes(backup_bytes)
+
+            response = self.client.post(
+                "/api/maintenance/backups/saved-restore.sqlite3/restore/",
+                data=json.dumps({"confirmation": "RESTORE DATABASE"}),
+                content_type="application/json",
+            )
+            payload = json_body(response)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(payload["restored"])
+            self.assertTrue(payload["pre_restore_backup"].endswith(".sqlite3"))
+            self.assertTrue(backup_path.exists())
+            self.assertGreaterEqual(len(payload["backups"]), 2)
+            self.assertTrue(
+                Transaction.objects.filter(
+                    description="Restored saved backup transaction"
+                ).exists()
+            )
+            self.assertFalse(
+                Transaction.objects.filter(
+                    description="Current saved backup transaction"
+                ).exists()
+            )

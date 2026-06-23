@@ -40,8 +40,35 @@ def csv_mapping_available_headers(mapping, limit=25):
     return headers
 
 
-def transaction_display_amount(transaction, split_by_owners=False):
-    amount = transaction.amount
+def transaction_converted_amount(transaction, default_currency=None):
+    target_currency = str(
+        default_currency or transaction.converted_currency or ""
+    ).upper()
+    source_currency = str(transaction.currency or "").upper()
+    if (
+        target_currency
+        and transaction.converted_amount is not None
+        and str(transaction.converted_currency or "").upper() == target_currency
+    ):
+        return transaction.converted_amount
+    if target_currency and source_currency == target_currency:
+        return transaction.amount
+    return None
+
+
+def transaction_display_amount(
+    transaction,
+    split_by_owners=False,
+    default_currency=None,
+    converted=False,
+):
+    amount = (
+        transaction_converted_amount(transaction, default_currency)
+        if converted
+        else transaction.amount
+    )
+    if amount is None:
+        return None
     if not split_by_owners:
         return amount
     owners = getattr(transaction.bank_account, "owners", 1) or 1
@@ -148,8 +175,17 @@ def serialize_keyword(keyword):
     }
 
 
-def serialize_transaction(transaction, split_by_owners=False):
+def serialize_transaction(transaction, split_by_owners=False, default_currency=None):
     category = transaction.subcategory.category if transaction.subcategory else None
+    display_currency = str(
+        default_currency or transaction.converted_currency or ""
+    ).upper()
+    converted_amount = transaction_display_amount(
+        transaction,
+        split_by_owners,
+        default_currency=display_currency,
+        converted=True,
+    )
     return {
         "id": str(transaction.id),
         "original_id": transaction.original_id,
@@ -158,6 +194,11 @@ def serialize_transaction(transaction, split_by_owners=False):
         "description": transaction.description,
         "amount": money(transaction_display_amount(transaction, split_by_owners)),
         "currency": transaction.currency,
+        "converted_amount": money(converted_amount),
+        "converted_currency": display_currency,
+        "conversion_rate": money(transaction.conversion_rate),
+        "conversion_rate_date": iso(transaction.conversion_rate_date),
+        "conversion_status": transaction.conversion_status,
         "direction": transaction.direction,
         "bank_account": model_ref(transaction.bank_account),
         "counterparty_account_number": transaction.counterparty_account_number,
@@ -195,6 +236,7 @@ def serialize_csv_import(csv_import):
 def serialize_finance_settings(settings):
     return {
         "id": str(settings.id),
+        "default_currency": settings.default_currency,
         "ignore_internal_account_references": settings.ignore_internal_account_references,
         "internal_transfer_subcategory": model_ref(
             settings.internal_transfer_subcategory

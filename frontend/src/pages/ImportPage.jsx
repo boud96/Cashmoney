@@ -4,7 +4,7 @@ import { apiGet } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
 import { formatAmountValue } from "../shared.js";
 
-export default function ImportPage({ hideAmounts = false, importReport, notify, refs, reloadAll, setImportReport }) {
+export default function ImportPage({ hideAmounts = false, importReport, notify, refs, reloadAll, reloadDashboard, setImportReport }) {
   const [dragActive, setDragActive] = useState(false);
   const [importing, setImporting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
@@ -98,8 +98,16 @@ export default function ImportPage({ hideAmounts = false, importReport, notify, 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      notify("CSV imported");
-      await Promise.all([reloadAll(), loadRecentImports()]);
+      if (payload.exchange_rate_sync?.synced === false) {
+        notify("CSV imported, but exchange rates need retry");
+      } else {
+        notify("CSV imported");
+      }
+      await Promise.all([
+        reloadAll(),
+        reloadDashboard ? reloadDashboard() : Promise.resolve(),
+        loadRecentImports(),
+      ]);
     } catch (error) {
       notify(error.message);
     } finally {
@@ -224,6 +232,7 @@ function ImportPreview({ hideAmounts, preview }) {
         {rows.map((row, index) => {
           const label = previewRowLabel(row);
           const display = previewRowDisplay(row, hideAmounts);
+          const duplicate = duplicateDisplay(row.duplicate_transaction, hideAmounts);
           return (
             <div className="import-sample-row" key={`${row.line || index}-${index}`}>
               <div className="import-sample-main">
@@ -232,6 +241,11 @@ function ImportPreview({ hideAmounts, preview }) {
                   {display.amount ? <span>{display.amount}</span> : null}
                 </div>
                 <strong title={display.description}>{display.description}</strong>
+                {duplicate ? (
+                  <span className="import-duplicate-detail" title={duplicate.title}>
+                    Duplicate of {duplicate.text}
+                  </span>
+                ) : null}
               </div>
               <span className={`import-sample-status ${row.status === "error" ? "is-error" : ""}`} title={label}>{label}</span>
             </div>
@@ -274,14 +288,59 @@ function previewRowLabel(row) {
 }
 
 function ImportReport({ report }) {
+  const duplicates = report.skipped?.duplicates || [];
   return (
-    <div className="metrics-grid report-grid">
-      <Metric label="Loaded" value={report.loaded} />
-      <Metric label="Created" tone="positive" value={report.created?.count || 0} />
-      <Metric label="Duplicates" value={report.skipped?.duplicates?.length || 0} />
-      <Metric label="Errors" tone="negative" value={report.skipped?.errors?.length || 0} />
+    <div className="import-report-content">
+      <div className="metrics-grid report-grid">
+        <Metric label="Loaded" value={report.loaded} />
+        <Metric label="Created" tone="positive" value={report.created?.count || 0} />
+        <Metric label="Duplicates" value={duplicates.length} />
+        <Metric label="Errors" tone="negative" value={report.skipped?.errors?.length || 0} />
+      </div>
+      {duplicates.length ? <DuplicateList duplicates={duplicates} /> : null}
     </div>
   );
+}
+
+function DuplicateList({ duplicates }) {
+  return (
+    <div className="import-duplicate-list">
+      <div className="import-duplicate-list-title">Skipped duplicates</div>
+      {duplicates.slice(0, 12).map((duplicate, index) => {
+        const existing = duplicateDisplay(duplicate.duplicate_transaction, false);
+        const imported = duplicate.row || {};
+        const importedDescription = imported.Description || imported.description || imported.Popis || "";
+        return (
+          <div className="import-duplicate-item" key={`${duplicate.line || index}-${index}`}>
+            <span>Line {duplicate.line || "?"}</span>
+            <strong title={importedDescription || duplicate.reason}>{importedDescription || duplicate.reason}</strong>
+            {existing ? <span title={existing.title}>Matched {existing.text}</span> : <span>{duplicate.reason || "Duplicate transaction"}</span>}
+          </div>
+        );
+      })}
+      {duplicates.length > 12 ? (
+        <div className="muted">+{(duplicates.length - 12).toLocaleString()} more duplicates</div>
+      ) : null}
+    </div>
+  );
+}
+
+function duplicateDisplay(transaction, hideAmounts) {
+  if (!transaction) {
+    return null;
+  }
+  const amount = transaction.amount === undefined || transaction.amount === null
+    ? ""
+    : formatAmountValue(transaction.amount, hideAmounts);
+  const parts = [
+    transaction.transaction_date,
+    transaction.description,
+    amount,
+  ].filter(Boolean);
+  return {
+    text: parts.join(" - "),
+    title: parts.join(" - "),
+  };
 }
 
 function ImportEmptyState() {

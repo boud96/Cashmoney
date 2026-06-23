@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { apiDelete, apiPost } from "../api.js";
+import { apiDelete, apiGet, apiPost } from "../api.js";
 import { LoadingButton, Metric } from "../components.jsx";
 import { formatCount } from "../shared.js";
 
@@ -8,23 +8,22 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
   const [deleting, setDeleting] = useState("");
   const [restoreFile, setRestoreFile] = useState(null);
   const [safeBusy, setSafeBusy] = useState("");
-  const [refreshingCounts, setRefreshingCounts] = useState(false);
+  const [backups, setBackups] = useState([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
+  const [backupAction, setBackupAction] = useState("");
   const counts = summary || {};
-  const snapshot = [
-    ["Transactions", counts.transactions],
-    ["Imports", counts.imports],
-    ["Sample Transactions", counts.sample_transactions],
-    ["Accounts", counts.bank_accounts],
-    ["CSV Mappings", counts.csv_mappings],
-    ["Categories", counts.categories],
-    ["Subcategories", counts.subcategories],
-    ["Tags", counts.tags],
-    ["Keywords", counts.keywords],
-    ["Saved filters", counts.saved_filters],
-  ];
+  const definitionObjectCount = [
+    counts.bank_accounts,
+    counts.csv_mappings,
+    counts.categories,
+    counts.subcategories,
+    counts.tags,
+    counts.keywords,
+  ].reduce((total, value) => total + Number(value || 0), 0);
   const financeObjectCount = [
     counts.transactions,
     counts.imports,
+    counts.exchange_rates,
     counts.bank_accounts,
     counts.csv_mappings,
     counts.categories,
@@ -43,15 +42,23 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
     counts.sample_tags,
     counts.sample_keywords,
   ].reduce((total, value) => total + Number(value || 0), 0);
+  const snapshot = [
+    ["Transactions", counts.transactions],
+    ["Imports", counts.imports],
+    ["Definitions", definitionObjectCount],
+    ["Exchange Rates", counts.exchange_rates],
+    ["Saved Filters", counts.saved_filters],
+    ["Sample Data", sampleObjectCount],
+  ];
   const transactionObjectCount = Number(counts.transactions || 0) + Number(counts.imports || 0);
-  const actions = [
-    {
-      count: sampleObjectCount,
-      description: "Remove only objects created by the first-launch demo dataset.",
-      endpoint: "/maintenance/sample-data/",
-      phrase: "DELETE SAMPLE DATA",
-      title: "Delete sample data",
-    },
+  const sampleDataAction = {
+    count: sampleObjectCount,
+    description: "Remove only objects created by the first-launch demo dataset.",
+    endpoint: "/maintenance/sample-data/",
+    phrase: "DELETE SAMPLE DATA",
+    title: "Delete sample data",
+  };
+  const dangerActions = [
     {
       count: transactionObjectCount,
       description: "Remove every transaction and all CSV import history. Definitions stay intact.",
@@ -61,12 +68,32 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
     },
     {
       count: financeObjectCount,
-      description: "Remove transactions, imports, keywords, accounts, mappings, tags, subcategories, and categories. Admin users stay intact.",
+      description: (
+        "Remove transactions, imports, keywords, accounts, mappings, tags, "
+        + "subcategories, and categories. Admin users stay intact."
+      ),
       endpoint: "/maintenance/finance-data/",
       phrase: "DELETE ALL FINANCE DATA",
       title: "Delete all finance data",
     },
   ];
+  const backupBusy = Boolean(backupAction) || Boolean(safeBusy) || Boolean(deleting);
+
+  useEffect(() => {
+    loadBackups();
+  }, []);
+
+  async function loadBackups() {
+    setBackupsLoading(true);
+    try {
+      const payload = await apiGet("/maintenance/backups/");
+      setBackups(payload.backups || []);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setBackupsLoading(false);
+    }
+  }
 
   async function deleteMaintenanceData(action) {
     if (!window.confirm(`${action.title}?\n\n${action.description}`)) {
@@ -81,15 +108,6 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
       notify(error.message);
     } finally {
       setDeleting("");
-    }
-  }
-
-  async function refreshCounts() {
-    setRefreshingCounts(true);
-    try {
-      await reloadMaintenance();
-    } finally {
-      setRefreshingCounts(false);
     }
   }
 
@@ -110,21 +128,7 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
     setSafeBusy("backup");
     try {
       const response = await fetch("/api/maintenance/database-backup/");
-      if (!response.ok) {
-        const payload = await response.json();
-        throw new Error(payload.error || "Backup failed");
-      }
-      const blob = await response.blob();
-      const disposition = response.headers.get("Content-Disposition") || "";
-      const filename = disposition.match(/filename="([^"]+)"/)?.[1] || "cashmoney-backup.sqlite3";
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      await downloadResponseAttachment(response, "cashmoney-backup.sqlite3", "Backup failed");
       notify("Database backup downloaded");
     } catch (error) {
       notify(error.message);
@@ -133,12 +137,80 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
     }
   }
 
+  async function exportSavedBackup(backup) {
+    setBackupAction(`export:${backup.filename}`);
+    try {
+      const response = await fetch(
+        `/api/maintenance/backups/${encodeURIComponent(backup.filename)}/export/`
+      );
+      await downloadResponseAttachment(response, backup.filename, "Backup export failed");
+      notify("Backup downloaded");
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setBackupAction("");
+    }
+  }
+
+  async function restoreSavedBackup(backup) {
+    if (
+      !window.confirm(
+        `Restore ${backup.filename}?\n\nThis replaces the current local database. `
+          + "A pre-restore backup will be saved automatically."
+      )
+    ) {
+      return;
+    }
+    setBackupAction(`restore:${backup.filename}`);
+    try {
+      const payload = await apiPost(
+        `/maintenance/backups/${encodeURIComponent(backup.filename)}/restore/`,
+        { confirmation: "RESTORE DATABASE" }
+      );
+      setBackups(payload.backups || []);
+      notify("Database restored");
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setBackupAction("");
+    }
+  }
+
+  async function deleteSavedBackup(backup) {
+    if (
+      !window.confirm(
+        `Delete ${backup.filename}?\n\nThis removes the saved backup file. The current database is not changed.`
+      )
+    ) {
+      return;
+    }
+    setBackupAction(`delete:${backup.filename}`);
+    try {
+      const payload = await apiDelete(
+        `/maintenance/backups/${encodeURIComponent(backup.filename)}/`,
+        { confirmation: "DELETE BACKUP" }
+      );
+      setBackups(payload.backups || []);
+      notify("Backup deleted");
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setBackupAction("");
+    }
+  }
+
   async function restoreDatabase(event) {
     event.preventDefault();
     if (!restoreFile) {
       return;
     }
-    if (!window.confirm("Restore database backup?\n\nThis replaces the current local database. A pre-restore backup will be saved automatically.")) {
+    if (
+      !window.confirm(
+        "Restore database backup?\n\nThis replaces the current local database. "
+          + "A pre-restore backup will be saved automatically."
+      )
+    ) {
       return;
     }
     setSafeBusy("restore");
@@ -154,6 +226,7 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
       if (!response.ok) {
         throw new Error(payload.error || "Restore failed");
       }
+      setBackups(payload.backups || []);
       notify("Database restored");
       setRestoreFile(null);
       window.setTimeout(() => window.location.reload(), 600);
@@ -169,7 +242,7 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
       <section className="panel maintenance-snapshot">
         <div className="panel-header">
           <h2>Database Snapshot</h2>
-          <LoadingButton busy={refreshingCounts} busyLabel="Refreshing" className="link-button" onClick={refreshCounts} type="button">Refresh Counts</LoadingButton>
+          <span className="muted">Current local database totals.</span>
         </div>
         <div className="maintenance-counts">
           {snapshot.map(([label, value]) => (
@@ -178,48 +251,92 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
         </div>
       </section>
 
-      <section className="panel maintenance-tools">
-        <div className="panel-header">
-          <h2>Safe Tools</h2>
-          <span className="muted">Useful before or after cleanup.</span>
+      <MaintenanceSection
+        defaultExpanded
+        storageId="backups"
+        subtitle="Export or restore the complete local SQLite database."
+        title="Backups"
+      >
+        <div className="maintenance-backup-list">
+          <article className="maintenance-backup-row is-current">
+            <div>
+              <h3>Current database</h3>
+              <p>The live local database state.</p>
+              <div className="backup-meta">Current</div>
+            </div>
+            <div className="backup-actions">
+              <LoadingButton
+                busy={safeBusy === "backup"}
+                busyLabel="Exporting"
+                className="primary-action"
+                disabled={backupBusy}
+                onClick={exportBackup}
+                type="button"
+              >
+                Export
+              </LoadingButton>
+            </div>
+          </article>
+          {backupsLoading ? (
+            <div className="backup-empty-state">Loading backups...</div>
+          ) : backups.length ? (
+            backups.map((backup) => (
+              <article className="maintenance-backup-row" key={backup.filename}>
+                <div>
+                  <h3>{backup.filename}</h3>
+                  <p>{backup.label || "Backup"}</p>
+                  <div className="backup-meta">
+                    {formatBackupDate(backup.modified_at)} | {formatBytes(backup.size_bytes)}
+                  </div>
+                </div>
+                <div className="backup-actions">
+                  <LoadingButton
+                    busy={backupAction === `restore:${backup.filename}`}
+                    busyLabel="Restoring"
+                    className="danger-button"
+                    disabled={backupBusy}
+                    onClick={() => restoreSavedBackup(backup)}
+                    type="button"
+                  >
+                    Restore
+                  </LoadingButton>
+                  <LoadingButton
+                    busy={backupAction === `export:${backup.filename}`}
+                    busyLabel="Exporting"
+                    className="link-button"
+                    disabled={backupBusy}
+                    onClick={() => exportSavedBackup(backup)}
+                    type="button"
+                  >
+                    Export
+                  </LoadingButton>
+                  <LoadingButton
+                    busy={backupAction === `delete:${backup.filename}`}
+                    busyLabel="Deleting"
+                    className="danger-button"
+                    disabled={backupBusy}
+                    onClick={() => deleteSavedBackup(backup)}
+                    type="button"
+                  >
+                    Delete
+                  </LoadingButton>
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="backup-empty-state">
+              No saved backups yet. Pre-restore backups will appear here after a database restore.
+            </div>
+          )}
         </div>
         <div className="maintenance-tool-grid">
-          <article className="maintenance-tool-card">
-            <div>
-              <h3>Export database backup</h3>
-              <p>Download a SQLite backup of the current local database.</p>
-            </div>
-            <LoadingButton
-              busy={safeBusy === "backup"}
-              busyLabel="Exporting"
-              className="primary-action"
-              disabled={Boolean(safeBusy)}
-              onClick={exportBackup}
-              type="button"
-            >
-              Export Backup
-            </LoadingButton>
-          </article>
-          <article className="maintenance-tool-card">
-            <div>
-              <h3>Recreate sample data</h3>
-              <p>Reset only the sample dataset and create the demo records again.</p>
-            </div>
-            <LoadingButton
-              busy={safeBusy === "samples"}
-              busyLabel="Recreating"
-              className="link-button"
-              disabled={Boolean(safeBusy)}
-              onClick={recreateSampleData}
-              type="button"
-            >
-              Recreate Samples
-            </LoadingButton>
-          </article>
           <article className="maintenance-tool-card restore-card">
             <div>
               <h3>Restore database backup</h3>
-              <p>Replace the current local database from a Cashmoney SQLite backup. A pre-restore backup is saved automatically.</p>
+              <p>
+                Replace the current local database from a Cashmoney SQLite backup.
+                The app saves a pre-restore backup first.
+              </p>
             </div>
             <form className="restore-form" onSubmit={restoreDatabase}>
               <label>
@@ -234,7 +351,7 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
                 busy={safeBusy === "restore"}
                 busyLabel="Restoring"
                 className="danger-button"
-                disabled={Boolean(safeBusy) || !restoreFile}
+                disabled={backupBusy || !restoreFile}
                 type="submit"
               >
                 Restore Database
@@ -242,15 +359,58 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
             </form>
           </article>
         </div>
-      </section>
+      </MaintenanceSection>
 
-      <section className="danger-zone">
-        <div className="danger-zone-header">
-          <h2>Danger Zone</h2>
-          <p>These actions permanently remove local finance data from this database.</p>
+      <MaintenanceSection
+        storageId="sample-data"
+        subtitle="Recreate or remove the demo records used for first-run exploration."
+        title="Sample Data"
+      >
+        <div className="maintenance-tool-grid">
+          <article className="maintenance-tool-card">
+            <div>
+              <h3>Recreate sample data</h3>
+              <p>Reset only the sample dataset and create the demo records again.</p>
+            </div>
+            <LoadingButton
+              busy={safeBusy === "samples"}
+              busyLabel="Recreating"
+              className="link-button"
+              disabled={Boolean(safeBusy) || Boolean(deleting)}
+              onClick={recreateSampleData}
+              type="button"
+            >
+              Recreate Samples
+            </LoadingButton>
+          </article>
+          <article className="maintenance-tool-card danger-tool-card">
+            <div>
+              <h3>{sampleDataAction.title}</h3>
+              <p>{sampleDataAction.description}</p>
+              <div className="danger-count">{formatCount(sampleDataAction.count)} affected</div>
+            </div>
+            <LoadingButton
+              busy={deleting === sampleDataAction.phrase}
+              busyLabel="Deleting"
+              className="danger-button"
+              disabled={Boolean(deleting) || Boolean(safeBusy)}
+              onClick={() => deleteMaintenanceData(sampleDataAction)}
+              type="button"
+            >
+              Delete Samples
+            </LoadingButton>
+          </article>
         </div>
-        <div className="danger-action-grid">
-          <article className="danger-card">
+      </MaintenanceSection>
+
+      <MaintenanceSection
+        danger
+        storageId="danger-zone"
+        subtitle="Permanent cleanup and direct database access."
+        title="Danger Zone"
+      >
+        <div className="maintenance-tool-grid">
+          <article className="maintenance-tool-card danger-tool-card">
             <div>
               <h3>Django admin</h3>
               <p>Open the raw Django admin interface for direct database maintenance.</p>
@@ -259,8 +419,8 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
               Admin
             </a>
           </article>
-          {actions.map((action) => (
-            <article className="danger-card" key={action.phrase}>
+          {dangerActions.map((action) => (
+            <article className="maintenance-tool-card danger-tool-card" key={action.phrase}>
               <div>
                 <h3>{action.title}</h3>
                 <p>{action.description}</p>
@@ -279,7 +439,116 @@ export default function MaintenancePage({ notify, reloadAll, reloadDashboard, re
             </article>
           ))}
         </div>
-      </section>
+      </MaintenanceSection>
     </>
+  );
+}
+
+async function downloadResponseAttachment(response, fallbackFilename, fallbackError) {
+  if (!response.ok) {
+    let message = fallbackError;
+    try {
+      const payload = await response.json();
+      message = payload.error || message;
+    } catch {
+      // Keep the fallback message when the server did not return JSON.
+    }
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] || fallbackFilename;
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatBackupDate(value) {
+  if (!value) {
+    return "Unknown date";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString();
+}
+
+function maintenancePanelStorageKey(storageId) {
+  return `cashmoney.maintenance.panel.${storageId}`;
+}
+
+function readStoredMaintenancePanelState(storageId, defaultExpanded) {
+  if (typeof window === "undefined") {
+    return defaultExpanded;
+  }
+  try {
+    const stored = window.localStorage.getItem(maintenancePanelStorageKey(storageId));
+    return stored === null ? defaultExpanded : stored === "1";
+  } catch {
+    return defaultExpanded;
+  }
+}
+
+function MaintenanceSection({ children, danger = false, defaultExpanded = false, storageId, subtitle, title }) {
+  const [expanded, setExpanded] = useState(() => readStoredMaintenancePanelState(storageId, defaultExpanded));
+  const panelClassName = [
+    "panel",
+    "definition-panel",
+    "maintenance-section",
+    danger ? "danger-maintenance-section" : "",
+    expanded ? "is-expanded" : "is-collapsed",
+  ].filter(Boolean).join(" ");
+
+  function toggleExpanded() {
+    setExpanded((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(maintenancePanelStorageKey(storageId), next ? "1" : "0");
+      } catch {
+        // Storage is optional; the section can still toggle for this session.
+      }
+      return next;
+    });
+  }
+
+  return (
+    <section className={panelClassName}>
+      <div className="definition-panel-header">
+        <button
+          aria-expanded={expanded}
+          className="definition-panel-toggle"
+          onClick={toggleExpanded}
+          type="button"
+        >
+          <span className="definition-panel-heading">
+            <span className="definition-panel-title-line">
+              <span className="definition-panel-title">{title}</span>
+            </span>
+            {subtitle ? <span className="definition-panel-subtitle">{subtitle}</span> : null}
+          </span>
+          <span aria-hidden="true" className="definition-panel-state">{expanded ? "Hide" : "Show"}</span>
+        </button>
+      </div>
+      <div className="definition-panel-body">
+        {children}
+      </div>
+    </section>
   );
 }
