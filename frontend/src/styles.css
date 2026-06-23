@@ -2963,6 +2963,65 @@ td {
   gap: 12px;
 }
 
+.maintenance-backup-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(52vh, 520px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
+}
+
+.maintenance-backup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--subtle-bg);
+  padding: 14px;
+}
+
+.maintenance-backup-row.is-current {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.maintenance-backup-row h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.maintenance-backup-row p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.backup-meta {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.backup-empty-state {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--subtle-bg);
+  padding: 14px;
+}
+
 .maintenance-tool-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -3400,9 +3459,19 @@ td {
     max-height: 168px;
   }
 
+  .backup-actions,
+  .maintenance-backup-row,
   .maintenance-tool-card,
   .restore-form {
     align-items: stretch;
     grid-template-columns: 1fr;
+  }
+
+  .backup-actions {
+    justify-content: stretch;
+  }
+
+  .backup-actions > * {
+    flex: 1 1 120px;
   }
 }

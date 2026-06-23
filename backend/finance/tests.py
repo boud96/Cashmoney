@@ -1,7 +1,9 @@
 import json
+import tempfile
 from datetime import date, timedelta
-from io import StringIO
 from decimal import Decimal
+from io import StringIO
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -1777,6 +1779,58 @@ class APITests(FinanceTestCase):
         self.assertIn("cashmoney-backup-", response["Content-Disposition"])
         self.assertTrue(response.content.startswith(b"SQLite format 3"))
 
+    def test_maintenance_saved_backups_can_be_listed_exported_and_deleted(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Saved backup test",
+            amount=Decimal("-12.50"),
+        )
+        connection.ensure_connection()
+
+        with tempfile.TemporaryDirectory() as temp_dir, self.settings(
+            DATA_DIR=Path(temp_dir)
+        ):
+            backup_dir = Path(temp_dir) / "backups"
+            backup_dir.mkdir()
+            backup_path = backup_dir / "pre-restore-20260102-030405.sqlite3"
+            backup_path.write_bytes(connection.connection.serialize())
+
+            list_response = self.client.get("/api/maintenance/backups/")
+            list_payload = json_body(list_response)
+
+            self.assertEqual(list_response.status_code, 200)
+            self.assertEqual(len(list_payload["backups"]), 1)
+            self.assertEqual(
+                list_payload["backups"][0]["filename"],
+                "pre-restore-20260102-030405.sqlite3",
+            )
+            self.assertEqual(list_payload["backups"][0]["label"], "Pre-restore")
+
+            export_response = self.client.get(
+                "/api/maintenance/backups/"
+                "pre-restore-20260102-030405.sqlite3/export/"
+            )
+
+            self.assertEqual(export_response.status_code, 200)
+            self.assertEqual(export_response["Content-Type"], "application/x-sqlite3")
+            self.assertIn(
+                "pre-restore-20260102-030405.sqlite3",
+                export_response["Content-Disposition"],
+            )
+            self.assertTrue(export_response.content.startswith(b"SQLite format 3"))
+
+            delete_response = self.delete_json(
+                "/api/maintenance/backups/pre-restore-20260102-030405.sqlite3/",
+                {"confirmation": "DELETE BACKUP"},
+            )
+            delete_payload = json_body(delete_response)
+
+            self.assertEqual(delete_response.status_code, 200)
+            self.assertTrue(delete_payload["deleted"])
+            self.assertFalse(backup_path.exists())
+            self.assertEqual(delete_payload["backups"], [])
+
     def test_maintenance_database_restore_rejects_invalid_upload(self):
         response = self.client.post(
             "/api/maintenance/database-restore/",
@@ -1858,3 +1912,54 @@ class MaintenanceRestoreTests(TransactionTestCase):
         self.assertFalse(
             Transaction.objects.filter(description="Current transaction").exists()
         )
+
+    def test_saved_backup_restore_replaces_current_database_and_keeps_backup_visible(
+        self,
+    ):
+        restored_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Restored saved backup transaction",
+            amount=Decimal("-12.50"),
+        )
+        connection.ensure_connection()
+        backup_bytes = connection.connection.serialize()
+
+        Transaction.objects.filter(id=restored_transaction.id).delete()
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-02-02",
+            description="Current saved backup transaction",
+            amount=Decimal("-8.00"),
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir, self.settings(
+            DATA_DIR=Path(temp_dir)
+        ):
+            backup_dir = Path(temp_dir) / "backups"
+            backup_dir.mkdir()
+            backup_path = backup_dir / "saved-restore.sqlite3"
+            backup_path.write_bytes(backup_bytes)
+
+            response = self.client.post(
+                "/api/maintenance/backups/saved-restore.sqlite3/restore/",
+                data=json.dumps({"confirmation": "RESTORE DATABASE"}),
+                content_type="application/json",
+            )
+            payload = json_body(response)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(payload["restored"])
+            self.assertTrue(payload["pre_restore_backup"].endswith(".sqlite3"))
+            self.assertTrue(backup_path.exists())
+            self.assertGreaterEqual(len(payload["backups"]), 2)
+            self.assertTrue(
+                Transaction.objects.filter(
+                    description="Restored saved backup transaction"
+                ).exists()
+            )
+            self.assertFalse(
+                Transaction.objects.filter(
+                    description="Current saved backup transaction"
+                ).exists()
+            )

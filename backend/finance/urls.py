@@ -142,6 +142,26 @@ urlpatterns = [
         name="maintenance-database-backup",
     ),
     path(
+        "maintenance/backups/",
+        views.MaintenanceSavedBackupsView.as_view(),
+        name="maintenance-saved-backups",
+    ),
+    path(
+        "maintenance/backups/<str:filename>/",
+        views.MaintenanceSavedBackupView.as_view(),
+        name="maintenance-saved-backup",
+    ),
+    path(
+        "maintenance/backups/<str:filename>/export/",
+        views.MaintenanceSavedBackupExportView.as_view(),
+        name="maintenance-saved-backup-export",
+    ),
+    path(
+        "maintenance/backups/<str:filename>/restore/",
+        views.MaintenanceSavedBackupRestoreView.as_view(),
+        name="maintenance-saved-backup-restore",
+    ),
+    path(
         "maintenance/database-restore/",
         views.MaintenanceDatabaseRestoreView.as_view(),
         name="maintenance-database-restore",

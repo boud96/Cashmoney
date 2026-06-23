@@ -1,7 +1,7 @@
 import json
 import sqlite3
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from decimal import InvalidOperation
 from pathlib import Path
@@ -76,6 +76,7 @@ NONE_FILTER_VALUE = "__none__"
 CONFIRM_DELETE_SAMPLE_DATA = "DELETE SAMPLE DATA"
 CONFIRM_DELETE_ALL_TRANSACTIONS = "DELETE ALL TRANSACTIONS"
 CONFIRM_DELETE_ALL_FINANCE_DATA = "DELETE ALL FINANCE DATA"
+CONFIRM_DELETE_BACKUP = "DELETE BACKUP"
 CONFIRM_RESTORE_DATABASE = "RESTORE DATABASE"
 REQUIRED_BACKUP_TABLES = {
     "finance_bankaccount",
@@ -1530,6 +1531,59 @@ class MaintenanceDatabaseBackupView(JsonView):
         return response
 
 
+def backup_directory():
+    return Path(getattr(settings, "DATA_DIR", Path.cwd())) / "backups"
+
+
+def backup_kind(filename):
+    if filename.startswith("pre-restore-"):
+        return "Pre-restore"
+    if filename.startswith("cashmoney-backup-"):
+        return "Manual"
+    return "Backup"
+
+
+def serialize_backup_file(backup_path):
+    stat = backup_path.stat()
+    return {
+        "filename": backup_path.name,
+        "label": backup_kind(backup_path.name),
+        "size_bytes": stat.st_size,
+        "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+    }
+
+
+def saved_backup_files():
+    backup_dir = backup_directory()
+    if not backup_dir.exists():
+        return []
+    backups = [
+        path
+        for path in backup_dir.iterdir()
+        if path.is_file() and path.suffix.lower() == ".sqlite3"
+    ]
+    return sorted(backups, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+def saved_backup_payload():
+    return [serialize_backup_file(path) for path in saved_backup_files()]
+
+
+def get_saved_backup_path(filename):
+    if Path(filename).name != filename or not filename.lower().endswith(".sqlite3"):
+        raise Http404("Backup not found")
+    backup_path = backup_directory() / filename
+    if not backup_path.is_file():
+        raise Http404("Backup not found")
+    return backup_path
+
+
+def sqlite_attachment_response(content, filename):
+    response = HttpResponse(content, content_type="application/x-sqlite3")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
 def validate_sqlite_backup(backup_path):
     candidate = None
     try:
@@ -1564,11 +1618,72 @@ def validate_sqlite_backup(backup_path):
 def create_pre_restore_backup():
     connection.ensure_connection()
     timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
-    backup_dir = Path(getattr(settings, "DATA_DIR", Path.cwd())) / "backups"
+    backup_dir = backup_directory()
     backup_dir.mkdir(parents=True, exist_ok=True)
     backup_path = backup_dir / f"pre-restore-{timestamp}.sqlite3"
     backup_path.write_bytes(connection.connection.serialize())
     return backup_path
+
+
+def restore_sqlite_database_from_path(backup_path):
+    validate_sqlite_backup(backup_path)
+    pre_restore_path = create_pre_restore_backup()
+
+    source = None
+    try:
+        connection.ensure_connection()
+        source = sqlite3.connect(str(backup_path))
+        source.backup(connection.connection)
+    finally:
+        if source is not None:
+            source.close()
+    connection.close()
+    return pre_restore_path
+
+
+class MaintenanceSavedBackupsView(JsonView):
+    def get(self, request):
+        return json_response({"backups": saved_backup_payload()})
+
+
+class MaintenanceSavedBackupExportView(JsonView):
+    def get(self, request, filename):
+        backup_path = get_saved_backup_path(filename)
+        return sqlite_attachment_response(backup_path.read_bytes(), backup_path.name)
+
+
+class MaintenanceSavedBackupRestoreView(JsonView):
+    def post(self, request, filename):
+        if connection.vendor != "sqlite":
+            raise APIValidationError(
+                "Database restore is only supported for SQLite",
+                {"vendor": connection.vendor},
+            )
+        require_confirmation(request, CONFIRM_RESTORE_DATABASE)
+        backup_path = get_saved_backup_path(filename)
+        pre_restore_path = restore_sqlite_database_from_path(backup_path)
+        return json_response(
+            {
+                "restored": True,
+                "pre_restore_backup": str(pre_restore_path),
+                "summary": maintenance_counts(),
+                "backups": saved_backup_payload(),
+            }
+        )
+
+
+class MaintenanceSavedBackupView(JsonView):
+    def delete(self, request, filename):
+        require_confirmation(request, CONFIRM_DELETE_BACKUP)
+        backup_path = get_saved_backup_path(filename)
+        backup_path.unlink()
+        return json_response(
+            {
+                "deleted": True,
+                "filename": filename,
+                "backups": saved_backup_payload(),
+            }
+        )
 
 
 class MaintenanceDatabaseRestoreView(JsonView):
@@ -1594,18 +1709,7 @@ class MaintenanceDatabaseRestoreView(JsonView):
                 for chunk in backup_file.chunks():
                     upload.write(chunk)
 
-            validate_sqlite_backup(upload_path)
-            pre_restore_path = create_pre_restore_backup()
-
-            source = None
-            try:
-                connection.ensure_connection()
-                source = sqlite3.connect(str(upload_path))
-                source.backup(connection.connection)
-            finally:
-                if source is not None:
-                    source.close()
-            connection.close()
+            pre_restore_path = restore_sqlite_database_from_path(upload_path)
         finally:
             if upload_path and upload_path.exists():
                 upload_path.unlink()
@@ -1615,6 +1719,7 @@ class MaintenanceDatabaseRestoreView(JsonView):
                 "restored": True,
                 "pre_restore_backup": str(pre_restore_path),
                 "summary": maintenance_counts(),
+                "backups": saved_backup_payload(),
             }
         )
 
