@@ -1553,29 +1553,49 @@ class CSVImportService:
         return transaction_obj, categorization
 
 
-def normalized_uncategorized_group_key(transaction_obj):
-    text = transaction_obj.description or transaction_obj.counterparty_name or ""
+def strict_categorization_text(transaction_data, csv_mapping):
+    parts = []
+    for field_name in csv_mapping.get_categorization_fields():
+        value = transaction_data.get(field_name)
+        if value not in (None, ""):
+            parts.append(str(value))
+    return " | ".join(parts)
+
+
+def uncategorized_suggestion_text(transaction_obj):
+    csv_mapping = (
+        transaction_obj.bank_account.default_csv_mapping
+        if transaction_obj.bank_account
+        else None
+    )
+    if not csv_mapping:
+        return ""
+
+    mapped_values = mapped_transaction_values_from_raw_data(
+        transaction_obj, csv_mapping
+    )
+    data = {}
+    for field_name in RECATEGORIZABLE_TRANSACTION_FIELDS:
+        data[field_name] = mapped_values.get(
+            field_name, getattr(transaction_obj, field_name)
+        )
+    return strict_categorization_text(data, csv_mapping)
+
+
+def normalized_uncategorized_group_key(text):
     normalized = re.sub(r"[^\w]+", " ", str(text).casefold())
     normalized = normalized.replace("_", " ")
     normalized = re.sub(r"\s+", " ", normalized).strip()
-    return normalized or "__no_description__"
+    return normalized
 
 
-def transaction_suggestion_label(transaction_obj):
-    label = (
-        transaction_obj.description
-        or transaction_obj.counterparty_name
-        or transaction_obj.transaction_type
-        or "No description"
-    )
+def transaction_suggestion_label(categorization_text):
+    label = categorization_text or "No categorization text"
     return re.sub(r"\s+", " ", str(label)).strip() or "No description"
 
 
-def group_suggestion_label(transactions):
-    labels = [
-        transaction_suggestion_label(transaction_obj)
-        for transaction_obj in transactions
-    ]
+def group_suggestion_label(categorization_texts):
+    labels = [transaction_suggestion_label(text) for text in categorization_texts]
     return sorted(labels, key=lambda label: (label.casefold(), label))[0]
 
 
@@ -1591,14 +1611,18 @@ def suggested_keyword_name(label):
 
 
 def build_uncategorized_suggestions(queryset, default_currency, limit=8):
-    groups = defaultdict(list)
+    groups = defaultdict(lambda: {"texts": [], "transactions": []})
     for transaction_obj in queryset:
-        groups[normalized_uncategorized_group_key(transaction_obj)].append(
-            transaction_obj
-        )
+        categorization_text = uncategorized_suggestion_text(transaction_obj)
+        group_key = normalized_uncategorized_group_key(categorization_text)
+        if not group_key:
+            continue
+        groups[group_key]["texts"].append(categorization_text)
+        groups[group_key]["transactions"].append(transaction_obj)
 
     suggestions = []
-    for group_key, transactions in groups.items():
+    for group_key, group in groups.items():
+        transactions = group["transactions"]
         sorted_transactions = sorted(
             transactions,
             key=lambda item: (
@@ -1607,7 +1631,7 @@ def build_uncategorized_suggestions(queryset, default_currency, limit=8):
             ),
             reverse=True,
         )
-        label = group_suggestion_label(transactions)
+        label = group_suggestion_label(group["texts"])
         amount_values = [
             transaction_priority_amount(transaction_obj, default_currency)
             for transaction_obj in transactions
@@ -1619,7 +1643,7 @@ def build_uncategorized_suggestions(queryset, default_currency, limit=8):
         )
         transaction_count = len(transactions)
         reason = (
-            "Repeated description"
+            "Repeated categorization text"
             if transaction_count > 1
             else "Large uncategorized transaction"
         )
@@ -1672,7 +1696,9 @@ def build_uncategorized_suggestions(queryset, default_currency, limit=8):
     )
     return {
         "count": len(suggestions),
-        "transaction_count": sum(len(transactions) for transactions in groups.values()),
+        "transaction_count": sum(
+            len(group["transactions"]) for group in groups.values()
+        ),
         "suggestions": suggestions[:limit],
     }
 
