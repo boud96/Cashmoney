@@ -3311,6 +3311,81 @@ td {
   overflow: auto;
 }
 
+.definition-grid-list {
+  width: 100%;
+  min-height: 190px;
+  margin-top: 14px;
+}
+
+.definition-grid-list .ag-cell {
+  border-right: 1px solid var(--border);
+}
+
+.definition-grid-list .ag-cell:last-child {
+  border-right: 0;
+}
+
+.definition-grid-list .ag-header-cell {
+  border-right: 1px solid var(--border);
+}
+
+.definition-grid-list .ag-header-cell:last-child {
+  border-right: 0;
+}
+
+.definition-grid-list .ag-cell-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.definition-grid-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.definition-grid-list .definition-grid-actions-cell {
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.definition-grid-actions .edit-button,
+.definition-grid-actions .delete-button {
+  min-height: 28px;
+  padding-block: 4px;
+}
+
+.definition-grid-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.definition-grid-color-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.definition-grid-color-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.definition-grid-empty {
+  margin-top: 14px;
+}
+
 .item-row {
   display: flex;
   align-items: center;

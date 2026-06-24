@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AgGridReact } from "ag-grid-react";
+import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPatch, apiPost } from "../api.js";
 import { LoadingButton, Select } from "../components.jsx";
@@ -25,6 +27,46 @@ import {
   validateRequiredFields,
   wniOptions,
 } from "../shared.js";
+
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+const definitionGridTheme = themeQuartz
+  .withParams({
+    accentColor: "var(--action)",
+    backgroundColor: "var(--surface)",
+    borderColor: "var(--border)",
+    browserColorScheme: "dark",
+    cellTextColor: "var(--text)",
+    chromeBackgroundColor: "var(--subtle-bg)",
+    dataBackgroundColor: "var(--surface)",
+    foregroundColor: "var(--text)",
+    headerBackgroundColor: "var(--subtle-bg)",
+    headerTextColor: "var(--text)",
+    menuBackgroundColor: "var(--surface)",
+    oddRowBackgroundColor: "var(--surface)",
+    rowHoverColor: "var(--surface-2)",
+    selectedRowBackgroundColor: "var(--focus-ring)",
+    wrapperBorder: "1px solid var(--border)",
+    wrapperBorderRadius: "8px",
+  }, "dark")
+  .withParams({
+    accentColor: "var(--action)",
+    backgroundColor: "var(--surface)",
+    borderColor: "var(--border)",
+    browserColorScheme: "light",
+    cellTextColor: "var(--text)",
+    chromeBackgroundColor: "var(--subtle-bg)",
+    dataBackgroundColor: "var(--surface)",
+    foregroundColor: "var(--text)",
+    headerBackgroundColor: "var(--subtle-bg)",
+    headerTextColor: "var(--text)",
+    menuBackgroundColor: "var(--surface)",
+    oddRowBackgroundColor: "var(--surface)",
+    rowHoverColor: "var(--surface-2)",
+    selectedRowBackgroundColor: "var(--focus-ring)",
+    wrapperBorder: "1px solid var(--border)",
+    wrapperBorderRadius: "8px",
+  }, "light");
 
 const defaultCurrencyOptions = [
   { code: "CZK", name: "Czech Koruna" },
@@ -53,22 +95,22 @@ export default function DefinitionsPage({ confirmAction, mappingDraft, notify, r
       <CollapsiblePanel storageId="app-settings" subtitle="Currency, exchange rates, and transfer automation" title="App Settings" wide>
         <SettingsForm notify={notify} refs={refs} reloadAll={reloadAll} reloadDashboard={reloadDashboard} settings={refs.settings} />
       </CollapsiblePanel>
-      <DefinitionPanel confirmAction={confirmAction} endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} subtitle="CSV import parsers" title="CSV Mappings" wide>
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} listRenderer={CsvMappingDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} subtitle="CSV import parsers" title="CSV Mappings" wide>
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
-      <DefinitionPanel confirmAction={confirmAction} endpoint="/bank-accounts/" formatter={(item) => [item.name, bankAccountSubtitle(item)]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} subtitle="Accounts available for imports" title="Bank Accounts">
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/bank-accounts/" formatter={(item) => [item.name, bankAccountSubtitle(item)]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} listRenderer={BankAccountDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} subtitle="Accounts available for imports" title="Bank Accounts">
         <AccountForm clearEditing={() => clearEditing("/bank-accounts/")} editingItem={editingItems["/bank-accounts/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel confirmAction={confirmAction} endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} subtitle="Top-level reporting buckets" title="Categories">
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} listRenderer={CategoryDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} subtitle="Top-level reporting buckets" title="Categories">
         <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" entityLabel="Category" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.categories} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel confirmAction={confirmAction} endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} notify={notify} onDeleted={() => clearEditing("/subcategories/")} onEdit={(item) => editItem("/subcategories/", item)} reloadAll={reloadAll} subtitle="Assignable category detail" title="Subcategories">
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} listRenderer={SubcategoryDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/subcategories/")} onEdit={(item) => editItem("/subcategories/", item)} reloadAll={reloadAll} subtitle="Assignable category detail" title="Subcategories">
         <SubcategoryForm clearEditing={() => clearEditing("/subcategories/")} editingItem={editingItems["/subcategories/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel confirmAction={confirmAction} endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} notify={notify} onDeleted={() => clearEditing("/tags/")} onEdit={(item) => editItem("/tags/", item)} reloadAll={reloadAll} subtitle="Flexible transaction labels" title="Tags">
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} listRenderer={TagDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/tags/")} onEdit={(item) => editItem("/tags/", item)} reloadAll={reloadAll} subtitle="Flexible transaction labels" title="Tags">
         <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" entityLabel="Tag" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.tags} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel confirmAction={confirmAction} endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} notify={notify} onDeleted={() => clearEditing("/keywords/")} onEdit={(item) => editItem("/keywords/", item)} reloadAll={reloadAll} subtitle="Categorization rules" title="Keywords" wide>
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} listRenderer={KeywordDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/keywords/")} onEdit={(item) => editItem("/keywords/", item)} reloadAll={reloadAll} subtitle="Categorization rules" title="Keywords" wide>
         <KeywordForm clearEditing={() => clearEditing("/keywords/")} editingItem={editingItems["/keywords/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
     </div>
@@ -332,31 +374,239 @@ function CollapsiblePanel({ children, count, defaultExpanded = false, helpText, 
   );
 }
 
-function DefinitionPanel({ children, confirmAction, defaultExpanded = false, endpoint, formatter, helpText, items, notify, onDeleted, onEdit, reloadAll, subtitle, title, wide = false }) {
+function DefinitionPanel({ children, confirmAction, defaultExpanded = false, endpoint, formatter, helpText, items, listRenderer: ListRenderer, notify, onDeleted, onEdit, reloadAll, subtitle, title, wide = false }) {
   const storageId = endpoint.replace(/(^\/|\/$)/g, "").replace(/\W+/g, "-");
   return (
     <CollapsiblePanel count={items.length} defaultExpanded={defaultExpanded} helpText={helpText} storageId={storageId} subtitle={subtitle} title={title} wide={wide}>
       {children}
-      <div className="item-list">
-        {items.length ? items.map((item) => {
-          const [itemTitle, subtitle] = formatter(item);
-          return (
-            <div className="item-row" key={item.id}>
-              <div>
-                <div className="item-title">{itemTitle}</div>
-                <div className="item-subtitle">{subtitle}</div>
-              </div>
-              <div className="item-actions">
-                {item.color && <span className="swatch" style={{ background: item.color }} />}
-                <button className="edit-button" onClick={() => onEdit(item)} type="button">Edit</button>
-                <DeleteButton confirmAction={confirmAction} endpoint={`${endpoint}${item.id}/`} name={itemTitle} notify={notify} onDeleted={onDeleted} reloadAll={reloadAll} />
-              </div>
-            </div>
-          );
-        }) : <div className="muted">No records yet.</div>}
-      </div>
+      {ListRenderer ? (
+        <ListRenderer confirmAction={confirmAction} endpoint={endpoint} formatter={formatter} items={items} notify={notify} onDeleted={onDeleted} onEdit={onEdit} reloadAll={reloadAll} />
+      ) : (
+        <DefaultDefinitionList confirmAction={confirmAction} endpoint={endpoint} formatter={formatter} items={items} notify={notify} onDeleted={onDeleted} onEdit={onEdit} reloadAll={reloadAll} />
+      )}
     </CollapsiblePanel>
   );
+}
+
+function DefaultDefinitionList({ confirmAction, endpoint, formatter, items, notify, onDeleted, onEdit, reloadAll }) {
+  return (
+    <div className="item-list">
+      {items.length ? items.map((item) => {
+        const [itemTitle, subtitle] = formatter(item);
+        return (
+          <div className="item-row" key={item.id}>
+            <div>
+              <div className="item-title">{itemTitle}</div>
+              <div className="item-subtitle">{subtitle}</div>
+            </div>
+            <div className="item-actions">
+              {item.color && <span className="swatch" style={{ background: item.color }} />}
+              <button className="edit-button" onClick={() => onEdit(item)} type="button">Edit</button>
+              <DeleteButton confirmAction={confirmAction} endpoint={`${endpoint}${item.id}/`} name={itemTitle} notify={notify} onDeleted={onDeleted} reloadAll={reloadAll} />
+            </div>
+          </div>
+        );
+      }) : <div className="muted">No records yet.</div>}
+    </div>
+  );
+}
+
+function definitionGridHeight(rowCount) {
+  return Math.min(560, Math.max(198, 48 + (Math.max(rowCount, 1) * 52)));
+}
+
+function definitionActionColumn({ confirmAction, endpoint, nameGetter = (item) => item.name, notify, onDeleted, onEdit, reloadAll }) {
+  return {
+    cellClass: "definition-grid-actions-cell",
+    cellRenderer: (params) => (
+      <div className="definition-grid-actions">
+        <button className="edit-button" onClick={() => onEdit(params.data)} type="button">Edit</button>
+        <DeleteButton confirmAction={confirmAction} endpoint={`${endpoint}${params.data.id}/`} name={nameGetter(params.data)} notify={notify} onDeleted={onDeleted} reloadAll={reloadAll} />
+      </div>
+    ),
+    headerName: "",
+    minWidth: 150,
+    pinned: "right",
+    resizable: false,
+    sortable: false,
+    width: 150,
+  };
+}
+
+function DefinitionAgGridList({ className = "", columnDefs, items, rowData }) {
+  if (!items.length) {
+    return <div className="muted definition-grid-empty">No records yet.</div>;
+  }
+
+  return (
+    <div className={`definition-grid-list ${className}`.trim()} style={{ height: definitionGridHeight(rowData.length) }}>
+      <AgGridReact
+        columnDefs={columnDefs}
+        defaultColDef={{ filter: true, resizable: true, sortable: true }}
+        enableCellTextSelection
+        ensureDomOrder
+        rowData={rowData}
+        rowHeight={52}
+        theme={definitionGridTheme}
+      />
+    </div>
+  );
+}
+
+function DefinitionGridColorCell({ value }) {
+  if (!value) {
+    return <span className="definition-grid-color-empty">None</span>;
+  }
+  return (
+    <span className="definition-grid-color">
+      <span className="definition-grid-color-swatch" style={{ background: value }} />
+      <span>{value}</span>
+    </span>
+  );
+}
+
+function CsvMappingDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const rowData = useMemo(() => items.map((item) => ({
+    ...item,
+    categorization_fields_text: (item.categorization_fields || []).map((field) => fieldLabel(field)).join(", "),
+    delimiter_text: item.delimiter === "\t" ? "\\t" : item.delimiter,
+  })), [items]);
+  const columnDefs = useMemo(() => [
+    { field: "name", flex: 1.2, headerName: "Name", minWidth: 220 },
+    { field: "default_currency", headerName: "Currency", minWidth: 115, width: 120 },
+    { field: "delimiter_text", headerName: "Delimiter", minWidth: 110, width: 115 },
+    { field: "date_format", headerName: "Date Format", minWidth: 145, width: 150 },
+    { field: "encoding", headerName: "Encoding", minWidth: 130, width: 140 },
+    { field: "header_row", headerName: "Header Row", minWidth: 120, width: 125 },
+    { field: "categorization_fields_text", flex: 1.4, headerName: "Categorization Fields", minWidth: 240, tooltipField: "categorization_fields_text" },
+    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
+  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+
+  return <DefinitionAgGridList className="csv-mapping-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
+}
+
+function BankAccountDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const rowData = useMemo(() => items.map((item) => ({
+    ...item,
+    default_mapping_text: item.default_csv_mapping?.name || "No default mapping",
+  })), [items]);
+  const columnDefs = useMemo(() => [
+    { field: "name", flex: 1.1, headerName: "Name", minWidth: 180 },
+    { field: "bank_name", flex: 1, headerName: "Bank", minWidth: 160 },
+    { field: "currency", headerName: "Currency", minWidth: 115, width: 120 },
+    { field: "owners", headerName: "Owners", minWidth: 105, width: 110 },
+    { field: "account_number", flex: 1, headerName: "Account Number", minWidth: 180 },
+    { field: "default_mapping_text", flex: 1.2, headerName: "Default Mapping", minWidth: 210, tooltipField: "default_mapping_text" },
+    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
+  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+
+  return <DefinitionAgGridList className="bank-account-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
+}
+
+function CategoryDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const columnDefs = useMemo(() => [
+    { cellRenderer: DefinitionGridColorCell, field: "color", filter: false, headerName: "Color", minWidth: 120, width: 125 },
+    { field: "name", flex: 1, headerName: "Name", minWidth: 200 },
+    { field: "description", flex: 1.6, headerName: "Description", minWidth: 260, tooltipField: "description" },
+    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
+  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+
+  return <DefinitionAgGridList className="category-definition-grid" columnDefs={columnDefs} items={items} rowData={items} />;
+}
+
+function SubcategoryDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const rowData = useMemo(() => items.map((item) => ({
+    ...item,
+    category_text: item.category?.name || "No category",
+  })), [items]);
+  const columnDefs = useMemo(() => [
+    { cellRenderer: DefinitionGridColorCell, field: "color", filter: false, headerName: "Color", minWidth: 120, width: 125 },
+    { field: "name", flex: 1, headerName: "Name", minWidth: 190 },
+    { field: "category_text", flex: 1, headerName: "Category", minWidth: 190 },
+    { field: "description", flex: 1.4, headerName: "Description", minWidth: 240, tooltipField: "description" },
+    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
+  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+
+  return <DefinitionAgGridList className="subcategory-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
+}
+
+function TagDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const columnDefs = useMemo(() => [
+    { cellRenderer: DefinitionGridColorCell, field: "color", filter: false, headerName: "Color", minWidth: 120, width: 125 },
+    { field: "name", flex: 1, headerName: "Name", minWidth: 200 },
+    { field: "description", flex: 1.6, headerName: "Description", minWidth: 260, tooltipField: "description" },
+    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
+  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+
+  return <DefinitionAgGridList className="tag-definition-grid" columnDefs={columnDefs} items={items} rowData={items} />;
+}
+
+function KeywordDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const rowData = useMemo(() => items.map((item) => ({
+    ...item,
+    include_terms_text: (item.include_terms || []).join(", "),
+    exclude_terms_text: (item.exclude_terms || []).join(", "),
+    subcategory_text: item.subcategory?.name || "No subcategory",
+    tags_text: (item.tags || []).map((tag) => tag.name).join(", "),
+    wni_text: item.want_need_investment ? titleCase(item.want_need_investment) : "No WNI",
+  })), [items]);
+  const columnDefs = useMemo(() => [
+    {
+      field: "name",
+      flex: 1.2,
+      headerName: "Name",
+      minWidth: 180,
+    },
+    {
+      field: "include_terms_text",
+      flex: 1.6,
+      headerName: "Include",
+      minWidth: 220,
+      tooltipField: "include_terms_text",
+    },
+    {
+      field: "exclude_terms_text",
+      flex: 1,
+      headerName: "Exclude",
+      minWidth: 160,
+      tooltipField: "exclude_terms_text",
+    },
+    {
+      field: "subcategory_text",
+      headerName: "Subcategory",
+      minWidth: 160,
+      width: 180,
+    },
+    {
+      field: "wni_text",
+      headerName: "WNI",
+      minWidth: 120,
+      width: 130,
+    },
+    {
+      field: "tags_text",
+      flex: 1,
+      headerName: "Tags",
+      minWidth: 160,
+      tooltipField: "tags_text",
+    },
+    {
+      field: "priority",
+      headerName: "Priority",
+      minWidth: 110,
+      width: 110,
+    },
+    {
+      field: "is_ignored",
+      headerName: "Ignored",
+      minWidth: 110,
+      valueFormatter: (params) => (params.value ? "Yes" : "No"),
+      width: 110,
+    },
+    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
+  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+
+  return <DefinitionAgGridList className="keyword-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
 }
 
 function HelpTooltip({ text }) {
