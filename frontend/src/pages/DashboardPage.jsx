@@ -1084,6 +1084,11 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
   const accountLookup = useMemo(() => new Map(refs.accounts.map((item) => [item.id, item.name])), [refs.accounts]);
+  const accountMappingLookup = useMemo(
+    () => new Map(refs.accounts.map((item) => [item.id, item.default_csv_mapping?.id || ""])),
+    [refs.accounts],
+  );
+  const mappingLookup = useMemo(() => new Map(refs.mappings.map((item) => [item.id, item])), [refs.mappings]);
 
   const rowData = useMemo(() => rows.map((row) => ({
     ...row,
@@ -1126,30 +1131,32 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
     };
   }, [rawDataPopover]);
 
-  const toggleRawDataPopover = useCallback((rowId, rawData, button) => {
-    const entries = rawDataEntries(rawData, hideAmounts);
+  const toggleRawDataPopover = useCallback((row, rawData, button) => {
+    const mappingId = accountMappingLookup.get(row?.account_id || row?.bank_account?.id || "");
+    const mapping = mappingLookup.get(mappingId);
+    const entries = rawDataEntries(rawData, hideAmounts, categorizationRawDataKeys(mapping));
     if (!entries.length) {
       setRawDataPopover(null);
       return;
     }
     setRawDataPopover((current) => {
-      if (current?.rowId === rowId) {
+      if (current?.rowId === row?.id) {
         return null;
       }
       return {
         entries,
         position: rawDataPopoverPosition(button.getBoundingClientRect()),
-        rowId,
+        rowId: row?.id,
       };
     });
-  }, [hideAmounts]);
+  }, [accountMappingLookup, hideAmounts, mappingLookup]);
 
   const columnDefs = useMemo(() => [
     {
       cellClass: "raw-data-grid-cell",
       cellRenderer: (params) => (
         <RawDataButton
-          onToggle={(button) => toggleRawDataPopover(params.data?.id, params.value, button)}
+          onToggle={(button) => toggleRawDataPopover(params.data, params.value, button)}
           rawData={params.value}
         />
       ),
@@ -1847,8 +1854,11 @@ const RawDataPopover = forwardRef(function RawDataPopover({ entries, position },
       </div>
       <dl className="raw-data-list">
         {entries.map((entry) => (
-          <div className="raw-data-row" key={entry.key}>
-            <dt className="raw-data-key">{entry.key}</dt>
+          <div className={`raw-data-row ${entry.isCategorizationField ? "is-categorization-field" : ""}`.trim()} key={entry.key}>
+            <dt className="raw-data-key">
+              <span>{entry.key}</span>
+              {entry.isCategorizationField ? <span className="raw-data-badge">Categorization</span> : null}
+            </dt>
             <dd className="raw-data-value">{entry.value}</dd>
           </div>
         ))}
@@ -1871,7 +1881,7 @@ function rawDataPopoverPosition(rect) {
   return { left, top: Math.max(12, top) };
 }
 
-function rawDataEntries(rawData, hideAmounts) {
+function rawDataEntries(rawData, hideAmounts, highlightedKeys = new Set()) {
   if (!rawData || typeof rawData !== "object") {
     return [];
   }
@@ -1879,9 +1889,32 @@ function rawDataEntries(rawData, hideAmounts) {
     ? rawData.map((value, index) => [`Item ${index + 1}`, value])
     : Object.entries(rawData);
   return entries.map(([key, value]) => ({
+    isCategorizationField: highlightedKeys.has(String(key)),
     key: String(key),
     value: formatRawDataValue(key, value, hideAmounts),
   }));
+}
+
+function categorizationRawDataKeys(mapping) {
+  const highlightedKeys = new Set();
+  if (!mapping?.column_map || !Array.isArray(mapping.categorization_fields)) {
+    return highlightedKeys;
+  }
+  mapping.categorization_fields.forEach((field) => {
+    coerceRawDataColumns(mapping.column_map[field]).forEach((column) => {
+      if (column) {
+        highlightedKeys.add(column);
+      }
+    });
+  });
+  return highlightedKeys;
+}
+
+function coerceRawDataColumns(value) {
+  if (!value) {
+    return [];
+  }
+  return Array.isArray(value) ? value.map((item) => String(item)) : [String(value)];
 }
 
 function formatRawDataValue(key, value, hideAmounts) {
