@@ -1405,20 +1405,36 @@ class APITests(FinanceTestCase):
         Transaction.objects.create(
             bank_account=self.account,
             transaction_date="2026-01-02",
-            description="Coffee Shop",
+            description="",
             amount=Decimal("-10.00"),
+            raw_data={"Description": "Coffee Shop", "Counterparty": ""},
         )
         Transaction.objects.create(
             bank_account=self.account,
             transaction_date="2026-01-03",
-            description="coffee   shop",
+            description="",
             amount=Decimal("-12.00"),
+            raw_data={"Description": "coffee   shop", "Counterparty": ""},
         )
         large_transaction = Transaction.objects.create(
             bank_account=self.account,
             transaction_date="2026-01-04",
-            description="Annual Insurance",
+            description="",
             amount=Decimal("-500.00"),
+            raw_data={"Description": "Annual Insurance", "Counterparty": ""},
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-04",
+            description="",
+            counterparty_name="",
+            transaction_type="Odchozí úhrada",
+            amount=Decimal("-25.00"),
+            raw_data={
+                "Description": "",
+                "Counterparty": "",
+                "Typ transakce": "Odchozí úhrada",
+            },
         )
         Transaction.objects.create(
             bank_account=self.account,
@@ -1452,7 +1468,7 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["count"], 2)
         self.assertEqual(
             [suggestion["reason"] for suggestion in payload["suggestions"]],
-            ["Large uncategorized transaction", "Repeated description"],
+            ["Large uncategorized transaction", "Repeated categorization text"],
         )
         self.assertEqual(
             payload["suggestions"][0]["transaction_ids"],
