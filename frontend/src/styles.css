@@ -2437,6 +2437,14 @@ select option {
   border-bottom: 0;
 }
 
+.raw-data-row.is-categorization-field {
+  border-color: color-mix(in srgb, var(--action) 38%, var(--border));
+  background: color-mix(in srgb, var(--action) 10%, transparent);
+  border-radius: 6px;
+  margin: 2px 0;
+  padding-inline: 7px;
+}
+
 .raw-data-key,
 .raw-data-value {
   margin: 0;
@@ -2446,9 +2454,22 @@ select option {
 
 .raw-data-key {
   color: var(--muted);
+  display: grid;
+  gap: 4px;
   font-size: 12px;
   font-weight: 760;
   line-height: 1.35;
+}
+
+.raw-data-badge {
+  width: fit-content;
+  border: 1px solid color-mix(in srgb, var(--action) 50%, var(--border));
+  border-radius: 999px;
+  color: var(--action);
+  font-size: 10px;
+  font-weight: 820;
+  line-height: 1;
+  padding: 3px 6px;
 }
 
 .raw-data-value {
