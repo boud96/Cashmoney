@@ -33,7 +33,7 @@ const defaultCurrencyOptions = [
   { code: "GBP", name: "British Pound" },
 ];
 
-export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll, reloadDashboard, setMappingDraft }) {
+export default function DefinitionsPage({ confirmAction, mappingDraft, notify, refs, reloadAll, reloadDashboard, setMappingDraft }) {
   const [editingItems, setEditingItems] = useState({});
 
   function editItem(endpoint, item) {
@@ -53,22 +53,22 @@ export default function DefinitionsPage({ mappingDraft, notify, refs, reloadAll,
       <CollapsiblePanel defaultExpanded storageId="app-settings" subtitle="Currency, exchange rates, and transfer automation" title="App Settings" wide>
         <SettingsForm notify={notify} refs={refs} reloadAll={reloadAll} reloadDashboard={reloadDashboard} settings={refs.settings} />
       </CollapsiblePanel>
-      <DefinitionPanel defaultExpanded endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} subtitle="CSV import parsers" title="CSV Mappings" wide>
+      <DefinitionPanel confirmAction={confirmAction} defaultExpanded endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} subtitle="CSV import parsers" title="CSV Mappings" wide>
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
-      <DefinitionPanel defaultExpanded endpoint="/bank-accounts/" formatter={(item) => [item.name, bankAccountSubtitle(item)]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} subtitle="Accounts available for imports" title="Bank Accounts">
+      <DefinitionPanel confirmAction={confirmAction} defaultExpanded endpoint="/bank-accounts/" formatter={(item) => [item.name, bankAccountSubtitle(item)]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} subtitle="Accounts available for imports" title="Bank Accounts">
         <AccountForm clearEditing={() => clearEditing("/bank-accounts/")} editingItem={editingItems["/bank-accounts/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} subtitle="Top-level reporting buckets" title="Categories">
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/categories/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Categories} items={refs.categories} notify={notify} onDeleted={() => clearEditing("/categories/")} onEdit={(item) => editItem("/categories/", item)} reloadAll={reloadAll} subtitle="Top-level reporting buckets" title="Categories">
         <SimpleForm clearEditing={() => clearEditing("/categories/")} editingItem={editingItems["/categories/"]} endpoint="/categories/" entityLabel="Category" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.categories} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} notify={notify} onDeleted={() => clearEditing("/subcategories/")} onEdit={(item) => editItem("/subcategories/", item)} reloadAll={reloadAll} subtitle="Assignable category detail" title="Subcategories">
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/subcategories/" formatter={(item) => [item.name, item.category?.name || ""]} helpText={definitionHelp.Subcategories} items={refs.subcategories} notify={notify} onDeleted={() => clearEditing("/subcategories/")} onEdit={(item) => editItem("/subcategories/", item)} reloadAll={reloadAll} subtitle="Assignable category detail" title="Subcategories">
         <SubcategoryForm clearEditing={() => clearEditing("/subcategories/")} editingItem={editingItems["/subcategories/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} notify={notify} onDeleted={() => clearEditing("/tags/")} onEdit={(item) => editItem("/tags/", item)} reloadAll={reloadAll} subtitle="Flexible transaction labels" title="Tags">
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/tags/" formatter={(item) => [item.name, item.description || ""]} helpText={definitionHelp.Tags} items={refs.tags} notify={notify} onDeleted={() => clearEditing("/tags/")} onEdit={(item) => editItem("/tags/", item)} reloadAll={reloadAll} subtitle="Flexible transaction labels" title="Tags">
         <SimpleForm clearEditing={() => clearEditing("/tags/")} editingItem={editingItems["/tags/"]} endpoint="/tags/" entityLabel="Tag" fields={[["name", "Name", true], ["color", "Color"], ["description", "Description"]]} items={refs.tags} notify={notify} reloadAll={reloadAll} />
       </DefinitionPanel>
-      <DefinitionPanel defaultExpanded endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} notify={notify} onDeleted={() => clearEditing("/keywords/")} onEdit={(item) => editItem("/keywords/", item)} reloadAll={reloadAll} subtitle="Categorization rules" title="Keywords" wide>
+      <DefinitionPanel confirmAction={confirmAction} defaultExpanded endpoint="/keywords/" formatter={(item) => [item.name, `${(item.include_terms || []).join(", ")} - ${item.subcategory?.name || "No subcategory"} - ${item.want_need_investment || "No WNI"}`]} helpText={definitionHelp.Keywords} items={refs.keywords} notify={notify} onDeleted={() => clearEditing("/keywords/")} onEdit={(item) => editItem("/keywords/", item)} reloadAll={reloadAll} subtitle="Categorization rules" title="Keywords" wide>
         <KeywordForm clearEditing={() => clearEditing("/keywords/")} editingItem={editingItems["/keywords/"]} notify={notify} refs={refs} reloadAll={reloadAll} />
       </DefinitionPanel>
     </div>
@@ -332,7 +332,7 @@ function CollapsiblePanel({ children, count, defaultExpanded = false, helpText, 
   );
 }
 
-function DefinitionPanel({ children, defaultExpanded = false, endpoint, formatter, helpText, items, notify, onDeleted, onEdit, reloadAll, subtitle, title, wide = false }) {
+function DefinitionPanel({ children, confirmAction, defaultExpanded = false, endpoint, formatter, helpText, items, notify, onDeleted, onEdit, reloadAll, subtitle, title, wide = false }) {
   const storageId = endpoint.replace(/(^\/|\/$)/g, "").replace(/\W+/g, "-");
   return (
     <CollapsiblePanel count={items.length} defaultExpanded={defaultExpanded} helpText={helpText} storageId={storageId} subtitle={subtitle} title={title} wide={wide}>
@@ -349,7 +349,7 @@ function DefinitionPanel({ children, defaultExpanded = false, endpoint, formatte
               <div className="item-actions">
                 {item.color && <span className="swatch" style={{ background: item.color }} />}
                 <button className="edit-button" onClick={() => onEdit(item)} type="button">Edit</button>
-                <DeleteButton endpoint={`${endpoint}${item.id}/`} name={itemTitle} notify={notify} onDeleted={onDeleted} reloadAll={reloadAll} />
+                <DeleteButton confirmAction={confirmAction} endpoint={`${endpoint}${item.id}/`} name={itemTitle} notify={notify} onDeleted={onDeleted} reloadAll={reloadAll} />
               </div>
             </div>
           );
@@ -368,10 +368,16 @@ function HelpTooltip({ text }) {
   );
 }
 
-function DeleteButton({ endpoint, name, notify, onDeleted, reloadAll }) {
+function DeleteButton({ confirmAction, endpoint, name, notify, onDeleted, reloadAll }) {
   const [deleting, setDeleting] = useState(false);
   async function remove() {
-    if (!window.confirm(`Delete ${name}?`)) {
+    const confirmed = await confirmAction({
+      confirmLabel: "Delete",
+      danger: true,
+      message: `Delete ${name}?`,
+      title: "Delete Record",
+    });
+    if (!confirmed) {
       return;
     }
     setDeleting(true);

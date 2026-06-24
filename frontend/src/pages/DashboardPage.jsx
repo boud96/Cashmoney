@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
 import { AgGridReact } from "ag-grid-react";
@@ -87,6 +87,7 @@ const emptyKeywordDraft = {
 };
 
 export default function DashboardPage({
+  confirmAction,
   filters,
   filterParams,
   hideAmounts,
@@ -247,7 +248,12 @@ export default function DashboardPage({
       return;
     }
     const lockedText = recategorizeLocked ? " Locked transactions included by the current filters will be reset and recategorized." : "";
-    if (!window.confirm(`Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?${lockedText}`)) {
+    const confirmed = await confirmAction({
+      confirmLabel: "Recategorize",
+      message: `Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?${lockedText}`,
+      title: "Recategorize Transactions",
+    });
+    if (!confirmed) {
       return;
     }
     setRecategorizing(true);
@@ -1061,7 +1067,19 @@ function LockIcon({ locked }) {
   );
 }
 
+function InfoIcon() {
+  return (
+    <IconSvg>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 8h.01" />
+    </IconSvg>
+  );
+}
+
 function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, refs, rows, updateTransaction }) {
+  const [rawDataPopover, setRawDataPopover] = useState(null);
+  const rawDataPopoverRef = useRef(null);
   const subcategoryOptions = useMemo(() => ["", ...refs.subcategories.map((item) => item.id)], [refs.subcategories]);
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
@@ -1074,8 +1092,74 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
     subcategory_id: row.subcategory?.id || "",
   })), [conflictIds, rows]);
 
+  useEffect(() => {
+    if (!rawDataPopover) {
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      const popover = rawDataPopoverRef.current;
+      const eventPath = event.composedPath?.() || [];
+      const clickedPopover = popover && (popover.contains(event.target) || eventPath.includes(popover));
+      if (!clickedPopover) {
+        setRawDataPopover(null);
+      }
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setRawDataPopover(null);
+      }
+    }
+
+    function closePopover() {
+      setRawDataPopover(null);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", closePopover);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", closePopover);
+    };
+  }, [rawDataPopover]);
+
+  const toggleRawDataPopover = useCallback((rowId, rawData, button) => {
+    const entries = rawDataEntries(rawData, hideAmounts);
+    if (!entries.length) {
+      setRawDataPopover(null);
+      return;
+    }
+    setRawDataPopover((current) => {
+      if (current?.rowId === rowId) {
+        return null;
+      }
+      return {
+        entries,
+        position: rawDataPopoverPosition(button.getBoundingClientRect()),
+        rowId,
+      };
+    });
+  }, [hideAmounts]);
+
   const columnDefs = useMemo(() => [
-    { field: "transaction_date", headerName: "Date", width: 120, sort: "desc" },
+    {
+      cellClass: "raw-data-grid-cell",
+      cellRenderer: (params) => (
+        <RawDataButton
+          onToggle={(button) => toggleRawDataPopover(params.data?.id, params.value, button)}
+          rawData={params.value}
+        />
+      ),
+      field: "raw_data",
+      headerName: "",
+      resizable: false,
+      sortable: false,
+      width: 52,
+    },
+    { field: "transaction_date", headerName: "Date", width: 120, initialSort: "desc" },
     { field: "description", headerName: "Description", flex: 2, minWidth: 260, wrapText: true, autoHeight: true },
     {
       cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
@@ -1209,7 +1293,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
       valueFormatter: (params) => (params.value ? "Locked" : "Unlocked"),
       width: 96,
     },
-  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, updateTransaction]);
+  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, toggleRawDataPopover, updateTransaction]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {
@@ -1240,6 +1324,13 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
         stopEditingWhenCellsLoseFocus
         theme={transactionGridTheme}
       />
+      {rawDataPopover && (
+        <RawDataPopover
+          entries={rawDataPopover.entries}
+          position={rawDataPopover.position}
+          ref={rawDataPopoverRef}
+        />
+      )}
     </div>
   );
 }
@@ -1699,6 +1790,145 @@ function WniCell({ value }) {
     return <span className="color-cell color-cell-muted"><span className="color-cell-label">Unassigned</span></span>;
   }
   return <span className="color-cell" style={colorPillStyle(wniColor(value))}><span className="color-cell-label">{titleCase(value)}</span></span>;
+}
+
+function RawDataButton({ onToggle, rawData }) {
+  const buttonRef = useRef(null);
+  const hasEntries = rawData && typeof rawData === "object" && Object.keys(rawData).length > 0;
+
+  function stopGridEvent(event) {
+    event.stopPropagation();
+  }
+
+  function togglePopover(event) {
+    event.stopPropagation();
+    if (buttonRef.current) {
+      onToggle(buttonRef.current);
+    }
+  }
+
+  return (
+    <div className="raw-data-cell-inner" onClick={stopGridEvent} onDoubleClick={stopGridEvent} onMouseDown={stopGridEvent} onPointerDown={stopGridEvent}>
+      <button
+        aria-haspopup="dialog"
+        aria-label={hasEntries ? "Show original transaction data" : "No original transaction data saved"}
+        className="raw-data-button"
+        disabled={!hasEntries}
+        onClick={togglePopover}
+        ref={buttonRef}
+        title={hasEntries ? "Show original data" : "No original data saved"}
+        type="button"
+      >
+        <InfoIcon />
+      </button>
+    </div>
+  );
+}
+
+const RawDataPopover = forwardRef(function RawDataPopover({ entries, position }, ref) {
+  function stopGridEvent(event) {
+    event.stopPropagation();
+  }
+
+  return (
+    <div
+      className="raw-data-popover"
+      onClick={stopGridEvent}
+      onDoubleClick={stopGridEvent}
+      onMouseDown={stopGridEvent}
+      onPointerDown={stopGridEvent}
+      ref={ref}
+      role="dialog"
+      style={{ left: position.left, top: position.top }}
+    >
+      <div className="raw-data-popover-header">
+        <strong>Original Data</strong>
+        <span>{entries.length.toLocaleString()} fields</span>
+      </div>
+      <dl className="raw-data-list">
+        {entries.map((entry) => (
+          <div className="raw-data-row" key={entry.key}>
+            <dt className="raw-data-key">{entry.key}</dt>
+            <dd className="raw-data-value">{entry.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+});
+
+function rawDataPopoverPosition(rect) {
+  const popoverWidth = 460;
+  const popoverHeight = 420;
+  const left = Math.min(
+    Math.max(12, rect.left),
+    Math.max(12, window.innerWidth - popoverWidth - 12),
+  );
+  const preferredTop = rect.bottom + 6;
+  const top = preferredTop + popoverHeight > window.innerHeight && rect.top > popoverHeight
+    ? rect.top - popoverHeight - 6
+    : preferredTop;
+  return { left, top: Math.max(12, top) };
+}
+
+function rawDataEntries(rawData, hideAmounts) {
+  if (!rawData || typeof rawData !== "object") {
+    return [];
+  }
+  const entries = Array.isArray(rawData)
+    ? rawData.map((value, index) => [`Item ${index + 1}`, value])
+    : Object.entries(rawData);
+  return entries.map(([key, value]) => ({
+    key: String(key),
+    value: formatRawDataValue(key, value, hideAmounts),
+  }));
+}
+
+function formatRawDataValue(key, value, hideAmounts) {
+  if (hideAmounts && rawDataFieldLooksMonetary(key)) {
+    return "--";
+  }
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function rawDataFieldLooksMonetary(key) {
+  const words = String(key || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  const wordTerms = new Set([
+    "amount",
+    "amt",
+    "balance",
+    "castka",
+    "credit",
+    "debit",
+    "expense",
+    "income",
+    "price",
+    "sum",
+    "suma",
+    "total",
+    "zustatek",
+  ]);
+  if (words.some((word) => wordTerms.has(word))) {
+    return true;
+  }
+  const normalized = normalizeName(key);
+  return ["amount", "balance", "castka", "expense", "income", "price", "suma", "total", "zustatek"]
+    .some((term) => normalized.includes(term));
 }
 
 function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {

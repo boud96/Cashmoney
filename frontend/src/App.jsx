@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, apiPatch } from "./api.js";
-import { Spinner } from "./components.jsx";
+import { ConfirmDialog, Spinner } from "./components.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import {
   accentPresets,
@@ -53,6 +53,7 @@ export default function App() {
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [importReport, setImportReport] = useState(null);
   const [maintenanceSummary, setMaintenanceSummary] = useState(null);
+  const [confirmation, setConfirmation] = useState(null);
   const [mappingDraft, setMappingDraft] = useState({
     column_map: {},
     categorization_fields: defaultCategorizationFields,
@@ -60,11 +61,40 @@ export default function App() {
     detected: null,
   });
   const filterSelectionsInitialized = useRef(false);
+  const confirmationResolver = useRef(null);
 
   const notify = useCallback((message) => {
     setToast(message);
     window.clearTimeout(notify.timeout);
     notify.timeout = window.setTimeout(() => setToast(""), 2600);
+  }, []);
+
+  const confirmAction = useCallback((options) => {
+    if (confirmationResolver.current) {
+      confirmationResolver.current(false);
+    }
+    return new Promise((resolve) => {
+      confirmationResolver.current = resolve;
+      setConfirmation({
+        cancelLabel: options.cancelLabel || "Cancel",
+        confirmLabel: options.confirmLabel || "Confirm",
+        danger: Boolean(options.danger),
+        message: options.message || "",
+        title: options.title || "Confirm Action",
+      });
+    });
+  }, []);
+
+  const closeConfirmation = useCallback((confirmed) => {
+    const resolve = confirmationResolver.current;
+    confirmationResolver.current = null;
+    setConfirmation(null);
+    resolve?.(confirmed);
+  }, []);
+
+  useEffect(() => () => {
+    confirmationResolver.current?.(false);
+    confirmationResolver.current = null;
   }, []);
 
   const loadReferenceData = useCallback(async () => {
@@ -278,6 +308,7 @@ export default function App() {
               transactionPage={transactionPage}
               updateTransaction={updateTransaction}
               filterParams={filterParams}
+              confirmAction={confirmAction}
               notify={notify}
               reloadDashboard={loadDashboard}
             />
@@ -289,6 +320,7 @@ export default function App() {
             {activePage === "settings" && (
               <DefinitionsPage
                 mappingDraft={mappingDraft}
+                confirmAction={confirmAction}
                 notify={notify}
                 refs={refs}
                 reloadAll={loadAll}
@@ -299,6 +331,7 @@ export default function App() {
             {activePage === "maintenance" && (
               <MaintenancePage
                 notify={notify}
+                confirmAction={confirmAction}
                 reloadAll={loadAll}
                 reloadDashboard={loadDashboard}
                 reloadMaintenance={loadMaintenance}
@@ -349,6 +382,17 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+      {confirmation && (
+        <ConfirmDialog
+          cancelLabel={confirmation.cancelLabel}
+          confirmLabel={confirmation.confirmLabel}
+          danger={confirmation.danger}
+          message={confirmation.message}
+          onCancel={() => closeConfirmation(false)}
+          onConfirm={() => closeConfirmation(true)}
+          title={confirmation.title}
+        />
       )}
       <div className={`toast ${toast ? "is-visible" : ""}`}>{toast}</div>
     </div>
