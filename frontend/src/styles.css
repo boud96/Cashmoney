@@ -3474,8 +3474,6 @@ td {
   max-height: min(52vh, 520px);
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 2px;
-  scrollbar-gutter: stable;
 }
 
 .maintenance-backup-row {
