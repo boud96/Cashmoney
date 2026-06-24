@@ -1081,7 +1081,12 @@ class UncategorizedSuggestionView(JsonView):
                 is_ignored=False,
                 is_categorization_locked=False,
             )
-            .select_related("bank_account", "subcategory", "subcategory__category")
+            .select_related(
+                "bank_account",
+                "bank_account__default_csv_mapping",
+                "subcategory",
+                "subcategory__category",
+            )
             .prefetch_related("tags")
         )
         return json_response(
