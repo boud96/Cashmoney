@@ -1271,72 +1271,166 @@ class RecategorizeTransactionsView(JsonView):
         )
 
 
+def legacy_bulk_assign_payload(data):
+    assignment_type = clean_text(
+        require_field(data, "assignment_type"), "assignment_type", required=True
+    )
+    if assignment_type == "subcategory":
+        return {"subcategory_id": require_field(data, "subcategory_id")}
+    if assignment_type == "tag":
+        return {
+            "tag_mode": "add",
+            "tag_ids": [require_field(data, "tag_id")],
+        }
+    if assignment_type == "want_need_investment":
+        return {
+            "want_need_investment": require_field(data, "want_need_investment"),
+        }
+    raise APIValidationError(
+        "Invalid assignment type",
+        {
+            "field": "assignment_type",
+            "allowed": ["subcategory", "tag", "want_need_investment"],
+        },
+    )
+
+
 class BulkAssignTransactionsView(JsonView):
     def post(self, request):
         data = parse_json_body(request)
-        assignment_type = clean_text(
-            require_field(data, "assignment_type"), "assignment_type", required=True
-        )
         queryset = filtered_transactions(request)
         transaction_ids = list(queryset.values_list("id", flat=True))
         updated_count = len(transaction_ids)
+        actions = []
 
-        if assignment_type == "subcategory":
+        if "assignment_type" in data:
+            data = legacy_bulk_assign_payload(data)
+
+        update_values = {"updated_at": timezone.now()}
+        should_lock_categorization = False
+
+        if "subcategory_id" in data:
             subcategory = optional_object(
-                Subcategory, require_field(data, "subcategory_id"), "subcategory_id"
+                Subcategory, data.get("subcategory_id"), "subcategory_id"
             )
-            Transaction.objects.filter(id__in=transaction_ids).update(
-                subcategory=subcategory,
-                is_categorization_locked=True,
-                updated_at=timezone.now(),
+            update_values["subcategory"] = subcategory
+            should_lock_categorization = True
+            actions.append(
+                {
+                    "field": "subcategory",
+                    "label": (
+                        f"{subcategory.category.name} / {subcategory.name}"
+                        if subcategory
+                        else "Unassigned"
+                    ),
+                }
             )
-            label = (
-                f"{subcategory.category.name} / {subcategory.name}"
-                if subcategory
-                else "Unassigned"
+
+        tag_mode = clean_choice(
+            data.get("tag_mode", "no_change"),
+            "tag_mode",
+            [
+                ("no_change", "No change"),
+                ("add", "Add"),
+                ("replace", "Replace"),
+                ("clear", "Clear"),
+            ],
+            allow_blank=False,
+        )
+        tag_ids = id_list(data.get("tag_ids", []))
+        tags = []
+        if tag_mode in {"add", "replace"}:
+            if not tag_ids:
+                raise APIValidationError(
+                    "Choose at least one tag", {"field": "tag_ids"}
+                )
+            tags = list(Tag.objects.filter(id__in=tag_ids))
+            if len(tags) != len(set(tag_ids)):
+                raise APIValidationError(
+                    "Invalid object reference", {"field": "tag_ids"}
+                )
+        if tag_mode != "no_change":
+            should_lock_categorization = True
+            actions.append(
+                {
+                    "field": "tags",
+                    "label": (
+                        "Cleared"
+                        if tag_mode == "clear"
+                        else ", ".join(tag.name for tag in tags)
+                    ),
+                    "mode": tag_mode,
+                }
             )
-        elif assignment_type == "tag":
-            tag = optional_object(Tag, require_field(data, "tag_id"), "tag_id")
-            Transaction.objects.filter(id__in=transaction_ids).update(
-                is_categorization_locked=True,
-                updated_at=timezone.now(),
-            )
-            through_model = Transaction.tags.through
-            through_model.objects.bulk_create(
-                [
-                    through_model(transaction_id=transaction_id, tag_id=tag.id)
-                    for transaction_id in transaction_ids
-                ],
-                ignore_conflicts=True,
-            )
-            label = tag.name
-        elif assignment_type == "want_need_investment":
+
+        if "want_need_investment" in data:
             want_need_investment = clean_choice(
-                require_field(data, "want_need_investment"),
+                data.get("want_need_investment"),
                 "want_need_investment",
                 WantNeedInvestment.CHOICES,
-                allow_blank=False,
+                allow_blank=True,
             )
-            Transaction.objects.filter(id__in=transaction_ids).update(
-                want_need_investment=want_need_investment,
-                is_categorization_locked=True,
-                updated_at=timezone.now(),
-            )
-            label = dict(WantNeedInvestment.CHOICES)[want_need_investment]
-        else:
-            raise APIValidationError(
-                "Invalid assignment type",
+            update_values["want_need_investment"] = want_need_investment
+            should_lock_categorization = True
+            actions.append(
                 {
-                    "field": "assignment_type",
-                    "allowed": ["subcategory", "tag", "want_need_investment"],
-                },
+                    "field": "want_need_investment",
+                    "label": (
+                        dict(WantNeedInvestment.CHOICES).get(want_need_investment)
+                        if want_need_investment
+                        else "Unassigned"
+                    ),
+                }
             )
+
+        if "is_ignored" in data:
+            is_ignored = parse_bool(data.get("is_ignored"))
+            update_values["is_ignored"] = is_ignored
+            should_lock_categorization = True
+            actions.append(
+                {
+                    "field": "is_ignored",
+                    "label": "Ignored" if is_ignored else "Not ignored",
+                }
+            )
+
+        if "is_categorization_locked" in data:
+            is_locked = parse_bool(data.get("is_categorization_locked"))
+            update_values["is_categorization_locked"] = is_locked
+            actions.append(
+                {
+                    "field": "is_categorization_locked",
+                    "label": "Locked" if is_locked else "Unlocked",
+                }
+            )
+        elif should_lock_categorization:
+            update_values["is_categorization_locked"] = True
+
+        if not actions:
+            raise APIValidationError("Choose at least one bulk assignment")
+
+        Transaction.objects.filter(id__in=transaction_ids).update(**update_values)
+
+        if tag_mode != "no_change":
+            through_model = Transaction.tags.through
+            if tag_mode in {"replace", "clear"}:
+                through_model.objects.filter(
+                    transaction_id__in=transaction_ids
+                ).delete()
+            if tag_mode in {"add", "replace"}:
+                through_model.objects.bulk_create(
+                    [
+                        through_model(transaction_id=transaction_id, tag_id=tag.id)
+                        for transaction_id in transaction_ids
+                        for tag in tags
+                    ],
+                    ignore_conflicts=True,
+                )
 
         return json_response(
             {
                 "updated": updated_count,
-                "assignment_type": assignment_type,
-                "label": label,
+                "actions": actions,
             }
         )
 

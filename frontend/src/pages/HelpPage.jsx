@@ -165,9 +165,7 @@ export default function HelpPage() {
           <ul>
             <li><strong>Recategorize Filtered:</strong> reruns keyword matching for the filtered transactions.</li>
             <li><strong>Include locked:</strong> resets locked filtered transactions and lets recategorization overwrite them.</li>
-            <li><strong>Bulk assign Subcategory:</strong> assigns one subcategory to all filtered transactions.</li>
-            <li><strong>Bulk assign Tag:</strong> adds one tag to all filtered transactions.</li>
-            <li><strong>Bulk assign WNI:</strong> assigns one WNI value to all filtered transactions.</li>
+            <li><strong>Bulk assign:</strong> updates subcategory, tags, WNI, ignored, or locked fields for all filtered transactions.</li>
             <li><strong>Find Transfers:</strong> previews likely transfers between defined accounts by matching opposite same-currency amounts across nearby dates.</li>
           </ul>
         </HelpCard>

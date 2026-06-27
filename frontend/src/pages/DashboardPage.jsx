@@ -86,6 +86,18 @@ const emptyKeywordDraft = {
   is_ignored: false,
 };
 
+const NO_BULK_CHANGE = "__no_change__";
+const CLEAR_BULK_VALUE = "__clear__";
+
+const emptyBulkAssignDraft = {
+  subcategory: NO_BULK_CHANGE,
+  tagMode: "no_change",
+  tagIds: [],
+  wantNeedInvestment: NO_BULK_CHANGE,
+  ignored: NO_BULK_CHANGE,
+  locked: NO_BULK_CHANGE,
+};
+
 export default function DashboardPage({
   confirmAction,
   filters,
@@ -115,8 +127,8 @@ export default function DashboardPage({
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
-  const [bulkAssignModal, setBulkAssignModal] = useState(null);
-  const [bulkAssignValue, setBulkAssignValue] = useState("");
+  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false);
+  const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
   const [recategorizeLocked, setRecategorizeLocked] = useState(false);
@@ -280,22 +292,31 @@ export default function DashboardPage({
     }
   }
 
-  const bulkAssignOptions = useMemo(() => ({
-    subcategory: refs.subcategories.map((item) => [item.id, subLabel(item)]),
-    tag: refs.tags.map((item) => [item.id, item.name]),
-    want_need_investment: wniOptions.map(([value, label]) => [value, label]),
-  }), [refs.subcategories, refs.tags]);
+  const bulkSubcategoryOptions = useMemo(
+    () => [
+      [NO_BULK_CHANGE, "No change"],
+      [CLEAR_BULK_VALUE, "Unassigned"],
+      ...refs.subcategories.map((item) => [item.id, subLabel(item)]),
+    ],
+    [refs.subcategories],
+  );
+  const bulkWniOptions = useMemo(
+    () => [
+      [NO_BULK_CHANGE, "No change"],
+      [CLEAR_BULK_VALUE, "Unassigned"],
+      ...wniOptions.map(([value, label]) => [value, label]),
+    ],
+    [],
+  );
+  const bulkBooleanOptions = [
+    [NO_BULK_CHANGE, "No change"],
+    ["true", "Yes"],
+    ["false", "No"],
+  ];
   const transferSubcategoryOptions = useMemo(
     () => [["", "No subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])],
     [refs.subcategories],
   );
-
-  const bulkAssignSelectedLabel = useMemo(() => {
-    if (!bulkAssignModal || !bulkAssignValue) {
-      return "";
-    }
-    return bulkAssignOptions[bulkAssignModal]?.find(([value]) => value === bulkAssignValue)?.[1] || "";
-  }, [bulkAssignModal, bulkAssignOptions, bulkAssignValue]);
   const selectedSuggestion = useMemo(
     () => uncategorizedSuggestions.find((item) => item.id === selectedSuggestionId) || uncategorizedSuggestions[0] || null,
     [selectedSuggestionId, uncategorizedSuggestions],
@@ -429,38 +450,73 @@ export default function DashboardPage({
     }
   }
 
-  function openBulkAssignModal(type) {
-    setBulkAssignModal(type);
-    setBulkAssignValue("");
+  function openBulkAssignModal() {
+    setBulkAssignDraft(emptyBulkAssignDraft);
+    setBulkAssignModalOpen(true);
   }
 
   function closeBulkAssignModal() {
     if (bulkAssignBusy) {
       return;
     }
-    setBulkAssignModal(null);
-    setBulkAssignValue("");
+    setBulkAssignModalOpen(false);
+    setBulkAssignDraft(emptyBulkAssignDraft);
+  }
+
+  function updateBulkAssignDraft(patch) {
+    setBulkAssignDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function toggleBulkAssignTag(tagId) {
+    setBulkAssignDraft((current) => ({
+      ...current,
+      tagIds: current.tagIds.includes(tagId)
+        ? current.tagIds.filter((item) => item !== tagId)
+        : [...current.tagIds, tagId],
+    }));
+  }
+
+  function bulkAssignPayload() {
+    const payload = {};
+    if (bulkAssignDraft.subcategory !== NO_BULK_CHANGE) {
+      payload.subcategory_id = bulkAssignDraft.subcategory === CLEAR_BULK_VALUE ? "" : bulkAssignDraft.subcategory;
+    }
+    if (bulkAssignDraft.tagMode !== "no_change") {
+      payload.tag_mode = bulkAssignDraft.tagMode;
+      payload.tag_ids = bulkAssignDraft.tagIds;
+    }
+    if (bulkAssignDraft.wantNeedInvestment !== NO_BULK_CHANGE) {
+      payload.want_need_investment = bulkAssignDraft.wantNeedInvestment === CLEAR_BULK_VALUE ? "" : bulkAssignDraft.wantNeedInvestment;
+    }
+    if (bulkAssignDraft.ignored !== NO_BULK_CHANGE) {
+      payload.is_ignored = bulkAssignDraft.ignored === "true";
+    }
+    if (bulkAssignDraft.locked !== NO_BULK_CHANGE) {
+      payload.is_categorization_locked = bulkAssignDraft.locked === "true";
+    }
+    return payload;
+  }
+
+  function bulkAssignHasChanges() {
+    return Object.keys(bulkAssignPayload()).length > 0;
   }
 
   async function submitBulkAssign() {
-    if (!bulkAssignModal || !bulkAssignValue) {
-      notify("Choose a value first");
+    const payload = bulkAssignPayload();
+    if (!Object.keys(payload).length) {
+      notify("Choose at least one bulk assignment");
       return;
     }
-    const payload = { assignment_type: bulkAssignModal };
-    if (bulkAssignModal === "subcategory") {
-      payload.subcategory_id = bulkAssignValue;
-    } else if (bulkAssignModal === "tag") {
-      payload.tag_id = bulkAssignValue;
-    } else if (bulkAssignModal === "want_need_investment") {
-      payload.want_need_investment = bulkAssignValue;
+    if (["add", "replace"].includes(bulkAssignDraft.tagMode) && !bulkAssignDraft.tagIds.length) {
+      notify("Choose at least one tag");
+      return;
     }
     setBulkAssignBusy(true);
     try {
       const result = await apiPost("/transactions/bulk-assign/", payload, filterParams);
       notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
-      setBulkAssignModal(null);
-      setBulkAssignValue("");
+      setBulkAssignModalOpen(false);
+      setBulkAssignDraft(emptyBulkAssignDraft);
       await reloadDashboard();
     } catch (error) {
       notify(error.message);
@@ -702,17 +758,9 @@ export default function DashboardPage({
             </div>
             <div className="dashboard-action-subsection dashboard-bulk-assign-action">
               <div className="metric-label">Bulk assign filtered transactions</div>
-              <div className="bulk-assign-buttons">
-                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("subcategory")} type="button">
-                  Subcategory
-                </button>
-                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("tag")} type="button">
-                  Tag
-                </button>
-                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("want_need_investment")} type="button">
-                  WNI
-                </button>
-              </div>
+              <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignModal} type="button">
+                Bulk assign
+              </button>
             </div>
             <div className="dashboard-action-subsection dashboard-uncategorized-action">
               <div className="metric-label">Uncategorized review</div>
@@ -800,17 +848,20 @@ export default function DashboardPage({
           suggestions={uncategorizedSuggestions}
         />
       )}
-      {bulkAssignModal && (
-        <BulkAssignModal
+      {bulkAssignModalOpen && (
+        <BulkAssignMultiModal
           busy={bulkAssignBusy}
           count={transactionPage.count}
+          draft={bulkAssignDraft}
+          hasChanges={bulkAssignHasChanges()}
           onClose={closeBulkAssignModal}
           onSubmit={submitBulkAssign}
-          onValueChange={setBulkAssignValue}
-          options={bulkAssignOptions[bulkAssignModal] || []}
-          selectedLabel={bulkAssignSelectedLabel}
-          type={bulkAssignModal}
-          value={bulkAssignValue}
+          onTagToggle={toggleBulkAssignTag}
+          onUpdate={updateBulkAssignDraft}
+          booleanOptions={bulkBooleanOptions}
+          subcategoryOptions={bulkSubcategoryOptions}
+          tags={refs.tags}
+          wniOptions={bulkWniOptions}
         />
       )}
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
@@ -861,6 +912,98 @@ function textLines(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function BulkAssignMultiModal({
+  booleanOptions,
+  busy,
+  count,
+  draft,
+  hasChanges,
+  onClose,
+  onSubmit,
+  onTagToggle,
+  onUpdate,
+  subcategoryOptions,
+  tags,
+  wniOptions,
+}) {
+  const tagSelectionDisabled = !["add", "replace"].includes(draft.tagMode);
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+      <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="bulk-assign-modal-header">
+          <h2 id="bulk-assign-modal-title">Bulk Assign</h2>
+          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
+        </div>
+        <div className="bulk-assign-form">
+          <label className="form-field">
+            <span>Subcategory</span>
+            <select autoFocus disabled={busy} onChange={(event) => onUpdate({ subcategory: event.target.value })} value={draft.subcategory}>
+              {subcategoryOptions.map(([optionValue, optionLabel]) => (
+                <option key={optionValue} value={optionValue}>{optionLabel}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>WNI</span>
+            <select disabled={busy} onChange={(event) => onUpdate({ wantNeedInvestment: event.target.value })} value={draft.wantNeedInvestment}>
+              {wniOptions.map(([optionValue, optionLabel]) => (
+                <option key={optionValue} value={optionValue}>{optionLabel}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Ignored</span>
+            <select disabled={busy} onChange={(event) => onUpdate({ ignored: event.target.value })} value={draft.ignored}>
+              {booleanOptions.map(([optionValue, optionLabel]) => (
+                <option key={optionValue} value={optionValue}>{optionLabel}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Locked</span>
+            <select disabled={busy} onChange={(event) => onUpdate({ locked: event.target.value })} value={draft.locked}>
+              {booleanOptions.map(([optionValue, optionLabel]) => (
+                <option key={optionValue} value={optionValue}>{optionLabel}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field bulk-tag-mode-field">
+            <span>Tags</span>
+            <select disabled={busy} onChange={(event) => onUpdate({ tagMode: event.target.value })} value={draft.tagMode}>
+              <option value="no_change">No change</option>
+              <option value="add">Add selected tags</option>
+              <option value="replace">Replace with selected tags</option>
+              <option value="clear">Clear all tags</option>
+            </select>
+          </label>
+          <div className={`bulk-tag-picker ${tagSelectionDisabled ? "is-disabled" : ""}`.trim()}>
+            {tags.length ? tags.map((tag) => (
+              <label className="check-row" key={tag.id}>
+                <input
+                  checked={draft.tagIds.includes(tag.id)}
+                  disabled={busy || tagSelectionDisabled}
+                  onChange={() => onTagToggle(tag.id)}
+                  type="checkbox"
+                />
+                <span>{tag.name}</span>
+              </label>
+            )) : <span className="muted">No tags defined</span>}
+          </div>
+        </div>
+        <div className="bulk-assign-warning">
+          This will update {count.toLocaleString()} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.
+        </div>
+        <div className="bulk-assign-modal-actions">
+          <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
+          <LoadingButton busy={busy} busyLabel="Assigning" className="primary-action" disabled={!hasChanges} onClick={onSubmit} type="button">
+            Apply
+          </LoadingButton>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, options, selectedLabel, type, value }) {

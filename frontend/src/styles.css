@@ -361,7 +361,7 @@ h2 {
 }
 
 .bulk-assign-modal {
-  width: min(440px, 100%);
+  width: min(760px, calc(100vw - 32px));
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
@@ -387,6 +387,40 @@ h2 {
 
 .bulk-assign-modal .form-field {
   margin-bottom: 12px;
+}
+
+.bulk-assign-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bulk-assign-form .form-field {
+  margin-bottom: 0;
+}
+
+.bulk-tag-mode-field,
+.bulk-tag-picker {
+  grid-column: 1 / -1;
+}
+
+.bulk-tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--field-bg);
+  padding: 8px;
+}
+
+.bulk-tag-picker.is-disabled {
+  opacity: 0.58;
+}
+
+.bulk-tag-picker .check-row {
+  min-height: 32px;
 }
 
 .bulk-assign-warning {
@@ -4118,6 +4152,7 @@ td {
   .filter-layout,
   .filter-side-stack,
   .filter-basics-card,
+  .bulk-assign-form,
   .filter-category-row,
   .filter-support-row,
   .uncategorized-keyword-form,
