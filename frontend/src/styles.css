@@ -2877,7 +2877,7 @@ select option {
 
 .tag-popover {
   position: fixed;
-  z-index: 40;
+  z-index: 45;
   width: min(360px, 92vw);
   display: grid;
   gap: 10px;

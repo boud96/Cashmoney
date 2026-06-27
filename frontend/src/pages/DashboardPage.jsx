@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
 import { AgGridReact } from "ag-grid-react";
@@ -2474,17 +2475,7 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
       if (!rect) {
         return;
       }
-      const popoverWidth = 360;
-      const popoverHeight = 340;
-      const left = Math.min(
-        Math.max(12, rect.left),
-        Math.max(12, window.innerWidth - popoverWidth - 12),
-      );
-      const preferredTop = rect.bottom + 6;
-      const top = preferredTop + popoverHeight > window.innerHeight && rect.top > popoverHeight
-        ? rect.top - popoverHeight - 6
-        : preferredTop;
-      setPopoverPosition({ left, top: Math.max(12, top) });
+      setPopoverPosition(tagPopoverPosition(rect));
     }
 
     updatePosition();
@@ -2497,6 +2488,10 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
   }, [isOpen]);
 
   function openEditor() {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPopoverPosition(tagPopoverPosition(rect));
+    }
     setDraftIds(selectedIds);
     setQuery("");
     setIsOpen(true);
@@ -2532,7 +2527,7 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
       <button className="tag-cell-button" onClick={openEditor} ref={buttonRef} title={tagTitle(tags)} type="button">
         <TagCloud tags={tags} />
       </button>
-      {isOpen && (
+      {isOpen && createPortal(
         <div className="tag-popover" onClick={stopGridEvent} onDoubleClick={stopGridEvent} onMouseDown={stopGridEvent} ref={popoverRef} style={{ left: popoverPosition.left, top: popoverPosition.top }}>
           <div className="tag-popover-selected">
             {selectedDraftTags.length ? <TagCloud collapse={false} tags={selectedDraftTags} /> : <span className="muted">No tags selected</span>}
@@ -2557,10 +2552,25 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
             <button className="link-button" disabled={saving} onClick={() => setIsOpen(false)} type="button">Cancel</button>
             <LoadingButton busy={saving} busyLabel="Applying" className="primary-action" onClick={applyTags} type="button">Apply</LoadingButton>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
+}
+
+function tagPopoverPosition(rect) {
+  const popoverWidth = 360;
+  const popoverHeight = 340;
+  const left = Math.min(
+    Math.max(12, rect.left),
+    Math.max(12, window.innerWidth - popoverWidth - 12),
+  );
+  const preferredTop = rect.bottom + 6;
+  const top = preferredTop + popoverHeight > window.innerHeight && rect.top > popoverHeight
+    ? rect.top - popoverHeight - 6
+    : preferredTop;
+  return { left, top: Math.max(12, top) };
 }
 
 function TagCloud({ collapse = true, tags }) {
