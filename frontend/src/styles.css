@@ -1653,7 +1653,8 @@ select option {
   padding-top: 12px;
 }
 
-.dashboard-uncategorized-action {
+.dashboard-uncategorized-action,
+.dashboard-transfer-action {
   border-top: 1px solid var(--border);
   display: grid;
   gap: 8px;
@@ -1661,7 +1662,8 @@ select option {
   padding-top: 12px;
 }
 
-.dashboard-uncategorized-action .link-button {
+.dashboard-uncategorized-action .link-button,
+.dashboard-transfer-action .link-button {
   justify-content: center;
   min-height: 36px;
   width: 100%;
@@ -1709,6 +1711,256 @@ select option {
 
 .metric-blue {
   color: var(--blue);
+}
+
+.transfer-review-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+}
+
+.transfer-review-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+  padding: 14px;
+}
+
+.transfer-review-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.transfer-review-modal-header span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.transfer-review-modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transfer-review-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 14px 14px 0;
+}
+
+.transfer-review-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.35fr) minmax(0, auto) minmax(0, auto);
+  gap: 10px;
+  align-items: end;
+}
+
+.transfer-review-controls .form-field {
+  margin: 0;
+}
+
+.transfer-review-controls .check-row {
+  min-height: 38px;
+}
+
+.transfer-review-error {
+  border: 1px solid rgba(179, 69, 69, 0.35);
+  border-radius: 8px;
+  background: var(--danger-soft);
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.transfer-candidate-list {
+  display: grid;
+  align-content: start;
+  flex: 1 1 auto;
+  gap: 10px;
+  min-width: 0;
+  min-height: 120px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0 2px 4px 0;
+  scrollbar-gutter: stable;
+}
+
+.transfer-candidate-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--subtle-bg);
+  color: var(--text);
+  cursor: pointer;
+  padding: 12px;
+}
+
+.transfer-candidate-card:hover,
+.transfer-candidate-card.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+}
+
+.transfer-candidate-card > input {
+  margin-top: 3px;
+}
+
+.transfer-candidate-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.transfer-candidate-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.transfer-candidate-header strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.transfer-pair-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.transfer-transaction-summary {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.transfer-transaction-summary > div:first-child,
+.transfer-transaction-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.transfer-transaction-summary span,
+.transfer-transaction-summary p {
+  overflow-wrap: anywhere;
+}
+
+.transfer-transaction-summary p {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.transfer-transaction-summary > div:first-child span,
+.transfer-transaction-main span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.transfer-reason-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.transfer-reason-list span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
+.transfer-reason-list span.is-positive {
+  border-color: color-mix(in srgb, var(--green) 44%, var(--border));
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+}
+
+.transfer-reason-list span.is-negative {
+  border-color: color-mix(in srgb, var(--red) 44%, var(--border));
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  color: var(--red);
+}
+
+.transfer-empty-state {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: var(--subtle-bg);
+  color: var(--muted);
+  padding: 14px;
+}
+
+.transfer-review-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  min-height: 88px;
+  padding: 14px 0 16px;
+}
+
+.transfer-review-actions > span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.transfer-apply-subcategory {
+  display: grid;
+  gap: 5px;
+  min-width: min(320px, 100%);
+}
+
+.transfer-apply-subcategory span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.transfer-apply-subcategory select {
+  min-height: 42px;
+}
+
+.transfer-apply-button {
+  align-self: end;
+  min-height: 42px;
+  min-width: 112px;
 }
 
 .uncategorized-review-modal {
@@ -3910,6 +4162,8 @@ td {
 
   .dashboard-action-row,
   .bulk-assign-buttons,
+  .transfer-review-controls,
+  .transfer-pair-grid,
   .uncategorized-sample-header,
   .uncategorized-sample-row,
   .raw-data-row {
@@ -3928,16 +4182,20 @@ td {
 
   .uncategorized-detail-header,
   .uncategorized-review-modal-header,
-  .uncategorized-review-actions {
+  .transfer-review-modal-header,
+  .uncategorized-review-actions,
+  .transfer-review-actions {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .uncategorized-review-modal-header-actions {
+  .uncategorized-review-modal-header-actions,
+  .transfer-review-modal-header-actions {
     justify-content: stretch;
   }
 
-  .uncategorized-review-modal-header-actions > * {
+  .uncategorized-review-modal-header-actions > *,
+  .transfer-review-modal-header-actions > * {
     flex: 1 1 auto;
   }
 

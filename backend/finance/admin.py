@@ -7,6 +7,7 @@ from .models import (
     Category,
     ExchangeRate,
     FinanceSettings,
+    InternalTransferMatch,
     Keyword,
     SavedFilter,
     Subcategory,
@@ -58,6 +59,22 @@ class TransactionAdmin(admin.ModelAdmin):
     @admin.display(description="Category")
     def category_name(self, obj):
         return obj.subcategory.category.name if obj.subcategory else ""
+
+
+@admin.register(InternalTransferMatch)
+class InternalTransferMatchAdmin(admin.ModelAdmin):
+    list_display = (
+        "outgoing_transaction",
+        "incoming_transaction",
+        "confidence_score",
+        "date_delta_days",
+        "created_at",
+    )
+    search_fields = (
+        "outgoing_transaction__description",
+        "incoming_transaction__description",
+    )
+    readonly_fields = ("match_reasons",)
 
 
 @admin.register(BankAccount)

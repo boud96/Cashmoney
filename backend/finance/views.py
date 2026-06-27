@@ -8,6 +8,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.management import call_command
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
@@ -30,6 +31,7 @@ from .models import (
     ExchangeRate,
     FinanceSettings,
     HEX_COLOR_VALIDATOR,
+    InternalTransferMatch,
     Keyword,
     SavedFilter,
     Subcategory,
@@ -59,7 +61,9 @@ from .services import (
     CategorizationService,
     ExchangeRateProviderError,
     available_currency_options,
+    apply_internal_transfer_candidates,
     build_dashboard_summary,
+    build_internal_transfer_candidates,
     build_uncategorized_suggestions,
     detect_csv_columns,
     exchange_rate_status,
@@ -1098,6 +1102,56 @@ class UncategorizedSuggestionView(JsonView):
         )
 
 
+def internal_transfer_date_tolerance(request, data=None):
+    raw_value = request.GET.get("date_tolerance_days")
+    if raw_value in (None, "") and data is not None:
+        raw_value = data.get("date_tolerance_days")
+    return min(
+        clean_int(raw_value, "date_tolerance_days", default=3, minimum=0),
+        14,
+    )
+
+
+class InternalTransferCandidateView(JsonView):
+    def get(self, request):
+        date_tolerance_days = internal_transfer_date_tolerance(request)
+        limit = min(
+            clean_int(request.GET.get("limit"), "limit", default=100, minimum=1),
+            500,
+        )
+        return json_response(
+            build_internal_transfer_candidates(
+                filtered_transactions(request),
+                date_tolerance_days=date_tolerance_days,
+                limit=limit,
+            )
+        )
+
+
+class InternalTransferApplyView(JsonView):
+    def post(self, request):
+        data = parse_json_body(request)
+        candidate_ids = clean_list(
+            require_field(data, "candidate_ids"), "candidate_ids"
+        )
+        date_tolerance_days = internal_transfer_date_tolerance(request, data)
+        subcategory_provided = "subcategory_id" in data
+        internal_transfer_subcategory = (
+            optional_object(Subcategory, data.get("subcategory_id"), "subcategory_id")
+            if subcategory_provided
+            else None
+        )
+        return json_response(
+            apply_internal_transfer_candidates(
+                filtered_transactions(request),
+                candidate_ids,
+                date_tolerance_days=date_tolerance_days,
+                internal_transfer_subcategory=internal_transfer_subcategory,
+                subcategory_provided=subcategory_provided,
+            )
+        )
+
+
 class TransactionFilterMetadataView(JsonView):
     def get(self, request):
         oldest_date = (
@@ -1420,6 +1474,7 @@ class DashboardSummaryView(JsonView):
 def maintenance_counts():
     return {
         "transactions": Transaction.objects.count(),
+        "internal_transfer_matches": InternalTransferMatch.objects.count(),
         "imports": CSVImport.objects.count(),
         "exchange_rates": ExchangeRate.objects.count(),
         "sample_transactions": Transaction.objects.filter(
@@ -1466,6 +1521,7 @@ def require_confirmation(request, expected):
 def delete_all_transactions():
     counts = {
         "transactions": Transaction.objects.count(),
+        "internal_transfer_matches": InternalTransferMatch.objects.count(),
         "imports": CSVImport.objects.count(),
     }
     with transaction.atomic():
@@ -1657,6 +1713,10 @@ def create_pre_restore_backup():
     return backup_path
 
 
+def migrate_restored_database():
+    call_command("migrate", interactive=False, verbosity=0)
+
+
 def restore_sqlite_database_from_path(backup_path):
     validate_sqlite_backup(backup_path)
     pre_restore_path = create_pre_restore_backup()
@@ -1670,6 +1730,7 @@ def restore_sqlite_database_from_path(backup_path):
         if source is not None:
             source.close()
     connection.close()
+    migrate_restored_database()
     return pre_restore_path
 
 

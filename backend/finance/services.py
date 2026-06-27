@@ -3,7 +3,7 @@ import io
 import json
 import re
 from bisect import bisect_right
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
@@ -21,6 +21,7 @@ from .models import (
     CSVImport,
     ExchangeRate,
     FinanceSettings,
+    InternalTransferMatch,
     Keyword,
     Transaction,
 )
@@ -54,6 +55,28 @@ UNCATEGORIZED_SUGGESTION_COUNT_WEIGHT = Decimal("25.00")
 RECATEGORIZABLE_TRANSACTION_FIELDS = (
     "description",
     "counterparty_account_number",
+    "counterparty_name",
+    "transaction_type",
+    "variable_symbol",
+    "specific_symbol",
+    "constant_symbol",
+    "counterparty_note",
+    "my_note",
+    "other_note",
+)
+INTERNAL_TRANSFER_SYMBOL_FIELDS = (
+    "variable_symbol",
+    "specific_symbol",
+    "constant_symbol",
+)
+INTERNAL_TRANSFER_SYMBOL_LABELS = {
+    "constant_symbol": "Constant symbol match",
+    "specific_symbol": "Specific symbol match",
+    "variable_symbol": "Variable symbol match",
+}
+INTERNAL_TRANSFER_TEXT_FIELDS = (
+    "counterparty_account_number",
+    "description",
     "counterparty_name",
     "transaction_type",
     "variable_symbol",
@@ -1700,6 +1723,345 @@ def build_uncategorized_suggestions(queryset, default_currency, limit=8):
             len(group["transactions"]) for group in groups.values()
         ),
         "suggestions": suggestions[:limit],
+    }
+
+
+def internal_transfer_transaction_summary(transaction_obj):
+    return {
+        "id": str(transaction_obj.id),
+        "transaction_date": transaction_obj.transaction_date.isoformat(),
+        "description": transaction_obj.description,
+        "amount": money(transaction_obj.amount),
+        "currency": transaction_obj.currency,
+        "bank_account": model_ref(transaction_obj.bank_account),
+        "counterparty_account_number": transaction_obj.counterparty_account_number,
+        "counterparty_name": transaction_obj.counterparty_name,
+        "variable_symbol": transaction_obj.variable_symbol,
+        "specific_symbol": transaction_obj.specific_symbol,
+        "constant_symbol": transaction_obj.constant_symbol,
+        "is_ignored": transaction_obj.is_ignored,
+        "is_categorization_locked": transaction_obj.is_categorization_locked,
+    }
+
+
+def transaction_mentions_account(transaction_obj, account):
+    if not transaction_obj or not account or not account.account_number:
+        return False
+    variants = {
+        variant
+        for variant in clean_account_number_variants(account.account_number)
+        if variant
+    }
+    if not variants:
+        return False
+    for field_name in INTERNAL_TRANSFER_TEXT_FIELDS:
+        normalized_value = clean_account_number(
+            getattr(transaction_obj, field_name, "")
+        )
+        if normalized_value and any(
+            variant in normalized_value for variant in variants
+        ):
+            return True
+    return False
+
+
+def shared_transfer_symbols(outgoing_transaction, incoming_transaction):
+    matches = []
+    for field_name in INTERNAL_TRANSFER_SYMBOL_FIELDS:
+        outgoing_value = str(
+            getattr(outgoing_transaction, field_name, "") or ""
+        ).strip()
+        incoming_value = str(
+            getattr(incoming_transaction, field_name, "") or ""
+        ).strip()
+        if outgoing_value and incoming_value and outgoing_value == incoming_value:
+            matches.append(field_name)
+    return matches
+
+
+def internal_transfer_confidence_label(score):
+    if score >= 110:
+        return "high"
+    if score >= 85:
+        return "medium"
+    return "possible"
+
+
+def internal_transfer_reason(label, tone="positive"):
+    return {"label": label, "tone": tone}
+
+
+def score_internal_transfer_candidate(
+    outgoing_transaction,
+    incoming_transaction,
+    date_delta_days,
+):
+    score = 75
+    reasons = [internal_transfer_reason("Same amount")]
+    if (
+        str(outgoing_transaction.currency or "").upper()
+        != str(incoming_transaction.currency or "").upper()
+    ):
+        reasons.append(internal_transfer_reason("Different currency", "negative"))
+    if date_delta_days == 0:
+        score += 25
+        reasons.append(internal_transfer_reason("Same day"))
+    else:
+        score += max(10, 22 - (date_delta_days * 3))
+        reasons.append(
+            internal_transfer_reason(
+                f"{date_delta_days} day{'' if date_delta_days == 1 else 's'} apart",
+                "negative",
+            )
+        )
+
+    if transaction_mentions_account(
+        outgoing_transaction, incoming_transaction.bank_account
+    ):
+        score += 35
+        reasons.append(internal_transfer_reason("Outgoing account match"))
+    if transaction_mentions_account(
+        incoming_transaction, outgoing_transaction.bank_account
+    ):
+        score += 35
+        reasons.append(internal_transfer_reason("Incoming account match"))
+
+    symbol_matches = shared_transfer_symbols(outgoing_transaction, incoming_transaction)
+    if symbol_matches:
+        score += min(20, len(symbol_matches) * 10)
+        reasons.extend(
+            internal_transfer_reason(
+                INTERNAL_TRANSFER_SYMBOL_LABELS.get(field_name, "Payment symbol match")
+            )
+            for field_name in symbol_matches
+        )
+
+    return score, reasons
+
+
+def internal_transfer_candidate_records(
+    queryset,
+    date_tolerance_days=3,
+    limit=100,
+):
+    date_tolerance_days = max(int(date_tolerance_days or 0), 0)
+    base_queryset = (
+        queryset.select_related("bank_account")
+        .filter(bank_account__isnull=False)
+        .exclude(outgoing_internal_transfer_match__isnull=False)
+        .exclude(incoming_internal_transfer_match__isnull=False)
+        .order_by("transaction_date", "created_at")
+    )
+    income_by_key = defaultdict(list)
+    outgoing_transactions = []
+
+    for transaction_obj in base_queryset:
+        if transaction_obj.amount < 0:
+            outgoing_transactions.append(transaction_obj)
+        elif transaction_obj.amount > 0:
+            key = (
+                str(transaction_obj.currency or "").upper(),
+                abs(transaction_obj.amount),
+            )
+            income_by_key[key].append(transaction_obj)
+
+    records = []
+    for outgoing_transaction in outgoing_transactions:
+        key = (
+            str(outgoing_transaction.currency or "").upper(),
+            abs(outgoing_transaction.amount),
+        )
+        for incoming_transaction in income_by_key.get(key, []):
+            if (
+                outgoing_transaction.bank_account_id
+                == incoming_transaction.bank_account_id
+            ):
+                continue
+            date_delta_days = abs(
+                (
+                    incoming_transaction.transaction_date
+                    - outgoing_transaction.transaction_date
+                ).days
+            )
+            if date_delta_days > date_tolerance_days:
+                continue
+            score, reasons = score_internal_transfer_candidate(
+                outgoing_transaction,
+                incoming_transaction,
+                date_delta_days,
+            )
+            records.append(
+                {
+                    "id": (f"{outgoing_transaction.id}:" f"{incoming_transaction.id}"),
+                    "outgoing": outgoing_transaction,
+                    "incoming": incoming_transaction,
+                    "amount": abs(outgoing_transaction.amount),
+                    "currency": str(outgoing_transaction.currency or "").upper(),
+                    "date_delta_days": date_delta_days,
+                    "confidence_score": score,
+                    "match_reasons": reasons,
+                }
+            )
+
+    outgoing_counts = Counter(record["outgoing"].id for record in records)
+    incoming_counts = Counter(record["incoming"].id for record in records)
+    for record in records:
+        ambiguity_count = max(
+            outgoing_counts[record["outgoing"].id],
+            incoming_counts[record["incoming"].id],
+        )
+        record["is_ambiguous"] = ambiguity_count > 1
+        record["possible_match_count"] = ambiguity_count
+        if record["is_ambiguous"]:
+            record["confidence_score"] = max(record["confidence_score"] - 25, 0)
+            record["match_reasons"] = [
+                *record["match_reasons"],
+                internal_transfer_reason(
+                    f"Possible {ambiguity_count} matches",
+                    "negative",
+                ),
+            ]
+
+    records.sort(
+        key=lambda record: (
+            record["confidence_score"],
+            -record["date_delta_days"],
+            str(record["outgoing"].transaction_date),
+            str(record["incoming"].transaction_date),
+        ),
+        reverse=True,
+    )
+    return records[:limit]
+
+
+def serialize_internal_transfer_candidate(record):
+    return {
+        "id": record["id"],
+        "confidence_score": record["confidence_score"],
+        "confidence_level": internal_transfer_confidence_label(
+            record["confidence_score"]
+        ),
+        "match_reasons": record["match_reasons"],
+        "date_delta_days": record["date_delta_days"],
+        "is_ambiguous": record["is_ambiguous"],
+        "possible_match_count": record["possible_match_count"],
+        "amount": money(record["amount"]),
+        "currency": record["currency"],
+        "outgoing": internal_transfer_transaction_summary(record["outgoing"]),
+        "incoming": internal_transfer_transaction_summary(record["incoming"]),
+    }
+
+
+def build_internal_transfer_candidates(
+    queryset,
+    date_tolerance_days=3,
+    limit=100,
+):
+    records = internal_transfer_candidate_records(
+        queryset,
+        date_tolerance_days=date_tolerance_days,
+        limit=limit,
+    )
+    serialized = [serialize_internal_transfer_candidate(record) for record in records]
+    return {
+        "count": len(serialized),
+        "high_confidence_count": sum(
+            1 for item in serialized if item["confidence_level"] == "high"
+        ),
+        "medium_confidence_count": sum(
+            1 for item in serialized if item["confidence_level"] == "medium"
+        ),
+        "ambiguous_count": sum(1 for item in serialized if item["is_ambiguous"]),
+        "date_tolerance_days": date_tolerance_days,
+        "candidates": serialized,
+    }
+
+
+def serialize_internal_transfer_match(match):
+    return {
+        "id": str(match.id),
+        "confidence_score": match.confidence_score,
+        "match_reasons": match.match_reasons,
+        "date_delta_days": match.date_delta_days,
+        "outgoing": internal_transfer_transaction_summary(match.outgoing_transaction),
+        "incoming": internal_transfer_transaction_summary(match.incoming_transaction),
+        "created_at": match.created_at.isoformat(),
+    }
+
+
+@transaction.atomic
+def apply_internal_transfer_candidates(
+    queryset,
+    candidate_ids,
+    date_tolerance_days=3,
+    internal_transfer_subcategory=None,
+    subcategory_provided=False,
+):
+    requested_ids = {
+        str(candidate_id) for candidate_id in candidate_ids if candidate_id
+    }
+    if not requested_ids:
+        return {"created": 0, "skipped": 0, "matches": []}
+
+    records = internal_transfer_candidate_records(
+        queryset,
+        date_tolerance_days=date_tolerance_days,
+        limit=max(len(requested_ids) * 4, 100),
+    )
+    apply_subcategory = internal_transfer_subcategory
+    if not subcategory_provided:
+        apply_subcategory = FinanceSettings.load().internal_transfer_subcategory
+    matched_records = []
+    skipped = 0
+    used_transaction_ids = set()
+
+    for record in records:
+        if record["id"] not in requested_ids:
+            continue
+        outgoing_transaction = record["outgoing"]
+        incoming_transaction = record["incoming"]
+        transaction_ids = {outgoing_transaction.id, incoming_transaction.id}
+        if used_transaction_ids.intersection(transaction_ids):
+            skipped += 1
+            continue
+        if InternalTransferMatch.objects.filter(
+            Q(outgoing_transaction_id__in=transaction_ids)
+            | Q(incoming_transaction_id__in=transaction_ids)
+        ).exists():
+            skipped += 1
+            continue
+
+        try:
+            match = InternalTransferMatch.objects.create(
+                outgoing_transaction=outgoing_transaction,
+                incoming_transaction=incoming_transaction,
+                confidence_score=record["confidence_score"],
+                match_reasons=record["match_reasons"],
+                date_delta_days=record["date_delta_days"],
+            )
+        except IntegrityError:
+            skipped += 1
+            continue
+
+        update_values = {
+            "is_ignored": True,
+            "is_categorization_locked": True,
+            "updated_at": timezone.now(),
+        }
+        if subcategory_provided or apply_subcategory:
+            update_values["subcategory"] = apply_subcategory
+        Transaction.objects.filter(id__in=transaction_ids).update(**update_values)
+        used_transaction_ids.update(transaction_ids)
+        match.outgoing_transaction.refresh_from_db()
+        match.incoming_transaction.refresh_from_db()
+        matched_records.append(match)
+
+    return {
+        "created": len(matched_records),
+        "skipped": skipped,
+        "matches": [
+            serialize_internal_transfer_match(match) for match in matched_records
+        ],
     }
 
 

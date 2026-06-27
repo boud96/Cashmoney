@@ -131,6 +131,17 @@ export default function DashboardPage({
   const [keywordDraft, setKeywordDraft] = useState(emptyKeywordDraft);
   const [keywordDraftBusy, setKeywordDraftBusy] = useState("");
   const [uncategorizedReviewError, setUncategorizedReviewError] = useState("");
+  const [transferReviewOpen, setTransferReviewOpen] = useState(false);
+  const [transferCandidates, setTransferCandidates] = useState([]);
+  const [transferMeta, setTransferMeta] = useState({ count: 0, high_confidence_count: 0, medium_confidence_count: 0, ambiguous_count: 0 });
+  const [transferDateTolerance, setTransferDateTolerance] = useState(3);
+  const [transferIncludeIgnored, setTransferIncludeIgnored] = useState(false);
+  const [transferIncludeLocked, setTransferIncludeLocked] = useState(false);
+  const [selectedTransferIds, setSelectedTransferIds] = useState([]);
+  const [transferSubcategoryId, setTransferSubcategoryId] = useState("");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferApplying, setTransferApplying] = useState(false);
+  const [transferError, setTransferError] = useState("");
   const localFilterPresetsMigrated = useRef(false);
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
   const subcategoryFilterOptions = useMemo(() => {
@@ -274,6 +285,10 @@ export default function DashboardPage({
     tag: refs.tags.map((item) => [item.id, item.name]),
     want_need_investment: wniOptions.map(([value, label]) => [value, label]),
   }), [refs.subcategories, refs.tags]);
+  const transferSubcategoryOptions = useMemo(
+    () => [["", "No subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])],
+    [refs.subcategories],
+  );
 
   const bulkAssignSelectedLabel = useMemo(() => {
     if (!bulkAssignModal || !bulkAssignValue) {
@@ -285,6 +300,55 @@ export default function DashboardPage({
     () => uncategorizedSuggestions.find((item) => item.id === selectedSuggestionId) || uncategorizedSuggestions[0] || null,
     [selectedSuggestionId, uncategorizedSuggestions],
   );
+  const transferFilterParams = useMemo(() => {
+    const params = {
+      ...filterParams,
+      date_tolerance_days: transferDateTolerance,
+      limit: 100,
+    };
+    if (transferIncludeIgnored) {
+      params.include_ignored = "true";
+    } else {
+      delete params.include_ignored;
+    }
+    if (transferIncludeLocked) {
+      params.include_locked = "true";
+    } else {
+      delete params.include_locked;
+    }
+    return params;
+  }, [filterParams, transferDateTolerance, transferIncludeIgnored, transferIncludeLocked]);
+
+  const loadTransferCandidates = useCallback(async () => {
+    setTransferLoading(true);
+    setTransferError("");
+    try {
+      const payload = await apiGet("/transactions/internal-transfers/preview/", transferFilterParams);
+      const candidates = payload.candidates || [];
+      setTransferCandidates(candidates);
+      setTransferMeta({
+        count: payload.count || 0,
+        high_confidence_count: payload.high_confidence_count || 0,
+        medium_confidence_count: payload.medium_confidence_count || 0,
+        ambiguous_count: payload.ambiguous_count || 0,
+      });
+      setSelectedTransferIds((current) => {
+        const currentSet = new Set(current);
+        const retained = candidates.filter((candidate) => currentSet.has(candidate.id)).map((candidate) => candidate.id);
+        if (retained.length) {
+          return retained;
+        }
+        return candidates
+          .filter((candidate) => candidate.confidence_level === "high" && !candidate.is_ambiguous)
+          .map((candidate) => candidate.id);
+      });
+    } catch (error) {
+      setTransferError(error.message);
+      notify(error.message);
+    } finally {
+      setTransferLoading(false);
+    }
+  }, [notify, transferFilterParams]);
 
   async function loadUncategorizedSuggestions(preferredSuggestionId = selectedSuggestionId) {
     setUncategorizedSuggestionsLoading(true);
@@ -308,6 +372,62 @@ export default function DashboardPage({
       loadUncategorizedSuggestions();
     }
   }, [filterParams, uncategorizedReviewOpen]);
+
+  useEffect(() => {
+    if (transferReviewOpen) {
+      loadTransferCandidates();
+    }
+  }, [loadTransferCandidates, transferReviewOpen]);
+
+  function openTransferReview() {
+    setTransferError("");
+    setTransferSubcategoryId(refs.settings?.internal_transfer_subcategory?.id || "");
+    setTransferReviewOpen(true);
+  }
+
+  function toggleTransferCandidate(candidateId) {
+    setSelectedTransferIds((current) => (
+      current.includes(candidateId)
+        ? current.filter((item) => item !== candidateId)
+        : [...current, candidateId]
+    ));
+  }
+
+  async function applySelectedTransfers() {
+    if (!selectedTransferIds.length) {
+      setTransferError("Choose at least one transfer pair");
+      return;
+    }
+    const confirmed = await confirmAction({
+      confirmLabel: "Apply",
+      message: `Mark ${selectedTransferIds.length.toLocaleString()} selected transfer pairs as internal transfers? Both sides will be ignored and locked.`,
+      title: "Apply Internal Transfers",
+    });
+    if (!confirmed) {
+      return;
+    }
+    setTransferApplying(true);
+    setTransferError("");
+    try {
+      const result = await apiPost(
+        "/transactions/internal-transfers/apply/",
+        {
+          candidate_ids: selectedTransferIds,
+          date_tolerance_days: transferDateTolerance,
+          subcategory_id: transferSubcategoryId,
+        },
+        transferFilterParams,
+      );
+      notify(`${Number(result.created || 0).toLocaleString()} transfer pairs applied`);
+      setSelectedTransferIds([]);
+      await Promise.all([reloadDashboard(), loadTransferCandidates()]);
+    } catch (error) {
+      setTransferError(error.message);
+      notify(error.message);
+    } finally {
+      setTransferApplying(false);
+    }
+  }
 
   function openBulkAssignModal(type) {
     setBulkAssignModal(type);
@@ -610,9 +730,50 @@ export default function DashboardPage({
                 Review Uncategorized
               </LoadingButton>
             </div>
+            <div className="dashboard-action-subsection dashboard-transfer-action">
+              <div className="metric-label">Internal transfers</div>
+              <LoadingButton
+                busy={transferLoading && transferReviewOpen}
+                busyLabel="Scanning"
+                className="link-button"
+                disabled={!transactionPage.count || importBusy}
+                onClick={openTransferReview}
+                type="button"
+              >
+                Find Transfers
+              </LoadingButton>
+            </div>
           </div>
         </section>
       </div>
+      {transferReviewOpen && (
+        <InternalTransferReviewPanel
+          applying={transferApplying}
+          busy={transferLoading}
+          candidates={transferCandidates}
+          dateTolerance={transferDateTolerance}
+          error={transferError}
+          hideAmounts={hideAmounts}
+          includeIgnored={transferIncludeIgnored}
+          includeLocked={transferIncludeLocked}
+          meta={transferMeta}
+          onApply={applySelectedTransfers}
+          onClose={() => {
+            if (!transferApplying) {
+              setTransferReviewOpen(false);
+            }
+          }}
+          onDateToleranceChange={setTransferDateTolerance}
+          onIncludeIgnoredChange={setTransferIncludeIgnored}
+          onIncludeLockedChange={setTransferIncludeLocked}
+          onRefresh={loadTransferCandidates}
+          onSubcategoryChange={setTransferSubcategoryId}
+          onToggleCandidate={toggleTransferCandidate}
+          selectedIds={selectedTransferIds}
+          subcategoryId={transferSubcategoryId}
+          subcategoryOptions={transferSubcategoryOptions}
+        />
+      )}
       {uncategorizedReviewOpen && (
         <UncategorizedReviewPanel
           busy={uncategorizedSuggestionsLoading}
@@ -759,6 +920,144 @@ function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, option
           </LoadingButton>
         </div>
       </div>
+    </div>
+  );
+}
+
+function InternalTransferReviewPanel({
+  applying,
+  busy,
+  candidates,
+  dateTolerance,
+  error,
+  hideAmounts,
+  includeIgnored,
+  includeLocked,
+  meta,
+  onApply,
+  onClose,
+  onDateToleranceChange,
+  onIncludeIgnoredChange,
+  onIncludeLockedChange,
+  onRefresh,
+  onSubcategoryChange,
+  onToggleCandidate,
+  selectedIds,
+  subcategoryId,
+  subcategoryOptions,
+}) {
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
+      <div aria-labelledby="transfer-review-title" aria-modal="true" className="transfer-review-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="transfer-review-modal-header">
+          <div>
+            <h2 id="transfer-review-title">Internal Transfers</h2>
+            <span>
+              {Number(meta.count || 0).toLocaleString()} candidates. {Number(meta.high_confidence_count || 0).toLocaleString()} high confidence, {Number(meta.ambiguous_count || 0).toLocaleString()} ambiguous.
+            </span>
+          </div>
+          <div className="transfer-review-modal-header-actions">
+            <LoadingButton busy={busy} busyLabel="Scanning" className="link-button" disabled={applying} onClick={onRefresh} type="button">
+              Refresh
+            </LoadingButton>
+            <button className="icon-button" disabled={applying} onClick={onClose} type="button" aria-label="Close transfer review">x</button>
+          </div>
+        </div>
+        <div className="transfer-review-layout">
+          <div className="transfer-review-controls">
+            <label className="form-field">
+              <span>Date offset</span>
+              <input
+                min="0"
+                max="14"
+                onChange={(event) => onDateToleranceChange(Number(event.target.value || 0))}
+                type="number"
+                value={dateTolerance}
+              />
+            </label>
+            <label className="check-row">
+              <input checked={includeIgnored} onChange={(event) => onIncludeIgnoredChange(event.target.checked)} type="checkbox" />
+              <span>Include ignored</span>
+            </label>
+            <label className="check-row">
+              <input checked={includeLocked} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
+              <span>Include locked</span>
+            </label>
+          </div>
+          {error && <div className="transfer-review-error">{error}</div>}
+          <div className="transfer-candidate-list">
+            {busy && !candidates.length ? (
+              <div className="transfer-empty-state">Scanning filtered transactions</div>
+            ) : candidates.length ? (
+              candidates.map((candidate) => (
+                <InternalTransferCandidateCard
+                  candidate={candidate}
+                  checked={selectedSet.has(candidate.id)}
+                  hideAmounts={hideAmounts}
+                  key={candidate.id}
+                  onToggle={() => onToggleCandidate(candidate.id)}
+                />
+              ))
+            ) : (
+              <div className="transfer-empty-state">No transfer candidates found in the current filter scope.</div>
+            )}
+          </div>
+          <div className="transfer-review-actions">
+            <span>{selectedIds.length.toLocaleString()} selected</span>
+            <label className="transfer-apply-subcategory">
+              <span>Subcategory</span>
+              <select disabled={applying} onChange={(event) => onSubcategoryChange(event.target.value)} value={subcategoryId}>
+                {subcategoryOptions.map(([value, label]) => <option key={value || "none"} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <LoadingButton busy={applying} busyLabel="Applying" className="primary-action transfer-apply-button" disabled={!selectedIds.length || busy} onClick={onApply} type="button">
+              Apply
+            </LoadingButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InternalTransferCandidateCard({ candidate, checked, hideAmounts, onToggle }) {
+  return (
+    <label className={`transfer-candidate-card ${checked ? "is-selected" : ""}`.trim()}>
+      <input checked={checked} onChange={onToggle} type="checkbox" />
+      <div className="transfer-candidate-body">
+        <div className="transfer-candidate-header">
+          <strong>{titleCase(candidate.confidence_level)} confidence</strong>
+        </div>
+        <div className="transfer-pair-grid">
+          <TransferTransactionSummary label="Outgoing" transaction={candidate.outgoing} hideAmounts={hideAmounts} />
+          <TransferTransactionSummary label="Incoming" transaction={candidate.incoming} hideAmounts={hideAmounts} />
+        </div>
+        <div className="transfer-reason-list">
+          {(candidate.match_reasons || []).map((reason) => {
+            const reasonLabel = typeof reason === "string" ? reason : reason.label;
+            const reasonTone = typeof reason === "string" ? "" : reason.tone;
+            return <span className={reasonTone ? `is-${reasonTone}` : ""} key={reasonLabel}>{reasonLabel}</span>;
+          })}
+        </div>
+      </div>
+    </label>
+  );
+}
+
+function TransferTransactionSummary({ hideAmounts, label, transaction }) {
+  return (
+    <div className="transfer-transaction-summary">
+      <div>
+        <strong>{label}</strong>
+        <span>{transaction.bank_account?.name || "No account"}</span>
+      </div>
+      <div className="transfer-transaction-main">
+        <span>{transaction.transaction_date}</span>
+        <strong>{formatAmountWithCurrency(transaction.amount, transaction.currency, hideAmounts)}</strong>
+      </div>
+      <p>{transaction.description || transaction.counterparty_name || "No description"}</p>
+      {transaction.counterparty_account_number ? <span className="muted">{transaction.counterparty_account_number}</span> : null}
     </div>
   );
 }

@@ -22,6 +22,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
   ].reduce((total, value) => total + Number(value || 0), 0);
   const financeObjectCount = [
     counts.transactions,
+    counts.internal_transfer_matches,
     counts.imports,
     counts.exchange_rates,
     counts.bank_accounts,
@@ -44,13 +45,14 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
   ].reduce((total, value) => total + Number(value || 0), 0);
   const snapshot = [
     ["Transactions", counts.transactions],
+    ["Transfer Matches", counts.internal_transfer_matches],
     ["Imports", counts.imports],
     ["Definitions", definitionObjectCount],
     ["Exchange Rates", counts.exchange_rates],
     ["Saved Filters", counts.saved_filters],
     ["Sample Data", sampleObjectCount],
   ];
-  const transactionObjectCount = Number(counts.transactions || 0) + Number(counts.imports || 0);
+  const transactionObjectCount = Number(counts.transactions || 0) + Number(counts.internal_transfer_matches || 0) + Number(counts.imports || 0);
   const sampleDataAction = {
     count: sampleObjectCount,
     description: "Remove only objects created by the first-launch demo dataset.",
