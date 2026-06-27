@@ -106,7 +106,6 @@ export default function DashboardPage({
   importBusy,
   notify,
   onFilterChange,
-  onToggleHideAmounts,
   recategorizeResult,
   refs,
   reloadAll,
@@ -131,7 +130,8 @@ export default function DashboardPage({
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
-  const [recategorizeLocked, setRecategorizeLocked] = useState(false);
+  const [recategorizeModalOpen, setRecategorizeModalOpen] = useState(false);
+  const [recategorizeIncludeLocked, setRecategorizeIncludeLocked] = useState(false);
   const [savedFilterName, setSavedFilterName] = useState("");
   const [savedFilters, setSavedFilters] = useState([]);
   const [savedFiltersBusy, setSavedFiltersBusy] = useState(false);
@@ -265,24 +265,38 @@ export default function DashboardPage({
     }
   }
 
+  function openRecategorizeModal() {
+    if (!transactionPage.count) {
+      notify("No filtered transactions");
+      return;
+    }
+    setRecategorizeIncludeLocked(false);
+    setRecategorizeModalOpen(true);
+  }
+
+  function closeRecategorizeModal() {
+    if (recategorizing) {
+      return;
+    }
+    setRecategorizeModalOpen(false);
+  }
+
   async function recategorize() {
     if (!transactionPage.count) {
       notify("No filtered transactions");
       return;
     }
-    const lockedText = recategorizeLocked ? " Locked transactions included by the current filters will be reset and recategorized." : "";
-    const confirmed = await confirmAction({
-      confirmLabel: "Recategorize",
-      message: `Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?${lockedText}`,
-      title: "Recategorize Transactions",
-    });
-    if (!confirmed) {
-      return;
-    }
     setRecategorizing(true);
     try {
-      const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeLocked }, filterParams);
+      const params = { ...filterParams };
+      if (recategorizeIncludeLocked) {
+        params.include_locked = "true";
+      } else {
+        delete params.include_locked;
+      }
+      const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeIncludeLocked }, params);
       setRecategorizeResult(result);
+      setRecategorizeModalOpen(false);
       notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
       await reloadDashboard();
     } catch (error) {
@@ -726,44 +740,30 @@ export default function DashboardPage({
         <section className="filter-panel dashboard-action-card" aria-labelledby="dashboard-actions-title">
           <h2 id="dashboard-actions-title" className="dashboard-section-title">Actions</h2>
           <div className="dashboard-action-section">
-            <div className="dashboard-action-row">
-              <div className="dashboard-action-subsection dashboard-privacy-action">
-                <button
-                  aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
-                  aria-pressed={hideAmounts}
-                  className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
-                  onClick={onToggleHideAmounts}
-                  title={hideAmounts ? "Show amounts" : "Hide amounts"}
-                  type="button"
-                >
-                  {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-              <div className="dashboard-action-subsection dashboard-recategorize-action">
-                <label className="check-row recategorize-locked-toggle">
-                  <input checked={recategorizeLocked} onChange={(event) => setRecategorizeLocked(event.target.checked)} type="checkbox" />
-                  <span>Include locked</span>
-                </label>
-                <LoadingButton
-                  busy={recategorizing}
-                  busyLabel="Recategorizing"
-                  className="primary-action"
-                  disabled={!transactionPage.count || importBusy}
-                  onClick={recategorize}
-                  type="button"
-                >
-                  Recategorize Filtered
-                </LoadingButton>
-              </div>
-            </div>
-            <div className="dashboard-action-subsection dashboard-bulk-assign-action">
-              <div className="metric-label">Bulk assign filtered transactions</div>
-              <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignModal} type="button">
+            <div className="dashboard-action-grid">
+              <LoadingButton
+                busy={recategorizing}
+                busyLabel="Recategorizing"
+                className="link-button"
+                disabled={!transactionPage.count || importBusy}
+                onClick={openRecategorizeModal}
+                type="button"
+              >
+                Recategorize
+              </LoadingButton>
+              <button className="link-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignModal} type="button">
                 Bulk assign
               </button>
-            </div>
-            <div className="dashboard-action-subsection dashboard-uncategorized-action">
-              <div className="metric-label">Uncategorized review</div>
+              <LoadingButton
+                busy={transferLoading && transferReviewOpen}
+                busyLabel="Scanning"
+                className="link-button"
+                disabled={!transactionPage.count || importBusy}
+                onClick={openTransferReview}
+                type="button"
+              >
+                Find transfers
+              </LoadingButton>
               <LoadingButton
                 busy={uncategorizedSuggestionsLoading && uncategorizedReviewOpen}
                 busyLabel="Loading"
@@ -775,25 +775,22 @@ export default function DashboardPage({
                 }}
                 type="button"
               >
-                Review Uncategorized
-              </LoadingButton>
-            </div>
-            <div className="dashboard-action-subsection dashboard-transfer-action">
-              <div className="metric-label">Internal transfers</div>
-              <LoadingButton
-                busy={transferLoading && transferReviewOpen}
-                busyLabel="Scanning"
-                className="link-button"
-                disabled={!transactionPage.count || importBusy}
-                onClick={openTransferReview}
-                type="button"
-              >
-                Find Transfers
+                Review uncategorized
               </LoadingButton>
             </div>
           </div>
         </section>
       </div>
+      {recategorizeModalOpen && (
+        <RecategorizeModal
+          busy={recategorizing}
+          count={transactionPage.count}
+          includeLocked={recategorizeIncludeLocked}
+          onClose={closeRecategorizeModal}
+          onIncludeLockedChange={setRecategorizeIncludeLocked}
+          onSubmit={recategorize}
+        />
+      )}
       {transferReviewOpen && (
         <InternalTransferReviewPanel
           applying={transferApplying}
@@ -814,7 +811,6 @@ export default function DashboardPage({
           onDateToleranceChange={setTransferDateTolerance}
           onIncludeIgnoredChange={setTransferIncludeIgnored}
           onIncludeLockedChange={setTransferIncludeLocked}
-          onRefresh={loadTransferCandidates}
           onSubcategoryChange={setTransferSubcategoryId}
           onToggleCandidate={toggleTransferCandidate}
           selectedIds={selectedTransferIds}
@@ -840,7 +836,6 @@ export default function DashboardPage({
             }
           }}
           onDraftChange={setKeywordDraft}
-          onRefresh={() => loadUncategorizedSuggestions()}
           onSelectSuggestion={selectUncategorizedSuggestion}
           refs={refs}
           selectedSuggestion={selectedSuggestion}
@@ -914,6 +909,49 @@ function textLines(value) {
     .filter(Boolean);
 }
 
+function RecategorizeModal({
+  busy,
+  count,
+  includeLocked,
+  onClose,
+  onIncludeLockedChange,
+  onSubmit,
+}) {
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+      <div aria-labelledby="recategorize-modal-title" aria-modal="true" className="recategorize-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="action-modal-header">
+          <div className="action-modal-title-block">
+            <h2 id="recategorize-modal-title">Recategorize</h2>
+            <p className="action-modal-description">
+              This will rerun keyword categorization for the current filtered scope. Locked transactions are skipped unless included here.
+            </p>
+          </div>
+          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
+        </div>
+        <div className="bulk-assign-warning">
+          Current filters show {count.toLocaleString()} transactions.
+        </div>
+        <label className="check-row recategorize-modal-toggle">
+          <input checked={includeLocked} disabled={busy} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
+          <span>Include locked transactions</span>
+        </label>
+        {includeLocked && (
+          <div className="recategorize-locked-warning">
+            Locked transactions may contain manual corrections. Recategorizing them can overwrite subcategory, WNI, tags, ignored state, and refreshed mapped fields.
+          </div>
+        )}
+        <div className="bulk-assign-modal-actions">
+          <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
+          <LoadingButton busy={busy} busyLabel="Recategorizing" className="primary-action" onClick={onSubmit} type="button">
+            Recategorize
+          </LoadingButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BulkAssignMultiModal({
   booleanOptions,
   busy,
@@ -932,8 +970,13 @@ function BulkAssignMultiModal({
   return (
     <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
       <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="bulk-assign-modal-header">
-          <h2 id="bulk-assign-modal-title">Bulk Assign</h2>
+        <div className="action-modal-header">
+          <div className="action-modal-title-block">
+            <h2 id="bulk-assign-modal-title">Bulk Assign</h2>
+            <p className="action-modal-description">
+              This will update {count.toLocaleString()} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.
+            </p>
+          </div>
           <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
         </div>
         <div className="bulk-assign-form">
@@ -991,9 +1034,6 @@ function BulkAssignMultiModal({
               </label>
             )) : <span className="muted">No tags defined</span>}
           </div>
-        </div>
-        <div className="bulk-assign-warning">
-          This will update {count.toLocaleString()} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.
         </div>
         <div className="bulk-assign-modal-actions">
           <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
@@ -1082,7 +1122,6 @@ function InternalTransferReviewPanel({
   onDateToleranceChange,
   onIncludeIgnoredChange,
   onIncludeLockedChange,
-  onRefresh,
   onSubcategoryChange,
   onToggleCandidate,
   selectedIds,
@@ -1093,21 +1132,19 @@ function InternalTransferReviewPanel({
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
       <div aria-labelledby="transfer-review-title" aria-modal="true" className="transfer-review-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="transfer-review-modal-header">
-          <div>
-            <h2 id="transfer-review-title">Internal Transfers</h2>
-            <span>
-              {Number(meta.count || 0).toLocaleString()} candidates. {Number(meta.high_confidence_count || 0).toLocaleString()} high confidence, {Number(meta.ambiguous_count || 0).toLocaleString()} ambiguous.
-            </span>
+        <div className="action-modal-header transfer-review-modal-header">
+          <div className="action-modal-title-block">
+            <h2 id="transfer-review-title">Find Transfers</h2>
+            <p className="action-modal-description">
+              Scan the current filtered scope for matching outgoing and incoming transactions across defined accounts.
+            </p>
           </div>
-          <div className="transfer-review-modal-header-actions">
-            <LoadingButton busy={busy} busyLabel="Scanning" className="link-button" disabled={applying} onClick={onRefresh} type="button">
-              Refresh
-            </LoadingButton>
-            <button className="icon-button" disabled={applying} onClick={onClose} type="button" aria-label="Close transfer review">x</button>
-          </div>
+          <button className="icon-button" disabled={applying} onClick={onClose} type="button" aria-label="Close transfer review">x</button>
         </div>
         <div className="transfer-review-layout">
+          <div className="bulk-assign-warning transfer-review-summary">
+            {Number(meta.count || 0).toLocaleString()} candidates. {Number(meta.high_confidence_count || 0).toLocaleString()} high confidence, {Number(meta.ambiguous_count || 0).toLocaleString()} ambiguous.
+          </div>
           <div className="transfer-review-controls">
             <label className="form-field">
               <span>Date offset</span>
@@ -1217,7 +1254,6 @@ function UncategorizedReviewPanel({
   onCreateKeywordAndApply,
   onClose,
   onDraftChange,
-  onRefresh,
   onSelectSuggestion,
   refs,
   selectedSuggestion,
@@ -1255,36 +1291,28 @@ function UncategorizedReviewPanel({
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
       >
-        <div className="uncategorized-review-modal-header">
-          <div>
-            <h2 id="uncategorized-review-title">Uncategorized Review</h2>
-            <span>
-              {Number(meta.transaction_count || 0).toLocaleString()} transactions in{" "}
-              {Number(meta.count || 0).toLocaleString()} groups
-            </span>
+        <div className="action-modal-header uncategorized-review-modal-header">
+          <div className="action-modal-title-block">
+            <h2 id="uncategorized-review-title">Review Uncategorized</h2>
+            <p className="action-modal-description">
+              Review uncategorized transaction groups and create a keyword rule from the selected suggestion.
+            </p>
           </div>
-          <div className="uncategorized-review-modal-header-actions">
-            <LoadingButton
-              busy={busy}
-              busyLabel="Refreshing"
-              className="link-button"
-              onClick={onRefresh}
-              type="button"
-            >
-              Refresh
-            </LoadingButton>
-            <button
-              aria-label="Close uncategorized review"
-              className="icon-button"
-              disabled={Boolean(submitting)}
-              onClick={onClose}
-              type="button"
-            >
-              x
-            </button>
-          </div>
+          <button
+            aria-label="Close uncategorized review"
+            className="icon-button"
+            disabled={Boolean(submitting)}
+            onClick={onClose}
+            type="button"
+          >
+            x
+          </button>
         </div>
         <div className="uncategorized-review-layout">
+          <div className="bulk-assign-warning uncategorized-review-summary">
+            {Number(meta.transaction_count || 0).toLocaleString()} transactions in{" "}
+            {Number(meta.count || 0).toLocaleString()} groups
+          </div>
           {error ? <div className="uncategorized-review-error">{error}</div> : null}
           <div className="uncategorized-suggestion-list">
           {busy && !suggestions.length ? (
@@ -1473,26 +1501,6 @@ function IconSvg({ children }) {
     <svg aria-hidden="true" className="icon-svg" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
       {children}
     </svg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <IconSvg>
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-    </IconSvg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <IconSvg>
-      <path d="m3 3 18 18" />
-      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-      <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.2 17.2 0 0 1-2.2 3.2" />
-      <path d="M6.2 6.5C3.5 8.2 2 12 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8" />
-    </IconSvg>
   );
 }
 

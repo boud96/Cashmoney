@@ -369,6 +369,15 @@ h2 {
   padding: 14px;
 }
 
+.recategorize-modal {
+  width: min(520px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+  padding: 14px;
+}
+
 .accent-modal-header {
   display: flex;
   align-items: center;
@@ -385,6 +394,30 @@ h2 {
   margin-bottom: 14px;
 }
 
+.action-modal-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.action-modal-title-block {
+  min-width: 0;
+}
+
+.action-modal-header h2 {
+  margin: 0;
+}
+
+.action-modal-description {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 640;
+  line-height: 1.45;
+  margin: 8px 0 0;
+}
+
 .bulk-assign-modal .form-field {
   margin-bottom: 12px;
 }
@@ -393,6 +426,7 @@ h2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+  margin-bottom: 14px;
 }
 
 .bulk-assign-form .form-field {
@@ -430,6 +464,22 @@ h2 {
   color: var(--text);
   font-size: 13px;
   font-weight: 640;
+  line-height: 1.45;
+  margin-bottom: 14px;
+  padding: 10px;
+}
+
+.recategorize-modal-toggle {
+  margin-bottom: 12px;
+}
+
+.recategorize-locked-warning {
+  border: 1px solid color-mix(in srgb, var(--red) 44%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--red) 10%, var(--surface));
+  color: var(--red);
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1.45;
   margin-bottom: 14px;
   padding: 10px;
@@ -1620,86 +1670,31 @@ select option {
 
 .dashboard-action-card {
   display: grid;
-  gap: 0;
+  gap: 12px;
   grid-template-rows: auto minmax(0, 1fr);
 }
 
 .dashboard-action-section {
   display: grid;
   align-content: stretch;
-  grid-template-rows: auto minmax(0, 1fr);
   min-height: 0;
   min-width: 0;
-  padding-top: 12px;
 }
 
-.dashboard-action-row {
+.dashboard-action-grid {
   display: grid;
-  grid-template-columns: minmax(54px, 0.28fr) minmax(0, 1fr);
-  min-width: 0;
-}
-
-.dashboard-action-card .relative-range-form {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  padding-top: 0;
-  border-top: 0;
+  height: 100%;
+  min-height: 0;
 }
 
-.dashboard-action-card .relative-range-form button {
-  grid-column: 1 / -1;
-}
-
-.dashboard-action-card .primary-action {
+.dashboard-action-grid button {
+  height: 100%;
   min-height: 38px;
   min-width: 0;
   padding-inline: 10px;
-  width: 100%;
-}
-
-.dashboard-action-subsection {
-  min-width: 0;
-}
-
-.dashboard-privacy-action {
-  align-items: center;
-  border-right: 1px solid var(--border);
-  display: flex;
-  justify-content: center;
-  padding-right: 12px;
-}
-
-.dashboard-recategorize-action {
-  align-content: center;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
-  padding-left: 12px;
-}
-
-.dashboard-bulk-assign-action {
-  align-content: end;
-  border-top: 1px solid var(--border);
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-  padding-top: 12px;
-}
-
-.dashboard-uncategorized-action,
-.dashboard-transfer-action {
-  border-top: 1px solid var(--border);
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-}
-
-.dashboard-uncategorized-action .link-button,
-.dashboard-transfer-action .link-button {
-  justify-content: center;
-  min-height: 36px;
   width: 100%;
 }
 
@@ -1715,22 +1710,6 @@ select option {
   min-width: 0;
   padding-inline: 10px;
   white-space: nowrap;
-}
-
-.recategorize-locked-toggle {
-  min-height: 34px;
-  padding: 6px 8px;
-  width: 100%;
-}
-
-.recategorize-locked-toggle span {
-  white-space: nowrap;
-}
-
-.dashboard-icon-action {
-  min-height: 38px;
-  padding: 0;
-  width: 38px;
 }
 
 .positive,
@@ -1760,31 +1739,8 @@ select option {
 }
 
 .transfer-review-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border-bottom: 1px solid var(--border);
-  padding: 14px;
-}
-
-.transfer-review-modal-header h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.transfer-review-modal-header span {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.transfer-review-modal-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin-bottom: 0;
+  padding: 14px 14px 0;
 }
 
 .transfer-review-layout {
@@ -1795,6 +1751,11 @@ select option {
   min-height: 0;
   overflow: hidden;
   padding: 14px 14px 0;
+}
+
+.transfer-review-summary {
+  flex: 0 0 auto;
+  margin-bottom: 0;
 }
 
 .transfer-review-controls {
@@ -2010,30 +1971,8 @@ select option {
 }
 
 .uncategorized-review-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border-bottom: 1px solid var(--border);
-  padding: 14px;
-}
-
-.uncategorized-review-modal-header h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.uncategorized-review-modal-header span {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.uncategorized-review-modal-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  margin-bottom: 0;
+  padding: 14px 14px 0;
 }
 
 .uncategorized-review-layout {
@@ -2045,6 +1984,11 @@ select option {
   min-height: 0;
   overflow: hidden;
   padding: 14px;
+}
+
+.uncategorized-review-summary {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
 }
 
 .uncategorized-review-error {
@@ -4195,8 +4139,8 @@ td {
     grid-template-columns: 1fr;
   }
 
-  .dashboard-action-row,
   .bulk-assign-buttons,
+  .dashboard-action-grid,
   .transfer-review-controls,
   .transfer-pair-grid,
   .uncategorized-sample-header,
@@ -4209,6 +4153,10 @@ td {
     gap: 3px;
   }
 
+  .dashboard-action-grid {
+    grid-template-rows: repeat(4, minmax(38px, 1fr));
+  }
+
   .uncategorized-keyword-form .form-field:nth-child(2),
   .uncategorized-keyword-form .form-field:nth-child(3),
   .uncategorized-tag-field {
@@ -4216,39 +4164,14 @@ td {
   }
 
   .uncategorized-detail-header,
-  .uncategorized-review-modal-header,
-  .transfer-review-modal-header,
   .uncategorized-review-actions,
   .transfer-review-actions {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .uncategorized-review-modal-header-actions,
-  .transfer-review-modal-header-actions {
-    justify-content: stretch;
-  }
-
-  .uncategorized-review-modal-header-actions > *,
-  .transfer-review-modal-header-actions > * {
-    flex: 1 1 auto;
-  }
-
   .uncategorized-sample-row strong {
     text-align: left;
-  }
-
-  .dashboard-privacy-action {
-    border-bottom: 1px solid var(--border);
-    border-right: 0;
-    justify-content: flex-start;
-    padding-bottom: 12px;
-    padding-right: 0;
-  }
-
-  .dashboard-recategorize-action {
-    padding-left: 0;
-    padding-top: 12px;
   }
 
   .import-action-row,

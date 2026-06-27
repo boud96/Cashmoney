@@ -280,6 +280,16 @@ export default function App() {
           >
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
+          <button
+            aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
+            aria-pressed={hideAmounts}
+            className={`sidebar-tool-button privacy-toggle amount-toggle ${hideAmounts ? "is-active" : ""}`.trim()}
+            onClick={toggleHideAmounts}
+            title={hideAmounts ? "Show amounts" : "Hide amounts"}
+            type="button"
+          >
+            {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
+          </button>
         </div>
       </aside>
 
@@ -297,7 +307,6 @@ export default function App() {
               filters={filters}
               hideAmounts={hideAmounts}
               importBusy={loadingDashboard}
-              onToggleHideAmounts={toggleHideAmounts}
               onFilterChange={updateFilter}
               refs={refs}
               recategorizeResult={recategorizeResult}
@@ -460,6 +469,26 @@ function SunIcon() {
       <path d="M20 12h2" />
       <path d="m6.34 17.66-1.41 1.41" />
       <path d="m19.07 4.93-1.41 1.41" />
+    </IconSvg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <IconSvg>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </IconSvg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <IconSvg>
+      <path d="m3 3 18 18" />
+      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+      <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.2 17.2 0 0 1-2.2 3.2" />
+      <path d="M6.2 6.5C3.5 8.2 2 12 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8" />
     </IconSvg>
   );
 }
