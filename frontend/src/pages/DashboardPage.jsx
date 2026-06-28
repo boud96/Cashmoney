@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
 import { AgGridReact } from "ag-grid-react";
@@ -86,6 +87,18 @@ const emptyKeywordDraft = {
   is_ignored: false,
 };
 
+const NO_BULK_CHANGE = "__no_change__";
+const CLEAR_BULK_VALUE = "__clear__";
+
+const emptyBulkAssignDraft = {
+  subcategory: NO_BULK_CHANGE,
+  tagMode: "no_change",
+  tagIds: [],
+  wantNeedInvestment: NO_BULK_CHANGE,
+  ignored: NO_BULK_CHANGE,
+  locked: NO_BULK_CHANGE,
+};
+
 export default function DashboardPage({
   confirmAction,
   filters,
@@ -94,7 +107,6 @@ export default function DashboardPage({
   importBusy,
   notify,
   onFilterChange,
-  onToggleHideAmounts,
   recategorizeResult,
   refs,
   reloadAll,
@@ -115,11 +127,12 @@ export default function DashboardPage({
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
-  const [bulkAssignModal, setBulkAssignModal] = useState(null);
-  const [bulkAssignValue, setBulkAssignValue] = useState("");
+  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false);
+  const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
-  const [recategorizeLocked, setRecategorizeLocked] = useState(false);
+  const [recategorizeModalOpen, setRecategorizeModalOpen] = useState(false);
+  const [recategorizeIncludeLocked, setRecategorizeIncludeLocked] = useState(false);
   const [savedFilterName, setSavedFilterName] = useState("");
   const [savedFilters, setSavedFilters] = useState([]);
   const [savedFiltersBusy, setSavedFiltersBusy] = useState(false);
@@ -131,6 +144,17 @@ export default function DashboardPage({
   const [keywordDraft, setKeywordDraft] = useState(emptyKeywordDraft);
   const [keywordDraftBusy, setKeywordDraftBusy] = useState("");
   const [uncategorizedReviewError, setUncategorizedReviewError] = useState("");
+  const [transferReviewOpen, setTransferReviewOpen] = useState(false);
+  const [transferCandidates, setTransferCandidates] = useState([]);
+  const [transferMeta, setTransferMeta] = useState({ count: 0, high_confidence_count: 0, medium_confidence_count: 0, ambiguous_count: 0 });
+  const [transferDateTolerance, setTransferDateTolerance] = useState(3);
+  const [transferIncludeIgnored, setTransferIncludeIgnored] = useState(false);
+  const [transferIncludeLocked, setTransferIncludeLocked] = useState(false);
+  const [selectedTransferIds, setSelectedTransferIds] = useState([]);
+  const [transferSubcategoryId, setTransferSubcategoryId] = useState("");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferApplying, setTransferApplying] = useState(false);
+  const [transferError, setTransferError] = useState("");
   const localFilterPresetsMigrated = useRef(false);
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
   const subcategoryFilterOptions = useMemo(() => {
@@ -242,24 +266,38 @@ export default function DashboardPage({
     }
   }
 
+  function openRecategorizeModal() {
+    if (!transactionPage.count) {
+      notify("No filtered transactions");
+      return;
+    }
+    setRecategorizeIncludeLocked(false);
+    setRecategorizeModalOpen(true);
+  }
+
+  function closeRecategorizeModal() {
+    if (recategorizing) {
+      return;
+    }
+    setRecategorizeModalOpen(false);
+  }
+
   async function recategorize() {
     if (!transactionPage.count) {
       notify("No filtered transactions");
       return;
     }
-    const lockedText = recategorizeLocked ? " Locked transactions included by the current filters will be reset and recategorized." : "";
-    const confirmed = await confirmAction({
-      confirmLabel: "Recategorize",
-      message: `Recategorize ${transactionPage.count.toLocaleString()} filtered transactions?${lockedText}`,
-      title: "Recategorize Transactions",
-    });
-    if (!confirmed) {
-      return;
-    }
     setRecategorizing(true);
     try {
-      const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeLocked }, filterParams);
+      const params = { ...filterParams };
+      if (recategorizeIncludeLocked) {
+        params.include_locked = "true";
+      } else {
+        delete params.include_locked;
+      }
+      const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeIncludeLocked }, params);
       setRecategorizeResult(result);
+      setRecategorizeModalOpen(false);
       notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
       await reloadDashboard();
     } catch (error) {
@@ -269,22 +307,84 @@ export default function DashboardPage({
     }
   }
 
-  const bulkAssignOptions = useMemo(() => ({
-    subcategory: refs.subcategories.map((item) => [item.id, subLabel(item)]),
-    tag: refs.tags.map((item) => [item.id, item.name]),
-    want_need_investment: wniOptions.map(([value, label]) => [value, label]),
-  }), [refs.subcategories, refs.tags]);
-
-  const bulkAssignSelectedLabel = useMemo(() => {
-    if (!bulkAssignModal || !bulkAssignValue) {
-      return "";
-    }
-    return bulkAssignOptions[bulkAssignModal]?.find(([value]) => value === bulkAssignValue)?.[1] || "";
-  }, [bulkAssignModal, bulkAssignOptions, bulkAssignValue]);
+  const bulkSubcategoryOptions = useMemo(
+    () => [
+      [NO_BULK_CHANGE, "No change"],
+      [CLEAR_BULK_VALUE, "Unassigned"],
+      ...refs.subcategories.map((item) => [item.id, subLabel(item)]),
+    ],
+    [refs.subcategories],
+  );
+  const bulkWniOptions = useMemo(
+    () => [
+      [NO_BULK_CHANGE, "No change"],
+      [CLEAR_BULK_VALUE, "Unassigned"],
+      ...wniOptions.map(([value, label]) => [value, label]),
+    ],
+    [],
+  );
+  const bulkBooleanOptions = [
+    [NO_BULK_CHANGE, "No change"],
+    ["true", "Yes"],
+    ["false", "No"],
+  ];
+  const transferSubcategoryOptions = useMemo(
+    () => [["", "No subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])],
+    [refs.subcategories],
+  );
   const selectedSuggestion = useMemo(
     () => uncategorizedSuggestions.find((item) => item.id === selectedSuggestionId) || uncategorizedSuggestions[0] || null,
     [selectedSuggestionId, uncategorizedSuggestions],
   );
+  const transferFilterParams = useMemo(() => {
+    const params = {
+      ...filterParams,
+      date_tolerance_days: transferDateTolerance,
+      limit: 100,
+    };
+    if (transferIncludeIgnored) {
+      params.include_ignored = "true";
+    } else {
+      delete params.include_ignored;
+    }
+    if (transferIncludeLocked) {
+      params.include_locked = "true";
+    } else {
+      delete params.include_locked;
+    }
+    return params;
+  }, [filterParams, transferDateTolerance, transferIncludeIgnored, transferIncludeLocked]);
+
+  const loadTransferCandidates = useCallback(async () => {
+    setTransferLoading(true);
+    setTransferError("");
+    try {
+      const payload = await apiGet("/transactions/internal-transfers/preview/", transferFilterParams);
+      const candidates = payload.candidates || [];
+      setTransferCandidates(candidates);
+      setTransferMeta({
+        count: payload.count || 0,
+        high_confidence_count: payload.high_confidence_count || 0,
+        medium_confidence_count: payload.medium_confidence_count || 0,
+        ambiguous_count: payload.ambiguous_count || 0,
+      });
+      setSelectedTransferIds((current) => {
+        const currentSet = new Set(current);
+        const retained = candidates.filter((candidate) => currentSet.has(candidate.id)).map((candidate) => candidate.id);
+        if (retained.length) {
+          return retained;
+        }
+        return candidates
+          .filter((candidate) => candidate.confidence_level === "high" && !candidate.is_ambiguous)
+          .map((candidate) => candidate.id);
+      });
+    } catch (error) {
+      setTransferError(error.message);
+      notify(error.message);
+    } finally {
+      setTransferLoading(false);
+    }
+  }, [notify, transferFilterParams]);
 
   async function loadUncategorizedSuggestions(preferredSuggestionId = selectedSuggestionId) {
     setUncategorizedSuggestionsLoading(true);
@@ -309,38 +409,129 @@ export default function DashboardPage({
     }
   }, [filterParams, uncategorizedReviewOpen]);
 
-  function openBulkAssignModal(type) {
-    setBulkAssignModal(type);
-    setBulkAssignValue("");
+  useEffect(() => {
+    if (transferReviewOpen) {
+      loadTransferCandidates();
+    }
+  }, [loadTransferCandidates, transferReviewOpen]);
+
+  function openTransferReview() {
+    setTransferError("");
+    setTransferSubcategoryId(refs.settings?.internal_transfer_subcategory?.id || "");
+    setTransferReviewOpen(true);
+  }
+
+  function toggleTransferCandidate(candidateId) {
+    setSelectedTransferIds((current) => (
+      current.includes(candidateId)
+        ? current.filter((item) => item !== candidateId)
+        : [...current, candidateId]
+    ));
+  }
+
+  async function applySelectedTransfers() {
+    if (!selectedTransferIds.length) {
+      setTransferError("Choose at least one transfer pair");
+      return;
+    }
+    const confirmed = await confirmAction({
+      confirmLabel: "Apply",
+      message: `Mark ${selectedTransferIds.length.toLocaleString()} selected transfer pairs as internal transfers? Both sides will be ignored and locked.`,
+      title: "Apply Internal Transfers",
+    });
+    if (!confirmed) {
+      return;
+    }
+    setTransferApplying(true);
+    setTransferError("");
+    try {
+      const result = await apiPost(
+        "/transactions/internal-transfers/apply/",
+        {
+          candidate_ids: selectedTransferIds,
+          date_tolerance_days: transferDateTolerance,
+          subcategory_id: transferSubcategoryId,
+        },
+        transferFilterParams,
+      );
+      notify(`${Number(result.created || 0).toLocaleString()} transfer pairs applied`);
+      setSelectedTransferIds([]);
+      await Promise.all([reloadDashboard(), loadTransferCandidates()]);
+    } catch (error) {
+      setTransferError(error.message);
+      notify(error.message);
+    } finally {
+      setTransferApplying(false);
+    }
+  }
+
+  function openBulkAssignModal() {
+    setBulkAssignDraft(emptyBulkAssignDraft);
+    setBulkAssignModalOpen(true);
   }
 
   function closeBulkAssignModal() {
     if (bulkAssignBusy) {
       return;
     }
-    setBulkAssignModal(null);
-    setBulkAssignValue("");
+    setBulkAssignModalOpen(false);
+    setBulkAssignDraft(emptyBulkAssignDraft);
+  }
+
+  function updateBulkAssignDraft(patch) {
+    setBulkAssignDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function toggleBulkAssignTag(tagId) {
+    setBulkAssignDraft((current) => ({
+      ...current,
+      tagIds: current.tagIds.includes(tagId)
+        ? current.tagIds.filter((item) => item !== tagId)
+        : [...current.tagIds, tagId],
+    }));
+  }
+
+  function bulkAssignPayload() {
+    const payload = {};
+    if (bulkAssignDraft.subcategory !== NO_BULK_CHANGE) {
+      payload.subcategory_id = bulkAssignDraft.subcategory === CLEAR_BULK_VALUE ? "" : bulkAssignDraft.subcategory;
+    }
+    if (bulkAssignDraft.tagMode !== "no_change") {
+      payload.tag_mode = bulkAssignDraft.tagMode;
+      payload.tag_ids = bulkAssignDraft.tagIds;
+    }
+    if (bulkAssignDraft.wantNeedInvestment !== NO_BULK_CHANGE) {
+      payload.want_need_investment = bulkAssignDraft.wantNeedInvestment === CLEAR_BULK_VALUE ? "" : bulkAssignDraft.wantNeedInvestment;
+    }
+    if (bulkAssignDraft.ignored !== NO_BULK_CHANGE) {
+      payload.is_ignored = bulkAssignDraft.ignored === "true";
+    }
+    if (bulkAssignDraft.locked !== NO_BULK_CHANGE) {
+      payload.is_categorization_locked = bulkAssignDraft.locked === "true";
+    }
+    return payload;
+  }
+
+  function bulkAssignHasChanges() {
+    return Object.keys(bulkAssignPayload()).length > 0;
   }
 
   async function submitBulkAssign() {
-    if (!bulkAssignModal || !bulkAssignValue) {
-      notify("Choose a value first");
+    const payload = bulkAssignPayload();
+    if (!Object.keys(payload).length) {
+      notify("Choose at least one bulk assignment");
       return;
     }
-    const payload = { assignment_type: bulkAssignModal };
-    if (bulkAssignModal === "subcategory") {
-      payload.subcategory_id = bulkAssignValue;
-    } else if (bulkAssignModal === "tag") {
-      payload.tag_id = bulkAssignValue;
-    } else if (bulkAssignModal === "want_need_investment") {
-      payload.want_need_investment = bulkAssignValue;
+    if (["add", "replace"].includes(bulkAssignDraft.tagMode) && !bulkAssignDraft.tagIds.length) {
+      notify("Choose at least one tag");
+      return;
     }
     setBulkAssignBusy(true);
     try {
       const result = await apiPost("/transactions/bulk-assign/", payload, filterParams);
       notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
-      setBulkAssignModal(null);
-      setBulkAssignValue("");
+      setBulkAssignModalOpen(false);
+      setBulkAssignDraft(emptyBulkAssignDraft);
       await reloadDashboard();
     } catch (error) {
       notify(error.message);
@@ -550,52 +741,30 @@ export default function DashboardPage({
         <section className="filter-panel dashboard-action-card" aria-labelledby="dashboard-actions-title">
           <h2 id="dashboard-actions-title" className="dashboard-section-title">Actions</h2>
           <div className="dashboard-action-section">
-            <div className="dashboard-action-row">
-              <div className="dashboard-action-subsection dashboard-privacy-action">
-                <button
-                  aria-label={hideAmounts ? "Show amounts" : "Hide amounts"}
-                  aria-pressed={hideAmounts}
-                  className={`link-button privacy-toggle dashboard-icon-action ${hideAmounts ? "is-active" : ""}`}
-                  onClick={onToggleHideAmounts}
-                  title={hideAmounts ? "Show amounts" : "Hide amounts"}
-                  type="button"
-                >
-                  {hideAmounts ? <EyeOffIcon /> : <EyeIcon />}
-                </button>
-              </div>
-              <div className="dashboard-action-subsection dashboard-recategorize-action">
-                <label className="check-row recategorize-locked-toggle">
-                  <input checked={recategorizeLocked} onChange={(event) => setRecategorizeLocked(event.target.checked)} type="checkbox" />
-                  <span>Include locked</span>
-                </label>
-                <LoadingButton
-                  busy={recategorizing}
-                  busyLabel="Recategorizing"
-                  className="primary-action"
-                  disabled={!transactionPage.count || importBusy}
-                  onClick={recategorize}
-                  type="button"
-                >
-                  Recategorize Filtered
-                </LoadingButton>
-              </div>
-            </div>
-            <div className="dashboard-action-subsection dashboard-bulk-assign-action">
-              <div className="metric-label">Bulk assign filtered transactions</div>
-              <div className="bulk-assign-buttons">
-                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("subcategory")} type="button">
-                  Subcategory
-                </button>
-                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("tag")} type="button">
-                  Tag
-                </button>
-                <button className="link-button bulk-assign-button" disabled={!transactionPage.count || importBusy} onClick={() => openBulkAssignModal("want_need_investment")} type="button">
-                  WNI
-                </button>
-              </div>
-            </div>
-            <div className="dashboard-action-subsection dashboard-uncategorized-action">
-              <div className="metric-label">Uncategorized review</div>
+            <div className="dashboard-action-grid">
+              <LoadingButton
+                busy={recategorizing}
+                busyLabel="Recategorizing"
+                className="link-button"
+                disabled={!transactionPage.count || importBusy}
+                onClick={openRecategorizeModal}
+                type="button"
+              >
+                Recategorize
+              </LoadingButton>
+              <button className="link-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignModal} type="button">
+                Bulk assign
+              </button>
+              <LoadingButton
+                busy={transferLoading && transferReviewOpen}
+                busyLabel="Scanning"
+                className="link-button"
+                disabled={!transactionPage.count || importBusy}
+                onClick={openTransferReview}
+                type="button"
+              >
+                Find transfers
+              </LoadingButton>
               <LoadingButton
                 busy={uncategorizedSuggestionsLoading && uncategorizedReviewOpen}
                 busyLabel="Loading"
@@ -607,12 +776,49 @@ export default function DashboardPage({
                 }}
                 type="button"
               >
-                Review Uncategorized
+                Review uncategorized
               </LoadingButton>
             </div>
           </div>
         </section>
       </div>
+      {recategorizeModalOpen && (
+        <RecategorizeModal
+          busy={recategorizing}
+          count={transactionPage.count}
+          includeLocked={recategorizeIncludeLocked}
+          onClose={closeRecategorizeModal}
+          onIncludeLockedChange={setRecategorizeIncludeLocked}
+          onSubmit={recategorize}
+        />
+      )}
+      {transferReviewOpen && (
+        <InternalTransferReviewPanel
+          applying={transferApplying}
+          busy={transferLoading}
+          candidates={transferCandidates}
+          dateTolerance={transferDateTolerance}
+          error={transferError}
+          hideAmounts={hideAmounts}
+          includeIgnored={transferIncludeIgnored}
+          includeLocked={transferIncludeLocked}
+          meta={transferMeta}
+          onApply={applySelectedTransfers}
+          onClose={() => {
+            if (!transferApplying) {
+              setTransferReviewOpen(false);
+            }
+          }}
+          onDateToleranceChange={setTransferDateTolerance}
+          onIncludeIgnoredChange={setTransferIncludeIgnored}
+          onIncludeLockedChange={setTransferIncludeLocked}
+          onSubcategoryChange={setTransferSubcategoryId}
+          onToggleCandidate={toggleTransferCandidate}
+          selectedIds={selectedTransferIds}
+          subcategoryId={transferSubcategoryId}
+          subcategoryOptions={transferSubcategoryOptions}
+        />
+      )}
       {uncategorizedReviewOpen && (
         <UncategorizedReviewPanel
           busy={uncategorizedSuggestionsLoading}
@@ -631,7 +837,6 @@ export default function DashboardPage({
             }
           }}
           onDraftChange={setKeywordDraft}
-          onRefresh={() => loadUncategorizedSuggestions()}
           onSelectSuggestion={selectUncategorizedSuggestion}
           refs={refs}
           selectedSuggestion={selectedSuggestion}
@@ -639,17 +844,20 @@ export default function DashboardPage({
           suggestions={uncategorizedSuggestions}
         />
       )}
-      {bulkAssignModal && (
-        <BulkAssignModal
+      {bulkAssignModalOpen && (
+        <BulkAssignMultiModal
           busy={bulkAssignBusy}
           count={transactionPage.count}
+          draft={bulkAssignDraft}
+          hasChanges={bulkAssignHasChanges()}
           onClose={closeBulkAssignModal}
           onSubmit={submitBulkAssign}
-          onValueChange={setBulkAssignValue}
-          options={bulkAssignOptions[bulkAssignModal] || []}
-          selectedLabel={bulkAssignSelectedLabel}
-          type={bulkAssignModal}
-          value={bulkAssignValue}
+          onTagToggle={toggleBulkAssignTag}
+          onUpdate={updateBulkAssignDraft}
+          booleanOptions={bulkBooleanOptions}
+          subcategoryOptions={bulkSubcategoryOptions}
+          tags={refs.tags}
+          wniOptions={bulkWniOptions}
         />
       )}
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
@@ -700,6 +908,143 @@ function textLines(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function RecategorizeModal({
+  busy,
+  count,
+  includeLocked,
+  onClose,
+  onIncludeLockedChange,
+  onSubmit,
+}) {
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+      <div aria-labelledby="recategorize-modal-title" aria-modal="true" className="recategorize-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="action-modal-header">
+          <div className="action-modal-title-block">
+            <h2 id="recategorize-modal-title">Recategorize</h2>
+            <p className="action-modal-description">
+              This will rerun keyword categorization for the current filtered scope. Locked transactions are skipped unless included here.
+            </p>
+          </div>
+          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
+        </div>
+        <div className="bulk-assign-warning">
+          Current filters show {count.toLocaleString()} transactions.
+        </div>
+        <label className="check-row recategorize-modal-toggle">
+          <input checked={includeLocked} disabled={busy} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
+          <span>Include locked transactions</span>
+        </label>
+        {includeLocked && (
+          <div className="recategorize-locked-warning">
+            Locked transactions may contain manual corrections. Recategorizing them can overwrite subcategory, WNI, tags, ignored state, and refreshed mapped fields.
+          </div>
+        )}
+        <div className="bulk-assign-modal-actions">
+          <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
+          <LoadingButton busy={busy} busyLabel="Recategorizing" className="primary-action" onClick={onSubmit} type="button">
+            Recategorize
+          </LoadingButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BulkAssignMultiModal({
+  booleanOptions,
+  busy,
+  count,
+  draft,
+  hasChanges,
+  onClose,
+  onSubmit,
+  onTagToggle,
+  onUpdate,
+  subcategoryOptions,
+  tags,
+  wniOptions,
+}) {
+  const tagSelectionDisabled = !["add", "replace"].includes(draft.tagMode);
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+      <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="action-modal-header">
+          <div className="action-modal-title-block">
+            <h2 id="bulk-assign-modal-title">Bulk Assign</h2>
+            <p className="action-modal-description">
+              This will update {count.toLocaleString()} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.
+            </p>
+          </div>
+          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
+        </div>
+        <div className="bulk-assign-form">
+          <label className="form-field">
+            <span>Subcategory</span>
+            <select autoFocus disabled={busy} onChange={(event) => onUpdate({ subcategory: event.target.value })} value={draft.subcategory}>
+              {subcategoryOptions.map(([optionValue, optionLabel]) => (
+                <option key={optionValue} value={optionValue}>{optionLabel}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>WNI</span>
+            <select disabled={busy} onChange={(event) => onUpdate({ wantNeedInvestment: event.target.value })} value={draft.wantNeedInvestment}>
+              {wniOptions.map(([optionValue, optionLabel]) => (
+                <option key={optionValue} value={optionValue}>{optionLabel}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Ignored</span>
+            <select disabled={busy} onChange={(event) => onUpdate({ ignored: event.target.value })} value={draft.ignored}>
+              {booleanOptions.map(([optionValue, optionLabel]) => (
+                <option key={optionValue} value={optionValue}>{optionLabel}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field">
+            <span>Locked</span>
+            <select disabled={busy} onChange={(event) => onUpdate({ locked: event.target.value })} value={draft.locked}>
+              {booleanOptions.map(([optionValue, optionLabel]) => (
+                <option key={optionValue} value={optionValue}>{optionLabel}</option>
+              ))}
+            </select>
+          </label>
+          <label className="form-field bulk-tag-mode-field">
+            <span>Tags</span>
+            <select disabled={busy} onChange={(event) => onUpdate({ tagMode: event.target.value })} value={draft.tagMode}>
+              <option value="no_change">No change</option>
+              <option value="add">Add selected tags</option>
+              <option value="replace">Replace with selected tags</option>
+              <option value="clear">Clear all tags</option>
+            </select>
+          </label>
+          <div className={`bulk-tag-picker ${tagSelectionDisabled ? "is-disabled" : ""}`.trim()}>
+            {tags.length ? tags.map((tag) => (
+              <label className="check-row" key={tag.id}>
+                <input
+                  checked={draft.tagIds.includes(tag.id)}
+                  disabled={busy || tagSelectionDisabled}
+                  onChange={() => onTagToggle(tag.id)}
+                  type="checkbox"
+                />
+                <span>{tag.name}</span>
+              </label>
+            )) : <span className="muted">No tags defined</span>}
+          </div>
+        </div>
+        <div className="bulk-assign-modal-actions">
+          <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
+          <LoadingButton busy={busy} busyLabel="Assigning" className="primary-action" disabled={!hasChanges} onClick={onSubmit} type="button">
+            Apply
+          </LoadingButton>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, options, selectedLabel, type, value }) {
@@ -763,6 +1108,141 @@ function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, option
   );
 }
 
+function InternalTransferReviewPanel({
+  applying,
+  busy,
+  candidates,
+  dateTolerance,
+  error,
+  hideAmounts,
+  includeIgnored,
+  includeLocked,
+  meta,
+  onApply,
+  onClose,
+  onDateToleranceChange,
+  onIncludeIgnoredChange,
+  onIncludeLockedChange,
+  onSubcategoryChange,
+  onToggleCandidate,
+  selectedIds,
+  subcategoryId,
+  subcategoryOptions,
+}) {
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  return (
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
+      <div aria-labelledby="transfer-review-title" aria-modal="true" className="transfer-review-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="action-modal-header transfer-review-modal-header">
+          <div className="action-modal-title-block">
+            <h2 id="transfer-review-title">Find Transfers</h2>
+            <p className="action-modal-description">
+              Scan the current filtered scope for matching outgoing and incoming transactions across defined accounts.
+            </p>
+          </div>
+          <button className="icon-button" disabled={applying} onClick={onClose} type="button" aria-label="Close transfer review">x</button>
+        </div>
+        <div className="transfer-review-layout">
+          <div className="bulk-assign-warning transfer-review-summary">
+            {Number(meta.count || 0).toLocaleString()} candidates. {Number(meta.high_confidence_count || 0).toLocaleString()} high confidence, {Number(meta.ambiguous_count || 0).toLocaleString()} ambiguous.
+          </div>
+          <div className="transfer-review-controls">
+            <label className="form-field">
+              <span>Date offset</span>
+              <input
+                min="0"
+                max="14"
+                onChange={(event) => onDateToleranceChange(Number(event.target.value || 0))}
+                type="number"
+                value={dateTolerance}
+              />
+            </label>
+            <label className="check-row">
+              <input checked={includeIgnored} onChange={(event) => onIncludeIgnoredChange(event.target.checked)} type="checkbox" />
+              <span>Include ignored</span>
+            </label>
+            <label className="check-row">
+              <input checked={includeLocked} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
+              <span>Include locked</span>
+            </label>
+          </div>
+          {error && <div className="transfer-review-error">{error}</div>}
+          <div className="transfer-candidate-list">
+            {busy && !candidates.length ? (
+              <div className="transfer-empty-state">Scanning filtered transactions</div>
+            ) : candidates.length ? (
+              candidates.map((candidate) => (
+                <InternalTransferCandidateCard
+                  candidate={candidate}
+                  checked={selectedSet.has(candidate.id)}
+                  hideAmounts={hideAmounts}
+                  key={candidate.id}
+                  onToggle={() => onToggleCandidate(candidate.id)}
+                />
+              ))
+            ) : (
+              <div className="transfer-empty-state">No transfer candidates found in the current filter scope.</div>
+            )}
+          </div>
+          <div className="transfer-review-actions">
+            <span>{selectedIds.length.toLocaleString()} selected</span>
+            <label className="transfer-apply-subcategory">
+              <span>Subcategory</span>
+              <select disabled={applying} onChange={(event) => onSubcategoryChange(event.target.value)} value={subcategoryId}>
+                {subcategoryOptions.map(([value, label]) => <option key={value || "none"} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <LoadingButton busy={applying} busyLabel="Applying" className="primary-action transfer-apply-button" disabled={!selectedIds.length || busy} onClick={onApply} type="button">
+              Apply
+            </LoadingButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InternalTransferCandidateCard({ candidate, checked, hideAmounts, onToggle }) {
+  return (
+    <label className={`transfer-candidate-card ${checked ? "is-selected" : ""}`.trim()}>
+      <input checked={checked} onChange={onToggle} type="checkbox" />
+      <div className="transfer-candidate-body">
+        <div className="transfer-candidate-header">
+          <strong>{titleCase(candidate.confidence_level)} confidence</strong>
+        </div>
+        <div className="transfer-pair-grid">
+          <TransferTransactionSummary label="Outgoing" transaction={candidate.outgoing} hideAmounts={hideAmounts} />
+          <TransferTransactionSummary label="Incoming" transaction={candidate.incoming} hideAmounts={hideAmounts} />
+        </div>
+        <div className="transfer-reason-list">
+          {(candidate.match_reasons || []).map((reason) => {
+            const reasonLabel = typeof reason === "string" ? reason : reason.label;
+            const reasonTone = typeof reason === "string" ? "" : reason.tone;
+            return <span className={reasonTone ? `is-${reasonTone}` : ""} key={reasonLabel}>{reasonLabel}</span>;
+          })}
+        </div>
+      </div>
+    </label>
+  );
+}
+
+function TransferTransactionSummary({ hideAmounts, label, transaction }) {
+  return (
+    <div className="transfer-transaction-summary">
+      <div>
+        <strong>{label}</strong>
+        <span>{transaction.bank_account?.name || "No account"}</span>
+      </div>
+      <div className="transfer-transaction-main">
+        <span>{transaction.transaction_date}</span>
+        <strong>{formatAmountWithCurrency(transaction.amount, transaction.currency, hideAmounts)}</strong>
+      </div>
+      <p>{transaction.description || transaction.counterparty_name || "No description"}</p>
+      {transaction.counterparty_account_number ? <span className="muted">{transaction.counterparty_account_number}</span> : null}
+    </div>
+  );
+}
+
 function UncategorizedReviewPanel({
   busy,
   defaultCurrency,
@@ -775,7 +1255,6 @@ function UncategorizedReviewPanel({
   onCreateKeywordAndApply,
   onClose,
   onDraftChange,
-  onRefresh,
   onSelectSuggestion,
   refs,
   selectedSuggestion,
@@ -813,36 +1292,28 @@ function UncategorizedReviewPanel({
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
       >
-        <div className="uncategorized-review-modal-header">
-          <div>
-            <h2 id="uncategorized-review-title">Uncategorized Review</h2>
-            <span>
-              {Number(meta.transaction_count || 0).toLocaleString()} transactions in{" "}
-              {Number(meta.count || 0).toLocaleString()} groups
-            </span>
+        <div className="action-modal-header uncategorized-review-modal-header">
+          <div className="action-modal-title-block">
+            <h2 id="uncategorized-review-title">Review Uncategorized</h2>
+            <p className="action-modal-description">
+              Review uncategorized transaction groups and create a keyword rule from the selected suggestion.
+            </p>
           </div>
-          <div className="uncategorized-review-modal-header-actions">
-            <LoadingButton
-              busy={busy}
-              busyLabel="Refreshing"
-              className="link-button"
-              onClick={onRefresh}
-              type="button"
-            >
-              Refresh
-            </LoadingButton>
-            <button
-              aria-label="Close uncategorized review"
-              className="icon-button"
-              disabled={Boolean(submitting)}
-              onClick={onClose}
-              type="button"
-            >
-              x
-            </button>
-          </div>
+          <button
+            aria-label="Close uncategorized review"
+            className="icon-button"
+            disabled={Boolean(submitting)}
+            onClick={onClose}
+            type="button"
+          >
+            x
+          </button>
         </div>
         <div className="uncategorized-review-layout">
+          <div className="bulk-assign-warning uncategorized-review-summary">
+            {Number(meta.transaction_count || 0).toLocaleString()} transactions in{" "}
+            {Number(meta.count || 0).toLocaleString()} groups
+          </div>
           {error ? <div className="uncategorized-review-error">{error}</div> : null}
           <div className="uncategorized-suggestion-list">
           {busy && !suggestions.length ? (
@@ -1031,26 +1502,6 @@ function IconSvg({ children }) {
     <svg aria-hidden="true" className="icon-svg" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
       {children}
     </svg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <IconSvg>
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-    </IconSvg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <IconSvg>
-      <path d="m3 3 18 18" />
-      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-      <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.2 17.2 0 0 1-2.2 3.2" />
-      <path d="M6.2 6.5C3.5 8.2 2 12 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8" />
-    </IconSvg>
   );
 }
 
@@ -2024,17 +2475,7 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
       if (!rect) {
         return;
       }
-      const popoverWidth = 360;
-      const popoverHeight = 340;
-      const left = Math.min(
-        Math.max(12, rect.left),
-        Math.max(12, window.innerWidth - popoverWidth - 12),
-      );
-      const preferredTop = rect.bottom + 6;
-      const top = preferredTop + popoverHeight > window.innerHeight && rect.top > popoverHeight
-        ? rect.top - popoverHeight - 6
-        : preferredTop;
-      setPopoverPosition({ left, top: Math.max(12, top) });
+      setPopoverPosition(tagPopoverPosition(rect));
     }
 
     updatePosition();
@@ -2047,6 +2488,10 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
   }, [isOpen]);
 
   function openEditor() {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setPopoverPosition(tagPopoverPosition(rect));
+    }
     setDraftIds(selectedIds);
     setQuery("");
     setIsOpen(true);
@@ -2082,7 +2527,7 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
       <button className="tag-cell-button" onClick={openEditor} ref={buttonRef} title={tagTitle(tags)} type="button">
         <TagCloud tags={tags} />
       </button>
-      {isOpen && (
+      {isOpen && createPortal(
         <div className="tag-popover" onClick={stopGridEvent} onDoubleClick={stopGridEvent} onMouseDown={stopGridEvent} ref={popoverRef} style={{ left: popoverPosition.left, top: popoverPosition.top }}>
           <div className="tag-popover-selected">
             {selectedDraftTags.length ? <TagCloud collapse={false} tags={selectedDraftTags} /> : <span className="muted">No tags selected</span>}
@@ -2107,10 +2552,25 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
             <button className="link-button" disabled={saving} onClick={() => setIsOpen(false)} type="button">Cancel</button>
             <LoadingButton busy={saving} busyLabel="Applying" className="primary-action" onClick={applyTags} type="button">Apply</LoadingButton>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
+}
+
+function tagPopoverPosition(rect) {
+  const popoverWidth = 360;
+  const popoverHeight = 340;
+  const left = Math.min(
+    Math.max(12, rect.left),
+    Math.max(12, window.innerWidth - popoverWidth - 12),
+  );
+  const preferredTop = rect.bottom + 6;
+  const top = preferredTop + popoverHeight > window.innerHeight && rect.top > popoverHeight
+    ? rect.top - popoverHeight - 6
+    : preferredTop;
+  return { left, top: Math.max(12, top) };
 }
 
 function TagCloud({ collapse = true, tags }) {

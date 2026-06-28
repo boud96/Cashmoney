@@ -98,6 +98,16 @@ urlpatterns = [
         name="uncategorized-suggestions",
     ),
     path(
+        "transactions/internal-transfers/preview/",
+        views.InternalTransferCandidateView.as_view(),
+        name="internal-transfer-preview",
+    ),
+    path(
+        "transactions/internal-transfers/apply/",
+        views.InternalTransferApplyView.as_view(),
+        name="internal-transfer-apply",
+    ),
+    path(
         "transactions/<uuid:pk>/",
         views.TransactionDetailView.as_view(),
         name="transaction-detail",

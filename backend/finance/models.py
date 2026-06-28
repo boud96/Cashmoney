@@ -1,4 +1,5 @@
 import uuid
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Q
@@ -429,6 +430,58 @@ class TransactionTag(TimestampedModel):
 
     def __str__(self):
         return f"{self.transaction} - {self.tag}"
+
+
+class InternalTransferMatch(TimestampedModel):
+    outgoing_transaction = models.OneToOneField(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="outgoing_internal_transfer_match",
+    )
+    incoming_transaction = models.OneToOneField(
+        Transaction,
+        on_delete=models.CASCADE,
+        related_name="incoming_internal_transfer_match",
+    )
+    confidence_score = models.PositiveIntegerField(default=0)
+    match_reasons = models.JSONField(default=empty_list, blank=True)
+    date_delta_days = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        if self.outgoing_transaction_id == self.incoming_transaction_id:
+            raise ValidationError(
+                "Outgoing and incoming transactions must be different."
+            )
+        transaction_ids = [
+            transaction_id
+            for transaction_id in [
+                self.outgoing_transaction_id,
+                self.incoming_transaction_id,
+            ]
+            if transaction_id
+        ]
+        if (
+            transaction_ids
+            and InternalTransferMatch.objects.exclude(pk=self.pk)
+            .filter(
+                Q(outgoing_transaction_id__in=transaction_ids)
+                | Q(incoming_transaction_id__in=transaction_ids)
+            )
+            .exists()
+        ):
+            raise ValidationError(
+                "A transaction can only belong to one internal transfer match."
+            )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.outgoing_transaction_id} -> {self.incoming_transaction_id}"
 
 
 class Keyword(TimestampedModel):

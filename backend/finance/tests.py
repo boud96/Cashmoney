@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 from datetime import date, timedelta
 from decimal import Decimal
@@ -23,6 +24,7 @@ from .models import (
     Category,
     ExchangeRate,
     FinanceSettings,
+    InternalTransferMatch,
     Keyword,
     SavedFilter,
     Subcategory,
@@ -1322,56 +1324,192 @@ class APITests(FinanceTestCase):
             amount=Decimal("-9.00"),
         )
 
-        subcategory_response = self.post_json(
+        bulk_response = self.post_json(
             "/api/transactions/bulk-assign/?date_from=2026-01-01",
             {
-                "assignment_type": "subcategory",
                 "subcategory_id": str(self.subcategory.id),
+                "tag_mode": "add",
+                "tag_ids": [str(assigned_tag.id)],
+                "want_need_investment": WantNeedInvestment.NEED,
+                "is_ignored": True,
+                "is_categorization_locked": False,
             },
         )
-        subcategory_payload = json_body(subcategory_response)
+        bulk_payload = json_body(bulk_response)
         filtered_transaction.refresh_from_db()
         outside_filter.refresh_from_db()
 
-        self.assertEqual(subcategory_response.status_code, 200)
-        self.assertEqual(subcategory_payload["updated"], 1)
+        self.assertEqual(bulk_response.status_code, 200)
+        self.assertEqual(bulk_payload["updated"], 1)
         self.assertEqual(
-            subcategory_payload["label"],
-            f"{self.category.name} / {self.subcategory.name}",
+            [action["field"] for action in bulk_payload["actions"]],
+            [
+                "subcategory",
+                "tags",
+                "want_need_investment",
+                "is_ignored",
+                "is_categorization_locked",
+            ],
         )
         self.assertEqual(filtered_transaction.subcategory, self.subcategory)
-        self.assertTrue(filtered_transaction.is_categorization_locked)
-        self.assertIsNone(outside_filter.subcategory)
-        self.assertFalse(outside_filter.is_categorization_locked)
-
-        tag_response = self.post_json(
-            "/api/transactions/bulk-assign/?date_from=2026-01-01&include_locked=true",
-            {"assignment_type": "tag", "tag_id": str(assigned_tag.id)},
-        )
-        filtered_transaction.refresh_from_db()
-
-        self.assertEqual(tag_response.status_code, 200)
-        self.assertEqual(json_body(tag_response)["updated"], 1)
         self.assertCountEqual(
             list(filtered_transaction.tags.values_list("id", flat=True)),
             [stale_tag.id, assigned_tag.id],
         )
-
-        wni_response = self.post_json(
-            "/api/transactions/bulk-assign/?date_from=2026-01-01&include_locked=true",
-            {
-                "assignment_type": "want_need_investment",
-                "want_need_investment": WantNeedInvestment.NEED,
-            },
-        )
-        filtered_transaction.refresh_from_db()
-
-        self.assertEqual(wni_response.status_code, 200)
-        self.assertEqual(json_body(wni_response)["updated"], 1)
         self.assertEqual(
             filtered_transaction.want_need_investment, WantNeedInvestment.NEED
         )
-        self.assertTrue(filtered_transaction.is_categorization_locked)
+        self.assertTrue(filtered_transaction.is_ignored)
+        self.assertFalse(filtered_transaction.is_categorization_locked)
+        self.assertIsNone(outside_filter.subcategory)
+        self.assertFalse(outside_filter.is_ignored)
+        self.assertFalse(outside_filter.is_categorization_locked)
+
+        legacy_response = self.post_json(
+            "/api/transactions/bulk-assign/?date_from=2026-01-01&include_ignored=true",
+            {"assignment_type": "tag", "tag_id": str(assigned_tag.id)},
+        )
+
+        self.assertEqual(legacy_response.status_code, 200)
+        self.assertEqual(json_body(legacy_response)["actions"][0]["field"], "tags")
+
+    def test_internal_transfer_preview_and_apply_marks_confirmed_pairs(self):
+        transfer_subcategory = Subcategory.objects.create(
+            name="Internal Transfer", category=self.category
+        )
+        settings_obj = FinanceSettings.load()
+        settings_obj.internal_transfer_subcategory = transfer_subcategory
+        settings_obj.save()
+        savings_account = BankAccount.objects.create(
+            name="Savings",
+            account_number="456/0100",
+            default_csv_mapping=self.mapping,
+        )
+        outgoing = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Transfer to savings",
+            amount=Decimal("-100.00"),
+            currency="CZK",
+            counterparty_account_number="456/0100",
+            variable_symbol="202601",
+        )
+        incoming = Transaction.objects.create(
+            bank_account=savings_account,
+            transaction_date="2026-01-04",
+            description="Transfer from main",
+            amount=Decimal("100.00"),
+            currency="CZK",
+            counterparty_account_number="123/0100",
+            variable_symbol="202601",
+        )
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Same account movement",
+            amount=Decimal("100.00"),
+            currency="CZK",
+        )
+
+        too_strict_response = self.client.get(
+            "/api/transactions/internal-transfers/preview/",
+            {"date_tolerance_days": 1},
+        )
+        preview_response = self.client.get(
+            "/api/transactions/internal-transfers/preview/",
+            {"date_tolerance_days": 2},
+        )
+        preview_payload = json_body(preview_response)
+        candidate = preview_payload["candidates"][0]
+
+        self.assertEqual(too_strict_response.status_code, 200)
+        self.assertEqual(json_body(too_strict_response)["count"], 0)
+        self.assertEqual(preview_response.status_code, 200)
+        self.assertEqual(preview_payload["count"], 1)
+        self.assertEqual(candidate["confidence_level"], "high")
+        self.assertEqual(candidate["date_delta_days"], 2)
+        self.assertEqual(candidate["outgoing"]["id"], str(outgoing.id))
+        self.assertEqual(candidate["incoming"]["id"], str(incoming.id))
+        reason_labels = [reason["label"] for reason in candidate["match_reasons"]]
+        reason_tones = {
+            reason["label"]: reason["tone"] for reason in candidate["match_reasons"]
+        }
+        self.assertIn("Same amount", reason_labels)
+        self.assertIn("2 days apart", reason_labels)
+        self.assertIn("Outgoing account match", reason_labels)
+        self.assertIn("Incoming account match", reason_labels)
+        self.assertIn("Variable symbol match", reason_labels)
+        self.assertNotIn("Same currency", reason_labels)
+        self.assertNotIn("Opposite directions", reason_labels)
+        self.assertEqual(reason_tones["Same amount"], "positive")
+        self.assertEqual(reason_tones["2 days apart"], "negative")
+
+        apply_response = self.post_json(
+            "/api/transactions/internal-transfers/apply/?date_tolerance_days=2",
+            {"candidate_ids": [candidate["id"]]},
+        )
+        apply_payload = json_body(apply_response)
+        outgoing.refresh_from_db()
+        incoming.refresh_from_db()
+
+        self.assertEqual(apply_response.status_code, 200)
+        self.assertEqual(apply_payload["created"], 1)
+        self.assertEqual(InternalTransferMatch.objects.count(), 1)
+        self.assertTrue(outgoing.is_ignored)
+        self.assertTrue(incoming.is_ignored)
+        self.assertTrue(outgoing.is_categorization_locked)
+        self.assertTrue(incoming.is_categorization_locked)
+        self.assertEqual(outgoing.subcategory, transfer_subcategory)
+        self.assertEqual(incoming.subcategory, transfer_subcategory)
+
+        matched_preview = self.client.get(
+            "/api/transactions/internal-transfers/preview/",
+            {
+                "date_tolerance_days": 2,
+                "include_ignored": "true",
+                "include_locked": "true",
+            },
+        )
+
+        self.assertEqual(matched_preview.status_code, 200)
+        self.assertEqual(json_body(matched_preview)["count"], 0)
+
+        override_subcategory = Subcategory.objects.create(
+            name="Transfer Override", category=self.category
+        )
+        override_outgoing = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-08",
+            description="Transfer to savings override",
+            amount=Decimal("-250.00"),
+            currency="CZK",
+        )
+        override_incoming = Transaction.objects.create(
+            bank_account=savings_account,
+            transaction_date="2026-01-08",
+            description="Transfer from main override",
+            amount=Decimal("250.00"),
+            currency="CZK",
+        )
+        override_preview = self.client.get(
+            "/api/transactions/internal-transfers/preview/",
+            {"date_tolerance_days": 0},
+        )
+        override_candidate = json_body(override_preview)["candidates"][0]
+        override_apply = self.post_json(
+            "/api/transactions/internal-transfers/apply/?date_tolerance_days=0",
+            {
+                "candidate_ids": [override_candidate["id"]],
+                "subcategory_id": str(override_subcategory.id),
+            },
+        )
+        override_outgoing.refresh_from_db()
+        override_incoming.refresh_from_db()
+
+        self.assertEqual(override_apply.status_code, 200)
+        self.assertEqual(json_body(override_apply)["created"], 1)
+        self.assertEqual(override_outgoing.subcategory, override_subcategory)
+        self.assertEqual(override_incoming.subcategory, override_subcategory)
 
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
@@ -1699,6 +1837,7 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["transactions"], 1)
+        self.assertEqual(payload["internal_transfer_matches"], 0)
         self.assertEqual(payload["imports"], 1)
         self.assertEqual(payload["bank_accounts"], 1)
         self.assertEqual(payload["csv_mappings"], 1)
@@ -1991,6 +2130,69 @@ class MaintenanceRestoreTests(TransactionTestCase):
         )
         self.assertFalse(
             Transaction.objects.filter(description="Current transaction").exists()
+        )
+
+    def test_database_restore_migrates_backup_without_internal_transfer_table(self):
+        restored_transaction = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Legacy restored transaction",
+            amount=Decimal("-12.50"),
+        )
+        connection.ensure_connection()
+        backup_bytes = connection.connection.serialize()
+
+        legacy_backup_path = None
+        legacy_connection = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as backup:
+                legacy_backup_path = Path(backup.name)
+                backup.write(backup_bytes)
+            legacy_connection = sqlite3.connect(str(legacy_backup_path))
+            legacy_connection.execute(
+                "DROP TABLE IF EXISTS finance_internaltransfermatch"
+            )
+            legacy_connection.execute(
+                "DELETE FROM django_migrations WHERE app = ? AND name = ?",
+                ("finance", "0010_internal_transfer_match"),
+            )
+            legacy_connection.commit()
+            legacy_backup_bytes = legacy_backup_path.read_bytes()
+        finally:
+            if legacy_connection is not None:
+                legacy_connection.close()
+            if legacy_backup_path and legacy_backup_path.exists():
+                legacy_backup_path.unlink()
+
+        Transaction.objects.filter(id=restored_transaction.id).delete()
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-02-02",
+            description="Current legacy restore transaction",
+            amount=Decimal("-8.00"),
+        )
+
+        response = self.client.post(
+            "/api/maintenance/database-restore/",
+            {
+                "confirmation": "RESTORE DATABASE",
+                "backup_file": SimpleUploadedFile(
+                    "legacy-cashmoney-backup.sqlite3",
+                    legacy_backup_bytes,
+                    content_type="application/x-sqlite3",
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Transaction.objects.filter(
+                description="Legacy restored transaction"
+            ).exists()
+        )
+        self.assertIn(
+            "finance_internaltransfermatch",
+            connection.introspection.table_names(),
         )
 
     def test_saved_backup_restore_replaces_current_database_and_keeps_backup_visible(

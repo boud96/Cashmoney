@@ -8,6 +8,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.management import call_command
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
@@ -30,6 +31,7 @@ from .models import (
     ExchangeRate,
     FinanceSettings,
     HEX_COLOR_VALIDATOR,
+    InternalTransferMatch,
     Keyword,
     SavedFilter,
     Subcategory,
@@ -59,7 +61,9 @@ from .services import (
     CategorizationService,
     ExchangeRateProviderError,
     available_currency_options,
+    apply_internal_transfer_candidates,
     build_dashboard_summary,
+    build_internal_transfer_candidates,
     build_uncategorized_suggestions,
     detect_csv_columns,
     exchange_rate_status,
@@ -1098,6 +1102,56 @@ class UncategorizedSuggestionView(JsonView):
         )
 
 
+def internal_transfer_date_tolerance(request, data=None):
+    raw_value = request.GET.get("date_tolerance_days")
+    if raw_value in (None, "") and data is not None:
+        raw_value = data.get("date_tolerance_days")
+    return min(
+        clean_int(raw_value, "date_tolerance_days", default=3, minimum=0),
+        14,
+    )
+
+
+class InternalTransferCandidateView(JsonView):
+    def get(self, request):
+        date_tolerance_days = internal_transfer_date_tolerance(request)
+        limit = min(
+            clean_int(request.GET.get("limit"), "limit", default=100, minimum=1),
+            500,
+        )
+        return json_response(
+            build_internal_transfer_candidates(
+                filtered_transactions(request),
+                date_tolerance_days=date_tolerance_days,
+                limit=limit,
+            )
+        )
+
+
+class InternalTransferApplyView(JsonView):
+    def post(self, request):
+        data = parse_json_body(request)
+        candidate_ids = clean_list(
+            require_field(data, "candidate_ids"), "candidate_ids"
+        )
+        date_tolerance_days = internal_transfer_date_tolerance(request, data)
+        subcategory_provided = "subcategory_id" in data
+        internal_transfer_subcategory = (
+            optional_object(Subcategory, data.get("subcategory_id"), "subcategory_id")
+            if subcategory_provided
+            else None
+        )
+        return json_response(
+            apply_internal_transfer_candidates(
+                filtered_transactions(request),
+                candidate_ids,
+                date_tolerance_days=date_tolerance_days,
+                internal_transfer_subcategory=internal_transfer_subcategory,
+                subcategory_provided=subcategory_provided,
+            )
+        )
+
+
 class TransactionFilterMetadataView(JsonView):
     def get(self, request):
         oldest_date = (
@@ -1217,72 +1271,166 @@ class RecategorizeTransactionsView(JsonView):
         )
 
 
+def legacy_bulk_assign_payload(data):
+    assignment_type = clean_text(
+        require_field(data, "assignment_type"), "assignment_type", required=True
+    )
+    if assignment_type == "subcategory":
+        return {"subcategory_id": require_field(data, "subcategory_id")}
+    if assignment_type == "tag":
+        return {
+            "tag_mode": "add",
+            "tag_ids": [require_field(data, "tag_id")],
+        }
+    if assignment_type == "want_need_investment":
+        return {
+            "want_need_investment": require_field(data, "want_need_investment"),
+        }
+    raise APIValidationError(
+        "Invalid assignment type",
+        {
+            "field": "assignment_type",
+            "allowed": ["subcategory", "tag", "want_need_investment"],
+        },
+    )
+
+
 class BulkAssignTransactionsView(JsonView):
     def post(self, request):
         data = parse_json_body(request)
-        assignment_type = clean_text(
-            require_field(data, "assignment_type"), "assignment_type", required=True
-        )
         queryset = filtered_transactions(request)
         transaction_ids = list(queryset.values_list("id", flat=True))
         updated_count = len(transaction_ids)
+        actions = []
 
-        if assignment_type == "subcategory":
+        if "assignment_type" in data:
+            data = legacy_bulk_assign_payload(data)
+
+        update_values = {"updated_at": timezone.now()}
+        should_lock_categorization = False
+
+        if "subcategory_id" in data:
             subcategory = optional_object(
-                Subcategory, require_field(data, "subcategory_id"), "subcategory_id"
+                Subcategory, data.get("subcategory_id"), "subcategory_id"
             )
-            Transaction.objects.filter(id__in=transaction_ids).update(
-                subcategory=subcategory,
-                is_categorization_locked=True,
-                updated_at=timezone.now(),
+            update_values["subcategory"] = subcategory
+            should_lock_categorization = True
+            actions.append(
+                {
+                    "field": "subcategory",
+                    "label": (
+                        f"{subcategory.category.name} / {subcategory.name}"
+                        if subcategory
+                        else "Unassigned"
+                    ),
+                }
             )
-            label = (
-                f"{subcategory.category.name} / {subcategory.name}"
-                if subcategory
-                else "Unassigned"
+
+        tag_mode = clean_choice(
+            data.get("tag_mode", "no_change"),
+            "tag_mode",
+            [
+                ("no_change", "No change"),
+                ("add", "Add"),
+                ("replace", "Replace"),
+                ("clear", "Clear"),
+            ],
+            allow_blank=False,
+        )
+        tag_ids = id_list(data.get("tag_ids", []))
+        tags = []
+        if tag_mode in {"add", "replace"}:
+            if not tag_ids:
+                raise APIValidationError(
+                    "Choose at least one tag", {"field": "tag_ids"}
+                )
+            tags = list(Tag.objects.filter(id__in=tag_ids))
+            if len(tags) != len(set(tag_ids)):
+                raise APIValidationError(
+                    "Invalid object reference", {"field": "tag_ids"}
+                )
+        if tag_mode != "no_change":
+            should_lock_categorization = True
+            actions.append(
+                {
+                    "field": "tags",
+                    "label": (
+                        "Cleared"
+                        if tag_mode == "clear"
+                        else ", ".join(tag.name for tag in tags)
+                    ),
+                    "mode": tag_mode,
+                }
             )
-        elif assignment_type == "tag":
-            tag = optional_object(Tag, require_field(data, "tag_id"), "tag_id")
-            Transaction.objects.filter(id__in=transaction_ids).update(
-                is_categorization_locked=True,
-                updated_at=timezone.now(),
-            )
-            through_model = Transaction.tags.through
-            through_model.objects.bulk_create(
-                [
-                    through_model(transaction_id=transaction_id, tag_id=tag.id)
-                    for transaction_id in transaction_ids
-                ],
-                ignore_conflicts=True,
-            )
-            label = tag.name
-        elif assignment_type == "want_need_investment":
+
+        if "want_need_investment" in data:
             want_need_investment = clean_choice(
-                require_field(data, "want_need_investment"),
+                data.get("want_need_investment"),
                 "want_need_investment",
                 WantNeedInvestment.CHOICES,
-                allow_blank=False,
+                allow_blank=True,
             )
-            Transaction.objects.filter(id__in=transaction_ids).update(
-                want_need_investment=want_need_investment,
-                is_categorization_locked=True,
-                updated_at=timezone.now(),
-            )
-            label = dict(WantNeedInvestment.CHOICES)[want_need_investment]
-        else:
-            raise APIValidationError(
-                "Invalid assignment type",
+            update_values["want_need_investment"] = want_need_investment
+            should_lock_categorization = True
+            actions.append(
                 {
-                    "field": "assignment_type",
-                    "allowed": ["subcategory", "tag", "want_need_investment"],
-                },
+                    "field": "want_need_investment",
+                    "label": (
+                        dict(WantNeedInvestment.CHOICES).get(want_need_investment)
+                        if want_need_investment
+                        else "Unassigned"
+                    ),
+                }
             )
+
+        if "is_ignored" in data:
+            is_ignored = parse_bool(data.get("is_ignored"))
+            update_values["is_ignored"] = is_ignored
+            should_lock_categorization = True
+            actions.append(
+                {
+                    "field": "is_ignored",
+                    "label": "Ignored" if is_ignored else "Not ignored",
+                }
+            )
+
+        if "is_categorization_locked" in data:
+            is_locked = parse_bool(data.get("is_categorization_locked"))
+            update_values["is_categorization_locked"] = is_locked
+            actions.append(
+                {
+                    "field": "is_categorization_locked",
+                    "label": "Locked" if is_locked else "Unlocked",
+                }
+            )
+        elif should_lock_categorization:
+            update_values["is_categorization_locked"] = True
+
+        if not actions:
+            raise APIValidationError("Choose at least one bulk assignment")
+
+        Transaction.objects.filter(id__in=transaction_ids).update(**update_values)
+
+        if tag_mode != "no_change":
+            through_model = Transaction.tags.through
+            if tag_mode in {"replace", "clear"}:
+                through_model.objects.filter(
+                    transaction_id__in=transaction_ids
+                ).delete()
+            if tag_mode in {"add", "replace"}:
+                through_model.objects.bulk_create(
+                    [
+                        through_model(transaction_id=transaction_id, tag_id=tag.id)
+                        for transaction_id in transaction_ids
+                        for tag in tags
+                    ],
+                    ignore_conflicts=True,
+                )
 
         return json_response(
             {
                 "updated": updated_count,
-                "assignment_type": assignment_type,
-                "label": label,
+                "actions": actions,
             }
         )
 
@@ -1420,6 +1568,7 @@ class DashboardSummaryView(JsonView):
 def maintenance_counts():
     return {
         "transactions": Transaction.objects.count(),
+        "internal_transfer_matches": InternalTransferMatch.objects.count(),
         "imports": CSVImport.objects.count(),
         "exchange_rates": ExchangeRate.objects.count(),
         "sample_transactions": Transaction.objects.filter(
@@ -1466,6 +1615,7 @@ def require_confirmation(request, expected):
 def delete_all_transactions():
     counts = {
         "transactions": Transaction.objects.count(),
+        "internal_transfer_matches": InternalTransferMatch.objects.count(),
         "imports": CSVImport.objects.count(),
     }
     with transaction.atomic():
@@ -1657,6 +1807,10 @@ def create_pre_restore_backup():
     return backup_path
 
 
+def migrate_restored_database():
+    call_command("migrate", interactive=False, verbosity=0)
+
+
 def restore_sqlite_database_from_path(backup_path):
     validate_sqlite_backup(backup_path)
     pre_restore_path = create_pre_restore_backup()
@@ -1670,6 +1824,7 @@ def restore_sqlite_database_from_path(backup_path):
         if source is not None:
             source.close()
     connection.close()
+    migrate_restored_database()
     return pre_restore_path
 
 
