@@ -61,6 +61,8 @@ export default function App() {
   });
   const filterSelectionsInitialized = useRef(false);
   const confirmationResolver = useRef(null);
+  const dashboardLoadSequence = useRef(0);
+  const dashboardSummarySequence = useRef(0);
 
   const notify = useCallback((message) => {
     setToast(message);
@@ -142,29 +144,56 @@ export default function App() {
 
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
 
-  const loadDashboardSummary = useCallback(async () => {
-    try {
-      setSummary(await apiGet("/dashboard/summary/", filterParams));
-    } catch (error) {
-      notify(error.message);
+  const runDashboardLoad = useCallback(async (params, loadSequence, summarySequence) => {
+    if (loadSequence !== dashboardLoadSequence.current) {
+      return;
     }
-  }, [filterParams, notify]);
-
-  const loadDashboard = useCallback(async () => {
     setLoadingDashboard(true);
     try {
       const [nextSummary, nextTransactions] = await Promise.all([
-        apiGet("/dashboard/summary/", filterParams),
-        apiGet("/transactions/", { ...filterParams, limit: 10000 }),
+        apiGet("/dashboard/summary/", params),
+        apiGet("/transactions/", { ...params, limit: 10000 }),
       ]);
-      setSummary(nextSummary);
+      if (loadSequence !== dashboardLoadSequence.current) {
+        return;
+      }
+      if (summarySequence === dashboardSummarySequence.current) {
+        setSummary(nextSummary);
+      }
       setTransactionPage(nextTransactions);
     } catch (error) {
-      notify(error.message);
+      if (loadSequence === dashboardLoadSequence.current) {
+        notify(error.message);
+      }
     } finally {
-      setLoadingDashboard(false);
+      if (loadSequence === dashboardLoadSequence.current) {
+        setLoadingDashboard(false);
+      }
+    }
+  }, [notify]);
+
+  const loadDashboardSummary = useCallback(async () => {
+    const summarySequence = dashboardSummarySequence.current + 1;
+    dashboardSummarySequence.current = summarySequence;
+    try {
+      const nextSummary = await apiGet("/dashboard/summary/", filterParams);
+      if (summarySequence === dashboardSummarySequence.current) {
+        setSummary(nextSummary);
+      }
+    } catch (error) {
+      if (summarySequence === dashboardSummarySequence.current) {
+        notify(error.message);
+      }
     }
   }, [filterParams, notify]);
+
+  const loadDashboard = useCallback(async (params = filterParams) => {
+    const loadSequence = dashboardLoadSequence.current + 1;
+    const summarySequence = dashboardSummarySequence.current + 1;
+    dashboardLoadSequence.current = loadSequence;
+    dashboardSummarySequence.current = summarySequence;
+    await runDashboardLoad(params, loadSequence, summarySequence);
+  }, [filterParams, runDashboardLoad]);
 
   const loadMaintenance = useCallback(async () => {
     try {
@@ -188,9 +217,17 @@ export default function App() {
 
   useEffect(() => {
     if (filterDefaults.to || filterDefaults.from) {
-      loadDashboard();
+      const loadSequence = dashboardLoadSequence.current + 1;
+      const summarySequence = dashboardSummarySequence.current + 1;
+      dashboardLoadSequence.current = loadSequence;
+      dashboardSummarySequence.current = summarySequence;
+      const timeoutId = window.setTimeout(() => {
+        runDashboardLoad(filterParams, loadSequence, summarySequence);
+      }, 250);
+      return () => window.clearTimeout(timeoutId);
     }
-  }, [filterDefaults, filterParams, loadDashboard]);
+    return undefined;
+  }, [filterDefaults.from, filterDefaults.to, filterParams, runDashboardLoad]);
 
   useEffect(() => {
     if (activePage === "maintenance") {

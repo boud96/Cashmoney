@@ -249,8 +249,8 @@ export function buildMetrics(summary, transactionPage, hideAmounts = false, defa
     ["Incomes", formatMoneyWithCurrency(income, currency, hideAmounts), "positive", { value: formatMoneyWithCurrency(income / monthCount, currency, hideAmounts), tone: "positive" }],
     ["Expenses", formatMoneyWithCurrency(expense, currency, hideAmounts), "negative", { value: formatMoneyWithCurrency(expense / monthCount, currency, hideAmounts), tone: "negative" }],
     ["Net", formatMoneyWithCurrency(net, currency, hideAmounts), "metric-blue", { value: formatMoneyWithCurrency(net / monthCount, currency, hideAmounts), tone: "metric-blue" }],
-    ["Transactions", `${transactionPage.count.toLocaleString()} / ${(transactionPage.total_count ?? transactionPage.count).toLocaleString()}`, ""],
-    ["Uncategorized", uncategorized.toLocaleString(), ""],
+    ["Transactions", `${formatCount(transactionPage.count)} / ${formatCount(transactionPage.total_count ?? transactionPage.count)}`, ""],
+    ["Uncategorized", formatCount(uncategorized), ""],
   ];
 }
 
@@ -618,7 +618,7 @@ export function formatNumber(value, options = {}) {
 }
 
 export function formatCount(value) {
-  return Number(value || 0).toLocaleString();
+  return formatNumber(value, { maximumFractionDigits: 0 });
 }
 
 export function colorPillStyle(color) {
