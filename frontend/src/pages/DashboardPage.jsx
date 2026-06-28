@@ -648,18 +648,27 @@ export default function DashboardPage({
                   <span className="filter-label">Display</span>
                 </div>
                 <div className="filter-display-options">
-                  <label className="check-row">
-                    <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
-                    <span>Divide amounts by owners</span>
-                  </label>
-                  <label className="check-row">
-                    <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
-                    <span>Ignored</span>
-                  </label>
-                  <label className="check-row">
-                    <input checked={filters.include_locked} onChange={(event) => onFilterChange("include_locked", event.target.checked)} type="checkbox" />
-                    <span>Locked</span>
-                  </label>
+                  <div className="check-row">
+                    <label className="check-row-label">
+                      <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
+                      <span>Divide by account owner count</span>
+                    </label>
+                    <HelpTooltip text="Divides account amounts by that account's owner count for dashboard totals and displayed transaction amounts." />
+                  </div>
+                  <div className="check-row">
+                    <label className="check-row-label">
+                      <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
+                      <span>Ignored</span>
+                    </label>
+                    <HelpTooltip text="Includes transactions marked as ignored in the dashboard, charts, and transaction table." />
+                  </div>
+                  <div className="check-row">
+                    <label className="check-row-label">
+                      <input checked={filters.include_locked} onChange={(event) => onFilterChange("include_locked", event.target.checked)} type="checkbox" />
+                      <span>Locked</span>
+                    </label>
+                    <HelpTooltip text="Includes transactions whose categorization is locked and protected from automatic recategorization." />
+                  </div>
                 </div>
               </div>
               <div className="filter-group filter-category-group">
@@ -907,6 +916,15 @@ function textLines(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function HelpTooltip({ text }) {
+  return (
+    <span className="help-tooltip">
+      <button aria-label={text} className="help-tooltip-button" type="button">?</button>
+      <span className="help-tooltip-bubble" role="tooltip">{text}</span>
+    </span>
+  );
 }
 
 function RecategorizeModal({
@@ -2103,7 +2121,7 @@ function KeywordMatchList({ matches }) {
 }
 
 function RelativeRangeForm({ setFilters }) {
-  const [count, setCount] = useState(10);
+  const [count, setCount] = useState("");
   const [unit, setUnit] = useState("months");
   function submit(event) {
     event.preventDefault();

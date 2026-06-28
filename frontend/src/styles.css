@@ -1068,6 +1068,7 @@ h2 {
 
 .filter-display-options .check-row {
   flex: 1 1 180px;
+  justify-content: space-between;
 }
 
 .filter-category-row {
@@ -1507,6 +1508,17 @@ select option {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
+}
+
+.check-row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.check-row-label span {
+  overflow-wrap: anywhere;
 }
 
 .check-row input {

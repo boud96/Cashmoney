@@ -152,8 +152,8 @@ export function emptyFilters() {
     tag: [],
     q: "",
     include_ignored: false,
-    include_locked: false,
-    split_by_owners: false,
+    include_locked: true,
+    split_by_owners: true,
   };
 }
 
