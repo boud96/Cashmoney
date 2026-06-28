@@ -888,7 +888,7 @@ export default function DashboardPage({
           <h2>Transactions</h2>
           <span className="muted">{transactionPage.count.toLocaleString()} shown</span>
         </div>
-        <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
@@ -1545,8 +1545,11 @@ function InfoIcon() {
   );
 }
 
-function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, refs, rows, updateTransaction }) {
+const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filters, so this row is kept visible temporarily.";
+
+function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
+  const [filterRetainedCells, setFilterRetainedCells] = useState({});
   const rawDataPopoverRef = useRef(null);
   const subcategoryOptions = useMemo(() => ["", ...refs.subcategories.map((item) => item.id)], [refs.subcategories]);
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
@@ -1557,6 +1560,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
     [refs.accounts],
   );
   const mappingLookup = useMemo(() => new Map(refs.mappings.map((item) => [item.id, item])), [refs.mappings]);
+  const filterSignature = useMemo(() => JSON.stringify(filters), [filters]);
 
   const rowData = useMemo(() => rows.map((row) => ({
     ...row,
@@ -1564,6 +1568,46 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
     categorization_conflict: conflictIds.has(row.id),
     subcategory_id: row.subcategory?.id || "",
   })), [conflictIds, rows]);
+
+  useEffect(() => {
+    setFilterRetainedCells({});
+  }, [filterSignature]);
+
+  const getRetainedCellMarker = useCallback((params) => {
+    const field = params.colDef?.field;
+    const rowId = params.data?.id;
+    if (!field || !rowId) {
+      return false;
+    }
+    return Boolean(filterRetainedCells[rowId]?.[field]);
+  }, [filterRetainedCells]);
+
+  const retainedCellClass = useCallback((params, baseClass = "") => {
+    return joinClassNames(baseClass, getRetainedCellMarker(params) ? "filter-retained-cell" : "");
+  }, [getRetainedCellMarker]);
+
+  const retainedCellTooltip = useCallback((params) => (
+    getRetainedCellMarker(params) ? FILTER_RETAINED_TOOLTIP : null
+  ), [getRetainedCellMarker]);
+
+  const saveTransaction = useCallback(async (row, patch) => {
+    const updated = await updateTransaction(row, patch);
+    const changedFields = changedTransactionCellFields(patch);
+    const isRetainedByEdit = changedFields.length > 0 && !transactionMatchesCurrentFilters(updated, filters);
+    setFilterRetainedCells((current) => {
+      const next = { ...current };
+      if (!isRetainedByEdit) {
+        delete next[updated.id];
+        return next;
+      }
+      next[updated.id] = {
+        ...(next[updated.id] || {}),
+        ...Object.fromEntries(changedFields.map((field) => [field, true])),
+      };
+      return next;
+    });
+    return updated;
+  }, [filters, updateTransaction]);
 
   useEffect(() => {
     if (!rawDataPopover) {
@@ -1685,7 +1729,8 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
         const subcategory = subcategoryLookup.get(params.value);
         return subcategory?.name || "Unassigned";
       },
-      cellClass: (params) => `editable-cell ${!params.value ? "muted-cell" : ""}`,
+      cellClass: (params) => retainedCellClass(params, `editable-cell ${!params.value ? "muted-cell" : ""}`),
+      tooltipValueGetter: retainedCellTooltip,
       width: 170,
     },
     {
@@ -1697,7 +1742,8 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
       headerName: "WNI",
       cellRenderer: (params) => <WniCell value={params.value} />,
       valueFormatter: (params) => (params.value ? titleCase(params.value) : "Unassigned"),
-      cellClass: (params) => `editable-cell ${!params.value ? "muted-cell" : ""}`,
+      cellClass: (params) => retainedCellClass(params, `editable-cell ${!params.value ? "muted-cell" : ""}`),
+      tooltipValueGetter: retainedCellTooltip,
       width: 135,
     },
     {
@@ -1710,10 +1756,12 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
           notify={notify}
           row={params.data}
           tags={params.value || []}
-          updateTransaction={updateTransaction}
+          updateTransaction={saveTransaction}
         />
       ),
       valueFormatter: (params) => (params.value || []).map((tag) => tag.name).join(", ") || "No tags",
+      cellClass: retainedCellClass,
+      tooltipValueGetter: retainedCellTooltip,
       sortable: false,
       flex: 1,
       minWidth: 240,
@@ -1727,7 +1775,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
           checked={Boolean(params.value)}
           onChange={async (event) => {
             try {
-              await updateTransaction(params.data, { is_ignored: event.target.checked });
+              await saveTransaction(params.data, { is_ignored: event.target.checked });
               notify("Transaction saved");
             } catch (error) {
               notify(error.message);
@@ -1736,10 +1784,12 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
           type="checkbox"
         />
       ),
+      cellClass: retainedCellClass,
+      tooltipValueGetter: retainedCellTooltip,
       width: 110,
     },
     {
-      cellClass: "lock-cell",
+      cellClass: (params) => retainedCellClass(params, "lock-cell"),
       field: "is_categorization_locked",
       headerName: "Locked",
       cellRenderer: (params) => {
@@ -1752,7 +1802,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
             onClick={async (event) => {
               event.stopPropagation();
               try {
-                await updateTransaction(params.data, { is_categorization_locked: !locked });
+                await saveTransaction(params.data, { is_categorization_locked: !locked });
                 notify(locked ? "Transaction unlocked" : "Transaction locked");
               } catch (error) {
                 notify(error.message);
@@ -1766,9 +1816,10 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
         );
       },
       valueFormatter: (params) => (params.value ? "Locked" : "Unlocked"),
+      tooltipValueGetter: retainedCellTooltip,
       width: 96,
     },
-  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, toggleRawDataPopover, updateTransaction]);
+  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, refs.tags, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {
@@ -1778,7 +1829,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
       ? { subcategory_id: event.newValue || "" }
       : { want_need_investment: event.newValue || "" };
     try {
-      await updateTransaction(event.data, patch);
+      await saveTransaction(event.data, patch);
       notify("Transaction saved");
     } catch (error) {
       event.node.setDataValue(event.colDef.field, event.oldValue);
@@ -1793,11 +1844,14 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
         defaultColDef={{ resizable: true, sortable: true }}
         enableCellTextSelection
         ensureDomOrder
+        getRowId={(params) => params.data.id}
         onCellValueChanged={onCellValueChanged}
         rowData={rowData}
         rowHeight={48}
         stopEditingWhenCellsLoseFocus
+        suppressScrollOnNewData
         theme={transactionGridTheme}
+        tooltipShowDelay={250}
       />
       {rawDataPopover && (
         <RawDataPopover
@@ -1808,6 +1862,108 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
       )}
     </div>
   );
+}
+
+function changedTransactionCellFields(patch) {
+  const fields = [];
+  if (Object.prototype.hasOwnProperty.call(patch, "subcategory_id")) {
+    fields.push("subcategory_id");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "want_need_investment")) {
+    fields.push("want_need_investment");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "tag_ids")) {
+    fields.push("tags");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "is_ignored")) {
+    fields.push("is_ignored");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "is_categorization_locked")) {
+    fields.push("is_categorization_locked");
+  }
+  return fields;
+}
+
+function transactionMatchesCurrentFilters(row, filters = {}) {
+  if (!row) {
+    return false;
+  }
+  if (!filters.include_ignored && row.is_ignored) {
+    return false;
+  }
+  if (!filters.include_locked && row.is_categorization_locked) {
+    return false;
+  }
+  if (filters.date_from && (!row.transaction_date || row.transaction_date < filters.date_from)) {
+    return false;
+  }
+  if (filters.date_to && (!row.transaction_date || row.transaction_date > filters.date_to)) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.direction, row.direction || "")) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.bank_account, row.bank_account?.id || "")) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.category, row.category?.id || UNASSIGNED)) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.subcategory, row.subcategory?.id || UNASSIGNED)) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.want_need_investment, row.want_need_investment || UNASSIGNED)) {
+    return false;
+  }
+  if (!tagSelectionMatches(filters.tag, row.tags || [])) {
+    return false;
+  }
+  if (!transactionSearchMatches(row, filters.q)) {
+    return false;
+  }
+  return true;
+}
+
+function checklistSelectionMatches(selection, value) {
+  if (!Array.isArray(selection)) {
+    return true;
+  }
+  return selection.length > 0 && selection.includes(value);
+}
+
+function tagSelectionMatches(selection, tags) {
+  if (!Array.isArray(selection)) {
+    return true;
+  }
+  if (!selection.length) {
+    return false;
+  }
+  if (!tags.length) {
+    return selection.includes(UNASSIGNED);
+  }
+  return tags.some((tag) => selection.includes(tag.id));
+}
+
+function transactionSearchMatches(row, query) {
+  const normalizedQuery = normalizeName(query);
+  if (!normalizedQuery) {
+    return true;
+  }
+  const rawDataValues = row.raw_data && typeof row.raw_data === "object"
+    ? Object.values(row.raw_data)
+    : [];
+  const searchableText = [
+    row.description,
+    row.counterparty_name,
+    row.counterparty_account_number,
+    row.transaction_type,
+    ...rawDataValues,
+  ].map((value) => normalizeName(value)).join(" ");
+  return searchableText.includes(normalizedQuery);
+}
+
+function joinClassNames(...classNames) {
+  return classNames.filter(Boolean).join(" ");
 }
 
 

@@ -143,6 +143,14 @@ export default function App() {
 
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
 
+  const loadDashboardSummary = useCallback(async () => {
+    try {
+      setSummary(await apiGet("/dashboard/summary/", filterParams));
+    } catch (error) {
+      notify(error.message);
+    }
+  }, [filterParams, notify]);
+
   const loadDashboard = useCallback(async () => {
     setLoadingDashboard(true);
     try {
@@ -232,15 +240,15 @@ export default function App() {
     setIsAccentPickerOpen(false);
   };
 
-  const updateTransaction = async (transaction, patch) => {
-    const updated = await apiPatch(`/transactions/${transaction.id}/`, patch);
+  const updateTransaction = useCallback(async (transaction, patch) => {
+    const updated = await apiPatch(`/transactions/${transaction.id}/`, patch, filterParams);
     setTransactionPage((current) => ({
       ...current,
       results: current.results.map((item) => (item.id === updated.id ? updated : item)),
     }));
-    await loadDashboard();
+    loadDashboardSummary();
     return updated;
-  };
+  }, [filterParams, loadDashboardSummary]);
 
   const [title, kicker] = pages[activePage];
 

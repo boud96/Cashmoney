@@ -1249,6 +1249,9 @@ class TransactionDetailView(JsonView):
         return json_response(
             serialize_transaction(
                 transaction,
+                split_by_owners=parse_bool(
+                    request.GET.get("split_by_owners"), default=False
+                ),
                 default_currency=settings_obj.default_currency,
             )
         )

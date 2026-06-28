@@ -2764,6 +2764,13 @@ select option {
   cursor: pointer;
 }
 
+.transaction-grid .ag-cell.filter-retained-cell {
+  background: color-mix(in srgb, var(--action) 8%, var(--surface));
+  border-color: var(--action);
+  outline: 2px solid var(--action);
+  outline-offset: -3px;
+}
+
 .transaction-grid .ag-cell:has(.color-cell) {
   align-items: stretch;
   padding: 0;

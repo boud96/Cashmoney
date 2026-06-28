@@ -1706,6 +1706,30 @@ class APITests(FinanceTestCase):
         self.assertEqual(transactions["results"][0]["amount"], -45.0)
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
 
+    def test_transaction_patch_respects_split_by_owners_response_amount(self):
+        self.account.owners = 2
+        self.account.save(update_fields=["owners"])
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Shared lunch",
+            amount=Decimal("-90.00"),
+            subcategory=self.subcategory,
+        )
+
+        response = self.client.patch(
+            f"/api/transactions/{transaction_obj.id}/?split_by_owners=true",
+            data=json.dumps({"want_need_investment": WantNeedInvestment.NEED}),
+            content_type="application/json",
+        )
+        transaction_obj.refresh_from_db()
+
+        payload = json_body(response)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["amount"], -45.0)
+        self.assertEqual(payload["want_need_investment"], WantNeedInvestment.NEED)
+        self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
+
     def test_dashboard_summary_uses_converted_default_currency_amounts(self):
         settings_obj = FinanceSettings.load()
         settings_obj.default_currency = "CZK"
