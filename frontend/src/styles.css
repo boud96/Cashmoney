@@ -2765,6 +2765,18 @@ select option {
   width: 100%;
 }
 
+.transaction-grid .ag-cell:has(.tag-edit-cell) {
+  align-items: stretch;
+}
+
+.transaction-grid .ag-cell:has(.tag-edit-cell) .ag-cell-wrapper,
+.transaction-grid .ag-cell:has(.tag-edit-cell) .ag-cell-value {
+  align-self: stretch;
+  display: flex;
+  min-height: 100%;
+  width: 100%;
+}
+
 .color-cell {
   align-items: center;
   display: flex;
@@ -2810,12 +2822,13 @@ select option {
   color: var(--chip-text);
   font-size: 12px;
   font-weight: 680;
+  line-height: 1.2;
 }
 
 .pill.color-pill,
 .pill.tag-pill {
-  min-height: 20px;
-  padding: 1px 7px;
+  min-height: 22px;
+  padding: 2px 7px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2833,29 +2846,63 @@ select option {
 }
 
 .tag-cloud {
+  align-items: center;
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
-  width: 100%;
-  max-height: 42px;
+  min-width: 0;
   overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.tag-cloud .pill {
+  flex-shrink: 0;
+}
+
+.tag-cloud-collapsed {
+  flex-wrap: nowrap;
+  min-height: 30px;
+}
+
+.tag-cloud-expanded {
+  flex-wrap: wrap;
+  max-height: 86px;
+  overflow: auto;
   padding-block: 2px;
 }
 
+.tag-cloud-measure {
+  display: flex;
+  gap: 4px;
+  left: 0;
+  max-width: none;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  visibility: hidden;
+  width: max-content;
+}
+
 .tag-edit-cell {
+  align-items: stretch;
+  display: flex;
+  min-height: 100%;
   position: relative;
   width: 100%;
 }
 
 .tag-cell-button {
+  align-items: center;
+  display: flex;
+  height: 100%;
   width: 100%;
   min-width: 0;
-  min-height: 34px;
+  min-height: 38px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: inherit;
-  padding: 2px 4px;
+  padding: 4px 6px;
   text-align: left;
 }
 
@@ -2890,11 +2937,6 @@ select option {
 
 .tag-popover-selected {
   min-height: 30px;
-}
-
-.tag-popover-selected .tag-cloud {
-  max-height: 86px;
-  overflow: auto;
 }
 
 .tag-search {

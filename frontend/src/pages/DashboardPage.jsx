@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import createPlotlyComponent from "react-plotly.js/factory";
 import Plotly from "plotly.js-dist-min";
@@ -16,7 +16,6 @@ import {
   completeMonthlyRows,
   countActiveFilters,
   cssVar,
-  estimateVisibleTagCount,
   formatAmountWithCurrency,
   formatAmountValue,
   formatDateInput,
@@ -2543,7 +2542,7 @@ function EditableTagCell({ allTags, notify, row, tags, updateTransaction }) {
           <div className="tag-option-list">
             {filteredTags.length ? filteredTags.map((tag) => (
               <button className={`tag-option ${selectedSet.has(tag.id) ? "is-selected" : ""}`} key={tag.id} onClick={() => toggleTag(tag.id)} type="button">
-                <span className="tag-option-check">{selectedSet.has(tag.id) ? "âœ“" : ""}</span>
+                <span className="tag-option-check">{selectedSet.has(tag.id) ? "\u2713" : ""}</span>
                 <span className="pill tag-pill" style={colorPillStyle(tag.color)}>{tag.name}</span>
               </button>
             )) : <div className="tag-no-matches">No matches</div>}
@@ -2575,33 +2574,93 @@ function tagPopoverPosition(rect) {
 
 function TagCloud({ collapse = true, tags }) {
   const containerRef = useRef(null);
-  const [width, setWidth] = useState(0);
-  const visibleCount = useMemo(() => (collapse ? estimateVisibleTagCount(tags, width) : tags.length), [collapse, tags, width]);
+  const measureRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(tags.length);
   const visibleTags = tags.slice(0, visibleCount);
   const hiddenCount = Math.max(tags.length - visibleCount, 0);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!collapse) {
+      setVisibleCount(tags.length);
+      return undefined;
+    }
     const element = containerRef.current;
+    const measureElement = measureRef.current;
     if (!element) {
       return undefined;
     }
-    function updateWidth() {
-      setWidth(element.clientWidth);
+
+    function updateVisibleCount() {
+      if (!tags.length) {
+        setVisibleCount(0);
+        return;
+      }
+      if (!measureElement) {
+        setVisibleCount(Math.min(tags.length, 2));
+        return;
+      }
+      setVisibleCount(measureVisibleTagCount(
+        tags,
+        element.clientWidth,
+        measureElement,
+      ));
     }
-    updateWidth();
+    updateVisibleCount();
     if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateWidth);
-      return () => window.removeEventListener("resize", updateWidth);
+      window.addEventListener("resize", updateVisibleCount);
+      return () => window.removeEventListener("resize", updateVisibleCount);
     }
-    const observer = new ResizeObserver(updateWidth);
+    const observer = new ResizeObserver(updateVisibleCount);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [collapse, tags]);
+
+  const className = `tag-cloud ${collapse ? "tag-cloud-collapsed" : "tag-cloud-expanded"}`;
 
   return (
-    <div className="tag-cloud" ref={containerRef} title={tagTitle(tags)}>
+    <div className={className} ref={containerRef} title={tagTitle(tags)}>
       {visibleTags.map((tag) => <span className="pill tag-pill" key={tag.id} style={colorPillStyle(tag.color)}>{tag.name}</span>)}
       {hiddenCount > 0 && <span className="pill tag-more-pill">+{hiddenCount}</span>}
+      {collapse && tags.length ? (
+        <div aria-hidden="true" className="tag-cloud-measure" ref={measureRef}>
+          {tags.map((tag) => (
+            <span className="pill tag-pill" data-tag-measure="tag" key={tag.id} style={colorPillStyle(tag.color)}>{tag.name}</span>
+          ))}
+          <span className="pill tag-more-pill" data-tag-measure="more">+{tags.length}</span>
+        </div>
+      ) : null}
     </div>
   );
+}
+
+function measureVisibleTagCount(tags, width, measureElement) {
+  if (!tags.length) {
+    return 0;
+  }
+  if (!width) {
+    return Math.min(tags.length, 2);
+  }
+  const tagElements = Array.from(measureElement.querySelectorAll("[data-tag-measure='tag']"));
+  const moreElement = measureElement.querySelector("[data-tag-measure='more']");
+  const tagWidths = tagElements.map((element, index) => element.offsetWidth || estimateFallbackTagWidth(tags[index]?.name));
+  const moreWidth = moreElement?.offsetWidth || 42;
+  const gap = 4;
+  let usedWidth = 0;
+  let visible = 0;
+
+  for (const tagWidth of tagWidths) {
+    const nextWidth = usedWidth + (visible ? gap : 0) + tagWidth;
+    const hasHiddenAfterThis = visible + 1 < tags.length;
+    const reserveWidth = hasHiddenAfterThis ? gap + moreWidth : 0;
+    if (nextWidth + reserveWidth > width) {
+      break;
+    }
+    usedWidth = nextWidth;
+    visible += 1;
+  }
+  return Math.max(visible, 1);
+}
+
+function estimateFallbackTagWidth(label) {
+  return Math.min(150, Math.max(42, String(label || "").length * 7 + 24));
 }
