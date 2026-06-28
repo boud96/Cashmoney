@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
-import { formatAmountValue } from "../shared.js";
+import { formatAmountValue, formatCount } from "../shared.js";
 
 export default function ImportPage({ hideAmounts = false, importReport, notify, refs, reloadAll, reloadDashboard, setImportReport }) {
   const [dragActive, setDragActive] = useState(false);
@@ -319,7 +319,7 @@ function DuplicateList({ duplicates }) {
         );
       })}
       {duplicates.length > 12 ? (
-        <div className="muted">+{(duplicates.length - 12).toLocaleString()} more duplicates</div>
+        <div className="muted">+{formatCount(duplicates.length - 12)} more duplicates</div>
       ) : null}
     </div>
   );

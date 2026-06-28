@@ -13,6 +13,7 @@ import {
   fieldLabel,
   findDuplicate,
   findDuplicateSubcategory,
+  formatCount,
   formObject,
   guessColumnMap,
   lines,
@@ -177,8 +178,8 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
     setSyncingRates(true);
     try {
       const result = await apiPost("/exchange-rates/sync/");
-      const createdRates = Number(result.created_rates || 0).toLocaleString();
-      const recalculated = Number(result.recalculation?.updated || 0).toLocaleString();
+      const createdRates = formatCount(result.created_rates);
+      const recalculated = formatCount(result.recalculation?.updated);
       if (showNotification) {
         notify(`${createdRates} rates downloaded, ${recalculated} transactions recalculated`);
       }
@@ -215,7 +216,7 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
       if (nextDefaultCurrency !== previousDefaultCurrency) {
         try {
           const result = await syncExchangeRates(false);
-          notify(`${Number(result.created_rates || 0).toLocaleString()} rates downloaded, default currency changed to ${nextDefaultCurrency}`);
+          notify(`${formatCount(result.created_rates)} rates downloaded, default currency changed to ${nextDefaultCurrency}`);
         } catch (error) {
           notify(`Settings saved, but rate sync failed: ${error.message}`);
           await refreshAfterCurrencyChange();
@@ -273,7 +274,7 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
         <strong>{formatExchangeRateStatus(rateStatus)}</strong>
         {missingRateCount ? (
           <span className="warning-text">
-            {missingRateCount.toLocaleString()} transactions need rates
+            {formatCount(missingRateCount)} transactions need rates
           </span>
         ) : currencyOptionsFallback ? (
           <span className="warning-text">Currency list is using fallback options.</span>
@@ -305,7 +306,7 @@ function formatExchangeRateStatus(status) {
   if (!status) {
     return "Loading";
   }
-  const count = Number(status.cached_rate_count || 0).toLocaleString();
+  const count = formatCount(status.cached_rate_count);
   if (!status.latest_cached_rate_date) {
     return `${count} cached rates`;
   }
@@ -359,7 +360,7 @@ function CollapsiblePanel({ children, count, defaultExpanded = false, helpText, 
           <span className="definition-panel-heading">
             <span className="definition-panel-title-line">
               <span className="definition-panel-title">{title}</span>
-              {typeof count === "number" ? <span className="definition-panel-count">{count.toLocaleString()}</span> : null}
+              {typeof count === "number" ? <span className="definition-panel-count">{formatCount(count)}</span> : null}
             </span>
             {subtitle ? <span className="definition-panel-subtitle">{subtitle}</span> : null}
           </span>

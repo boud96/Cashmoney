@@ -18,6 +18,7 @@ import {
   cssVar,
   formatAmountWithCurrency,
   formatAmountValue,
+  formatCount,
   formatDateInput,
   formatMoneyValue,
   formatNumber,
@@ -297,7 +298,7 @@ export default function DashboardPage({
       const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeIncludeLocked }, params);
       setRecategorizeResult(result);
       setRecategorizeModalOpen(false);
-      notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
+      notify(`${formatCount(result.updated)} transactions updated`);
       await reloadDashboard();
     } catch (error) {
       notify(error.message);
@@ -435,7 +436,7 @@ export default function DashboardPage({
     }
     const confirmed = await confirmAction({
       confirmLabel: "Apply",
-      message: `Mark ${selectedTransferIds.length.toLocaleString()} selected transfer pairs as internal transfers? Both sides will be ignored and locked.`,
+      message: `Mark ${formatCount(selectedTransferIds.length)} selected transfer pairs as internal transfers? Both sides will be ignored and locked.`,
       title: "Apply Internal Transfers",
     });
     if (!confirmed) {
@@ -453,7 +454,7 @@ export default function DashboardPage({
         },
         transferFilterParams,
       );
-      notify(`${Number(result.created || 0).toLocaleString()} transfer pairs applied`);
+      notify(`${formatCount(result.created)} transfer pairs applied`);
       setSelectedTransferIds([]);
       await Promise.all([reloadDashboard(), loadTransferCandidates()]);
     } catch (error) {
@@ -528,7 +529,7 @@ export default function DashboardPage({
     setBulkAssignBusy(true);
     try {
       const result = await apiPost("/transactions/bulk-assign/", payload, filterParams);
-      notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
+      notify(`${formatCount(result.updated)} transactions updated`);
       setBulkAssignModalOpen(false);
       setBulkAssignDraft(emptyBulkAssignDraft);
       await reloadDashboard();
@@ -585,7 +586,7 @@ export default function DashboardPage({
           transaction_ids: selectedSuggestion.transaction_ids || [],
         });
         setRecategorizeResult(result);
-        notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
+        notify(`${formatCount(result.updated)} transactions updated`);
         await Promise.all([reloadDashboard(), loadUncategorizedSuggestions()]);
       } else {
         notify("Keyword added");
@@ -871,7 +872,7 @@ export default function DashboardPage({
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
       {summary?.missing_conversions ? (
         <div className="dashboard-warning">
-          {Number(summary.missing_conversions).toLocaleString()} filtered transactions are missing exchange rates and are excluded from converted totals.
+          {formatCount(summary.missing_conversions)} filtered transactions are missing exchange rates and are excluded from converted totals.
         </div>
       ) : null}
 
@@ -886,7 +887,7 @@ export default function DashboardPage({
       <section className="panel transaction-panel">
         <div className="panel-header">
           <h2>Transactions</h2>
-          <span className="muted">{transactionPage.count.toLocaleString()} shown</span>
+          <span className="muted">{formatCount(transactionPage.count)} shown</span>
         </div>
         <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
@@ -948,7 +949,7 @@ function RecategorizeModal({
           <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
         </div>
         <div className="bulk-assign-warning">
-          Current filters show {count.toLocaleString()} transactions.
+          Current filters show {formatCount(count)} transactions.
         </div>
         <label className="check-row recategorize-modal-toggle">
           <input checked={includeLocked} disabled={busy} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
@@ -992,7 +993,7 @@ function BulkAssignMultiModal({
           <div className="action-modal-title-block">
             <h2 id="bulk-assign-modal-title">Bulk Assign</h2>
             <p className="action-modal-description">
-              This will update {count.toLocaleString()} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.
+              This will update {formatCount(count)} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.
             </p>
           </div>
           <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
@@ -1072,8 +1073,8 @@ function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, option
       label: "Subcategory",
       title: "Assign Filtered to Subcategory",
       warning: selectedLabel
-        ? `This will assign ${count.toLocaleString()} currently filtered transactions to ${selectedLabel} and lock their categorization.`
-        : `Choose a subcategory to assign ${count.toLocaleString()} currently filtered transactions.`,
+        ? `This will assign ${formatCount(count)} currently filtered transactions to ${selectedLabel} and lock their categorization.`
+        : `Choose a subcategory to assign ${formatCount(count)} currently filtered transactions.`,
     },
     tag: {
       blank: "Choose tag",
@@ -1081,8 +1082,8 @@ function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, option
       label: "Tag",
       title: "Assign Tag to Filtered",
       warning: selectedLabel
-        ? `This will add the ${selectedLabel} tag to ${count.toLocaleString()} currently filtered transactions and lock their categorization. Existing tags will stay in place.`
-        : `Choose a tag to add to ${count.toLocaleString()} currently filtered transactions.`,
+        ? `This will add the ${selectedLabel} tag to ${formatCount(count)} currently filtered transactions and lock their categorization. Existing tags will stay in place.`
+        : `Choose a tag to add to ${formatCount(count)} currently filtered transactions.`,
     },
     want_need_investment: {
       blank: "Choose WNI",
@@ -1090,8 +1091,8 @@ function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, option
       label: "WNI",
       title: "Assign WNI to Filtered",
       warning: selectedLabel
-        ? `This will set ${count.toLocaleString()} currently filtered transactions to ${selectedLabel} and lock their categorization.`
-        : `Choose a WNI value to assign ${count.toLocaleString()} currently filtered transactions.`,
+        ? `This will set ${formatCount(count)} currently filtered transactions to ${selectedLabel} and lock their categorization.`
+        : `Choose a WNI value to assign ${formatCount(count)} currently filtered transactions.`,
     },
   }[type];
 
@@ -1161,7 +1162,7 @@ function InternalTransferReviewPanel({
         </div>
         <div className="transfer-review-layout">
           <div className="bulk-assign-warning transfer-review-summary">
-            {Number(meta.count || 0).toLocaleString()} candidates. {Number(meta.high_confidence_count || 0).toLocaleString()} high confidence, {Number(meta.ambiguous_count || 0).toLocaleString()} ambiguous.
+            {formatCount(meta.count)} candidates. {formatCount(meta.high_confidence_count)} high confidence, {formatCount(meta.ambiguous_count)} ambiguous.
           </div>
           <div className="transfer-review-controls">
             <label className="form-field">
@@ -1202,7 +1203,7 @@ function InternalTransferReviewPanel({
             )}
           </div>
           <div className="transfer-review-actions">
-            <span>{selectedIds.length.toLocaleString()} selected</span>
+            <span>{formatCount(selectedIds.length)} selected</span>
             <label className="transfer-apply-subcategory">
               <span>Subcategory</span>
               <select disabled={applying} onChange={(event) => onSubcategoryChange(event.target.value)} value={subcategoryId}>
@@ -1328,8 +1329,8 @@ function UncategorizedReviewPanel({
         </div>
         <div className="uncategorized-review-layout">
           <div className="bulk-assign-warning uncategorized-review-summary">
-            {Number(meta.transaction_count || 0).toLocaleString()} transactions in{" "}
-            {Number(meta.count || 0).toLocaleString()} groups
+            {formatCount(meta.transaction_count)} transactions in{" "}
+            {formatCount(meta.count)} groups
           </div>
           {error ? <div className="uncategorized-review-error">{error}</div> : null}
           <div className="uncategorized-suggestion-list">
@@ -1347,7 +1348,7 @@ function UncategorizedReviewPanel({
               >
                 <span className="suggestion-card-title">{suggestion.sample_description}</span>
                 <span className="suggestion-card-meta">
-                  {suggestion.reason} | {suggestion.transaction_count.toLocaleString()} transactions
+                  {suggestion.reason} | {formatCount(suggestion.transaction_count)} transactions
                 </span>
                 <span className="suggestion-card-amount">
                   {formatAmountWithCurrency(
@@ -1465,7 +1466,7 @@ function UncategorizedReviewPanel({
               <div className="uncategorized-sample-table">
                 <div className="uncategorized-sample-header">
                   <span>Sample transactions</span>
-                  <span>{selectedSuggestion.transaction_count.toLocaleString()} total</span>
+                  <span>{formatCount(selectedSuggestion.transaction_count)} total</span>
                 </div>
                 {selectedSuggestion.sample_transactions.map((transaction) => (
                   <div className="uncategorized-sample-row" key={transaction.id}>
@@ -2172,10 +2173,10 @@ function RecategorizeMetric({ metric }) {
   return (
     <div className={`metric recategorize-metric${hasDetails ? " metric-has-details" : ""}`}>
       <div className="metric-label">{metric.label}</div>
-      <div className="metric-value">{count.toLocaleString()}</div>
+      <div className="metric-value">{formatCount(count)}</div>
       {hasDetails ? (
         <details className="metric-details">
-          <summary>{detailCount.toLocaleString()} details</summary>
+          <summary>{formatCount(detailCount)} details</summary>
           {metric.details || (transactions.length ? <TransactionSummaryList transactions={transactions} /> : <TransactionIdList ids={ids} />)}
         </details>
       ) : (
@@ -2191,7 +2192,7 @@ function TransactionIdList({ ids }) {
     <div className="metric-id-list">
       {visibleIds.map((id) => <code key={id}>{id}</code>)}
       {ids.length > visibleIds.length ? (
-        <span className="muted">+{(ids.length - visibleIds.length).toLocaleString()} more</span>
+        <span className="muted">+{formatCount(ids.length - visibleIds.length)} more</span>
       ) : null}
     </div>
   );
@@ -2216,7 +2217,7 @@ function TransactionSummaryList({ transactions }) {
         </div>
       ))}
       {transactions.length > visibleTransactions.length ? (
-        <span className="muted">+{(transactions.length - visibleTransactions.length).toLocaleString()} more</span>
+        <span className="muted">+{formatCount(transactions.length - visibleTransactions.length)} more</span>
       ) : null}
     </div>
   );
@@ -2243,7 +2244,7 @@ function ConflictDetailList({ details }) {
         </article>
       ))}
       {details.length > visibleDetails.length ? (
-        <div className="muted">+{(details.length - visibleDetails.length).toLocaleString()} more conflicts</div>
+        <div className="muted">+{formatCount(details.length - visibleDetails.length)} more conflicts</div>
       ) : null}
     </div>
   );
@@ -2322,7 +2323,7 @@ function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave,
           <div className="saved-filter-row" key={preset.id}>
             <button disabled={busy} onClick={() => onLoad(preset)} type="button">
               <span>{preset.name}</span>
-              <small>{countActiveFilters(preset.filters).toLocaleString()} filters</small>
+              <small>{formatCount(countActiveFilters(preset.filters))} filters</small>
             </button>
             <button aria-label={`Delete ${preset.name}`} className="icon-button" disabled={busy} onClick={() => onDelete(preset.id)} type="button">x</button>
           </div>
@@ -2474,7 +2475,7 @@ const RawDataPopover = forwardRef(function RawDataPopover({ entries, position },
     >
       <div className="raw-data-popover-header">
         <strong>Original Data</strong>
-        <span>{entries.length.toLocaleString()} fields</span>
+        <span>{formatCount(entries.length)} fields</span>
       </div>
       <dl className="raw-data-list">
         {entries.map((entry) => (

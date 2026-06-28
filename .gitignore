@@ -168,7 +168,7 @@ tools/node.old/
 tools/*.zip
 
 # Local AI handoff/context notes
-ai_context/
+#ai_context/
 
 # App build outputs
 backend/build/
