@@ -121,7 +121,7 @@ export default function HelpPage() {
             <li><strong>Category/Subcategory/WNI:</strong> subcategory options narrow automatically when categories are selected.</li>
             <li><strong>Direction:</strong> Incomes are positive transactions and Expenses are negative transactions.</li>
             <li><strong>Ignored / Locked:</strong> control whether those rows appear in the filtered data.</li>
-            <li><strong>Divide amounts by owners:</strong> divides shared-account amounts by the account owner count.</li>
+            <li><strong>Divide by account owner count:</strong> divides shared-account amounts by the account owner count.</li>
           </ul>
         </HelpCard>
 

@@ -12,7 +12,7 @@ on:
       - "v*"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-windows:
@@ -52,14 +52,16 @@ jobs:
           $setupDir = Join-Path $artifactRoot "setup"
           $portableDir = Join-Path $artifactRoot "portable"
           $unpackedDir = Join-Path $artifactRoot "win-unpacked"
+          $releaseDir = Join-Path $artifactRoot "release"
 
-          New-Item -ItemType Directory -Force -Path $setupDir, $portableDir, $unpackedDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $setupDir, $portableDir, $unpackedDir, $releaseDir | Out-Null
 
           $setup = Get-ChildItem -Path $dist -Filter "Cashmoney Setup *.exe" | Select-Object -First 1
           if ($null -eq $setup) {
             throw "Setup installer was not found in $dist."
           }
           Copy-Item -LiteralPath $setup.FullName -Destination $setupDir
+          Copy-Item -LiteralPath $setup.FullName -Destination (Join-Path $releaseDir "Cashmoney-Setup.exe")
 
           $portable = Get-ChildItem -Path $dist -Filter "Cashmoney *.exe" |
             Where-Object { $_.Name -notlike "Cashmoney Setup *" } |
@@ -68,6 +70,11 @@ jobs:
             throw "Portable executable was not found in $dist."
           }
           Copy-Item -LiteralPath $portable.FullName -Destination $portableDir
+          Copy-Item -LiteralPath $portable.FullName -Destination (Join-Path $releaseDir "Cashmoney-Portable.exe")
+
+          Get-FileHash (Join-Path $releaseDir "Cashmoney-Setup.exe"), (Join-Path $releaseDir "Cashmoney-Portable.exe") |
+            ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
+            Set-Content -Path (Join-Path $releaseDir "checksums.txt") -Encoding ascii
 
           if (!(Test-Path -LiteralPath "$dist/win-unpacked")) {
             throw "Unpacked app folder was not found in $dist."
@@ -94,3 +101,20 @@ jobs:
           name: cashmoney-win-unpacked
           path: artifacts/win-unpacked/**
           if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $assets = @(
+            "artifacts/release/Cashmoney-Setup.exe",
+            "artifacts/release/Cashmoney-Portable.exe",
+            "artifacts/release/checksums.txt"
+          )
+          if (gh release view $env:GITHUB_REF_NAME *> $null) {
+            gh release upload $env:GITHUB_REF_NAME @assets --clobber
+          } else {
+            gh release create $env:GITHUB_REF_NAME @assets --title "Cashmoney $env:GITHUB_REF_NAME" --generate-notes
+          }

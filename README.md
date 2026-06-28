@@ -3,6 +3,14 @@
 Cashmoney is a local finance dashboard built with Django, React, AG Grid, and
 Electron packaging support.
 
+## Download
+
+Latest version: [View release notes](https://github.com/boud96/CashmoneyDjango/releases/latest)
+
+- [Download installer](https://github.com/boud96/CashmoneyDjango/releases/latest/download/Cashmoney-Setup.exe)
+- [Download portable app](https://github.com/boud96/CashmoneyDjango/releases/latest/download/Cashmoney-Portable.exe)
+- [Checksums](https://github.com/boud96/CashmoneyDjango/releases/latest/download/checksums.txt)
+
 ## Launch
 
 For a fresh clone on Windows, bootstrap the local Python and Node dependencies
