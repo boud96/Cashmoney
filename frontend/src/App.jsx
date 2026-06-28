@@ -33,7 +33,6 @@ export default function App() {
   const [accent, setAccent] = useState(getStoredAccent);
   const [hideAmounts, setHideAmounts] = useState(getStoredHideAmounts);
   const [isAccentPickerOpen, setIsAccentPickerOpen] = useState(false);
-  const [draftAccent, setDraftAccent] = useState("");
   const [status, setStatus] = useState("Checking backend");
   const [toast, setToast] = useState("");
   const [refs, setRefs] = useState({
@@ -186,20 +185,6 @@ export default function App() {
   useEffect(() => {
     applyAccent(accent);
   }, [accent]);
-
-  useEffect(() => {
-    if (!isAccentPickerOpen) {
-      return undefined;
-    }
-    setDraftAccent(accent || defaultAccentForTheme(theme));
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        setIsAccentPickerOpen(false);
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [accent, isAccentPickerOpen, theme]);
 
   useEffect(() => {
     if (filterDefaults.to || filterDefaults.from) {
@@ -360,45 +345,12 @@ export default function App() {
         </PageErrorBoundary>
       </main>
       {isAccentPickerOpen && (
-        <div className="modal-backdrop" onMouseDown={() => setIsAccentPickerOpen(false)} role="presentation">
-          <div aria-labelledby="accent-modal-title" aria-modal="true" className="accent-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-            <div className="accent-modal-header">
-              <h2 id="accent-modal-title">Accent</h2>
-              <button className="icon-button" onClick={() => setIsAccentPickerOpen(false)} type="button" aria-label="Close accent picker">x</button>
-            </div>
-            <label className="accent-custom-picker">
-              <span>Custom color</span>
-              <input
-                onChange={(event) => setDraftAccent(event.target.value)}
-                type="color"
-                value={draftAccent || accent || defaultAccentForTheme(theme)}
-              />
-            </label>
-            <button className="primary-action accent-confirm-button" onClick={() => updateAccent(draftAccent || defaultAccentForTheme(theme))} type="button">
-              Apply custom color
-            </button>
-            <div className="accent-preset-label">Presets</div>
-            <div className="accent-preset-grid">
-              {accentPresets.map((color) => {
-                const isSelected = normalizeHexColor(accent || defaultAccentForTheme(theme)).toLowerCase() === color.toLowerCase();
-                return (
-                  <button
-                    aria-label={`Use accent ${color}`}
-                    aria-pressed={isSelected}
-                    className={`accent-preset ${isSelected ? "is-selected" : ""}`}
-                    key={color}
-                    onClick={() => updateAccent(color)}
-                    title={color}
-                    style={{ "--preset-color": color }}
-                    type="button"
-                  >
-                    <span className="accent-preset-swatch" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <AccentModal
+          accent={accent}
+          onApply={updateAccent}
+          onClose={() => setIsAccentPickerOpen(false)}
+          theme={theme}
+        />
       )}
       {confirmation && (
         <ConfirmDialog
@@ -412,6 +364,68 @@ export default function App() {
         />
       )}
       <div className={`toast ${toast ? "is-visible" : ""}`}>{toast}</div>
+    </div>
+  );
+}
+
+function AccentModal({ accent, onApply, onClose, theme }) {
+  const fallbackAccent = defaultAccentForTheme(theme);
+  const appliedAccent = normalizeHexColor(accent || fallbackAccent) || fallbackAccent;
+  const [draftAccent, setDraftAccent] = useState(appliedAccent);
+
+  useEffect(() => {
+    setDraftAccent(appliedAccent);
+  }, [appliedAccent]);
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
+      <div aria-labelledby="accent-modal-title" aria-modal="true" className="accent-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="accent-modal-header">
+          <h2 id="accent-modal-title">Accent</h2>
+          <button className="icon-button" onClick={onClose} type="button" aria-label="Close accent picker">x</button>
+        </div>
+        <label className="accent-custom-picker">
+          <span>Custom color</span>
+          <input
+            onChange={(event) => setDraftAccent(event.target.value)}
+            type="color"
+            value={draftAccent || appliedAccent}
+          />
+        </label>
+        <button className="primary-action accent-confirm-button" onClick={() => onApply(draftAccent || fallbackAccent)} type="button">
+          Apply custom color
+        </button>
+        <div className="accent-preset-label">Presets</div>
+        <div className="accent-preset-grid">
+          {accentPresets.map((color) => {
+            const isSelected = appliedAccent.toLowerCase() === color.toLowerCase();
+            return (
+              <button
+                aria-label={`Use accent ${color}`}
+                aria-pressed={isSelected}
+                className={`accent-preset ${isSelected ? "is-selected" : ""}`}
+                key={color}
+                onClick={() => onApply(color)}
+                title={color}
+                style={{ "--preset-color": color }}
+                type="button"
+              >
+                <span className="accent-preset-swatch" />
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
