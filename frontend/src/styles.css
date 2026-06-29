@@ -4011,6 +4011,31 @@ td {
   line-height: 1.45;
 }
 
+.help-version-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.help-version-list div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.help-version-list dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.help-version-list dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+}
+
 .help-two-column {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

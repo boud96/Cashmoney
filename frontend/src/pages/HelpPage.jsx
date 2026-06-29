@@ -27,6 +27,8 @@ const troubleshootingItems = [
   ["Charts look wrong", "Review date range, ignored/locked inclusion, direction, account, category, subcategory, WNI, tag, and saved filter state."],
 ];
 
+const appVersion = __CASHMONEY_APP_VERSION__ === "unknown" ? "Unknown" : `v${__CASHMONEY_APP_VERSION__}`;
+
 export default function HelpPage() {
   return (
     <div className="help-page">
@@ -209,6 +211,15 @@ export default function HelpPage() {
               </div>
             ))}
           </div>
+        </HelpCard>
+
+        <HelpCard title="About" wide>
+          <dl className="help-version-list">
+            <div>
+              <dt>App version</dt>
+              <dd>{appVersion}</dd>
+            </div>
+          </dl>
         </HelpCard>
       </section>
     </div>
