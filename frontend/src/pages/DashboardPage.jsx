@@ -979,7 +979,7 @@ function BulkAssignMultiModal({
       className="bulk-assign-modal"
       closeDisabled={busy}
       closeLabel="Close bulk assign modal"
-      description={`This will update ${formatCount(count)} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.`}
+      description={`This will update ${formatCount(count)} currently filtered transactions. Subcategory, tags, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.`}
       onClose={onClose}
       title="Bulk Assign"
       titleId="bulk-assign-modal-title"
