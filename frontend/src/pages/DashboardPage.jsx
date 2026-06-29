@@ -1552,7 +1552,10 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
   const [rawDataPopover, setRawDataPopover] = useState(null);
   const [filterRetainedCells, setFilterRetainedCells] = useState({});
   const rawDataPopoverRef = useRef(null);
-  const subcategoryOptions = useMemo(() => ["", ...refs.subcategories.map((item) => item.id)], [refs.subcategories]);
+  const subcategoryOptions = useMemo(
+    () => [["", "Unassigned"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])],
+    [refs.subcategories],
+  );
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
   const accountLookup = useMemo(() => new Map(refs.accounts.map((item) => [item.id, item.name])), [refs.accounts]);
@@ -1713,8 +1716,8 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
       width: 150,
     },
     {
-      cellEditor: "agSelectCellEditor",
-      cellEditorParams: { values: subcategoryOptions },
+      cellEditor: SubcategorySelectEditor,
+      cellEditorParams: { options: subcategoryOptions },
       editable: true,
       field: "subcategory_id",
       headerClass: "editable-header",
@@ -1862,6 +1865,34 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
         />
       )}
     </div>
+  );
+}
+
+function SubcategorySelectEditor({ onKeyDown, onValueChange, options = [], stopEditing, value }) {
+  const selectRef = useRef(null);
+  const currentValue = value || "";
+
+  useEffect(() => {
+    selectRef.current?.focus();
+  }, []);
+
+  return (
+    <select
+      className="ag-cell-edit-select"
+      onChange={(event) => {
+        onValueChange?.(event.target.value);
+        stopEditing?.();
+      }}
+      onKeyDown={(event) => onKeyDown?.(event.nativeEvent)}
+      ref={selectRef}
+      value={currentValue}
+    >
+      {options.map(([optionValue, optionLabel]) => (
+        <option key={optionValue || "unassigned"} value={optionValue}>
+          {optionLabel}
+        </option>
+      ))}
+    </select>
   );
 }
 
