@@ -6,7 +6,7 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
-import { LoadingButton } from "../components.jsx";
+import { LoadingButton, ModalShell } from "../components.jsx";
 import {
   UNASSIGNED,
   baseLayout,
@@ -937,17 +937,15 @@ function RecategorizeModal({
   onSubmit,
 }) {
   return (
-    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
-      <div aria-labelledby="recategorize-modal-title" aria-modal="true" className="recategorize-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="action-modal-header">
-          <div className="action-modal-title-block">
-            <h2 id="recategorize-modal-title">Recategorize</h2>
-            <p className="action-modal-description">
-              This will rerun keyword categorization for the current filtered scope. Locked transactions are skipped unless included here.
-            </p>
-          </div>
-          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
-        </div>
+    <ModalShell
+      className="recategorize-modal"
+      closeDisabled={busy}
+      closeLabel="Close recategorize modal"
+      description="This will rerun keyword categorization for the current filtered scope. Locked transactions are skipped unless included here."
+      onClose={onClose}
+      title="Recategorize"
+      titleId="recategorize-modal-title"
+    >
         <div className="bulk-assign-warning">
           Current filters show {formatCount(count)} transactions.
         </div>
@@ -966,8 +964,7 @@ function RecategorizeModal({
             Recategorize
           </LoadingButton>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -987,17 +984,15 @@ function BulkAssignMultiModal({
 }) {
   const tagSelectionDisabled = !["add", "replace"].includes(draft.tagMode);
   return (
-    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
-      <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="action-modal-header">
-          <div className="action-modal-title-block">
-            <h2 id="bulk-assign-modal-title">Bulk Assign</h2>
-            <p className="action-modal-description">
-              This will update {formatCount(count)} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.
-            </p>
-          </div>
-          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
-        </div>
+    <ModalShell
+      className="bulk-assign-modal"
+      closeDisabled={busy}
+      closeLabel="Close bulk assign modal"
+      description={`This will update ${formatCount(count)} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.`}
+      onClose={onClose}
+      title="Bulk Assign"
+      titleId="bulk-assign-modal-title"
+    >
         <div className="bulk-assign-form">
           <label className="form-field">
             <span>Subcategory</span>
@@ -1060,8 +1055,7 @@ function BulkAssignMultiModal({
             Apply
           </LoadingButton>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -1149,17 +1143,16 @@ function InternalTransferReviewPanel({
 }) {
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
-      <div aria-labelledby="transfer-review-title" aria-modal="true" className="transfer-review-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="action-modal-header transfer-review-modal-header">
-          <div className="action-modal-title-block">
-            <h2 id="transfer-review-title">Find Transfers</h2>
-            <p className="action-modal-description">
-              Scan the current filtered scope for matching outgoing and incoming transactions across defined accounts.
-            </p>
-          </div>
-          <button className="icon-button" disabled={applying} onClick={onClose} type="button" aria-label="Close transfer review">x</button>
-        </div>
+    <ModalShell
+      className="transfer-review-modal"
+      closeDisabled={applying}
+      closeLabel="Close transfer review"
+      description="Scan the current filtered scope for matching outgoing and incoming transactions across defined accounts."
+      headerClassName="transfer-review-modal-header"
+      onClose={onClose}
+      title="Find Transfers"
+      titleId="transfer-review-title"
+    >
         <div className="transfer-review-layout">
           <div className="bulk-assign-warning transfer-review-summary">
             {formatCount(meta.count)} candidates. {formatCount(meta.high_confidence_count)} high confidence, {formatCount(meta.ambiguous_count)} ambiguous.
@@ -1215,8 +1208,7 @@ function InternalTransferReviewPanel({
             </LoadingButton>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -1298,35 +1290,16 @@ function UncategorizedReviewPanel({
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => event.target === event.currentTarget && !submitting && onClose()}
-      role="presentation"
+    <ModalShell
+      className="uncategorized-review-modal"
+      closeDisabled={Boolean(submitting)}
+      closeLabel="Close uncategorized review"
+      description="Review uncategorized transaction groups and create a keyword rule from the selected suggestion."
+      headerClassName="uncategorized-review-modal-header"
+      onClose={onClose}
+      title="Review Uncategorized"
+      titleId="uncategorized-review-title"
     >
-      <section
-        aria-labelledby="uncategorized-review-title"
-        aria-modal="true"
-        className="uncategorized-review-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <div className="action-modal-header uncategorized-review-modal-header">
-          <div className="action-modal-title-block">
-            <h2 id="uncategorized-review-title">Review Uncategorized</h2>
-            <p className="action-modal-description">
-              Review uncategorized transaction groups and create a keyword rule from the selected suggestion.
-            </p>
-          </div>
-          <button
-            aria-label="Close uncategorized review"
-            className="icon-button"
-            disabled={Boolean(submitting)}
-            onClick={onClose}
-            type="button"
-          >
-            x
-          </button>
-        </div>
         <div className="uncategorized-review-layout">
           <div className="bulk-assign-warning uncategorized-review-summary">
             {formatCount(meta.transaction_count)} transactions in{" "}
@@ -1510,8 +1483,7 @@ function UncategorizedReviewPanel({
           )}
           </div>
         </div>
-      </section>
-    </div>
+    </ModalShell>
   );
 }
 

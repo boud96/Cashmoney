@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, apiPatch } from "./api.js";
-import { ConfirmDialog, Spinner } from "./components.jsx";
+import { ConfirmDialog, ModalShell, Spinner } from "./components.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import {
   accentPresets,
@@ -414,23 +414,15 @@ function AccentModal({ accent, onApply, onClose, theme }) {
     setDraftAccent(appliedAccent);
   }, [appliedAccent]);
 
-  useEffect(() => {
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        onClose();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
-
   return (
-    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
-      <div aria-labelledby="accent-modal-title" aria-modal="true" className="accent-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="accent-modal-header">
-          <h2 id="accent-modal-title">Accent</h2>
-          <button className="icon-button" onClick={onClose} type="button" aria-label="Close accent picker">x</button>
-        </div>
+    <ModalShell
+      className="accent-modal"
+      closeLabel="Close accent picker"
+      headerClassName="accent-modal-header"
+      onClose={onClose}
+      title="Accent"
+      titleId="accent-modal-title"
+    >
         <label className="accent-custom-picker">
           <span>Custom color</span>
           <input
@@ -462,8 +454,7 @@ function AccentModal({ accent, onApply, onClose, theme }) {
             );
           })}
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
