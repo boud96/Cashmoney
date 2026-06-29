@@ -1921,6 +1921,11 @@ function MonthlyChart({ hideAmounts, rows }) {
   const incomes = monthlyRows.map((row) => row.income);
   const expenses = monthlyRows.map((row) => -row.expense);
   const net = monthlyRows.map((row) => row.net);
+  const monthlyHoverData = monthlyRows.map((row) => [
+    formatMoneyValue(row.income, hideAmounts),
+    formatMoneyValue(row.expense, hideAmounts),
+    formatMoneyValue(row.net, hideAmounts),
+  ]);
   const barWidth = monthlyRows.map(() => 0.78);
   const netColors = monthlyRows.map(() => cssVar("--net-overlay", "rgba(230, 237, 243, 0.26)"));
   return (
@@ -1928,8 +1933,8 @@ function MonthlyChart({ hideAmounts, rows }) {
       config={{ displaylogo: false, responsive: true }}
       data={[
         {
-          customdata: monthlyRows.map((row) => [row.expense, row.net]),
-          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Incomes: %{y:,.0f}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          customdata: monthlyHoverData,
+          hovertemplate: "Incomes: %{customdata[0]}<extra></extra>",
           marker: { color: cssVar("--green", "#2f8f65") },
           name: "Incomes",
           type: "bar",
@@ -1938,8 +1943,8 @@ function MonthlyChart({ hideAmounts, rows }) {
           y: incomes,
         },
         {
-          customdata: monthlyRows.map((row) => [row.expense, row.net]),
-          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          customdata: monthlyHoverData,
+          hovertemplate: "Expenses: %{customdata[1]}<extra></extra>",
           marker: { color: cssVar("--red", "#dc2626") },
           name: "Expenses",
           type: "bar",
@@ -1948,8 +1953,8 @@ function MonthlyChart({ hideAmounts, rows }) {
           y: expenses,
         },
         {
-          customdata: monthlyRows.map((row) => [row.income, row.expense]),
-          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Net: %{y:,.0f}<br>Incomes: %{customdata[0]:,.0f}<br>Expenses: %{customdata[1]:,.0f}<extra></extra>",
+          customdata: monthlyHoverData,
+          hovertemplate: "Net: %{customdata[2]}<extra></extra>",
           marker: {
             color: netColors,
             line: { width: 0 },
@@ -2025,13 +2030,15 @@ function WniChart({ hideAmounts, rows }) {
 function TopExpenseChart({ hideAmounts, rows }) {
   const topRows = topExpenseSubcategories(rows);
   if (!topRows.length) return <EmptyChart />;
+  const topExpenseHoverData = topRows.map((row) => formatMoneyValue(row.amount, hideAmounts));
   return (
     <Plot
       config={{ displaylogo: false, responsive: true }}
       data={[{
+        customdata: topExpenseHoverData,
         marker: { color: cssVar("--blue", "#58a6ff") },
         orientation: "h",
-        hovertemplate: hideAmounts ? "%{y}<extra></extra>" : "%{y}<br>Amount: %{x:,.0f}<extra></extra>",
+        hovertemplate: hideAmounts ? "%{y}<extra></extra>" : "%{y}<br>Amount: %{customdata}<extra></extra>",
         text: topRows.map((row) => formatMoneyValue(row.amount, hideAmounts)),
         textposition: "auto",
         type: "bar",
