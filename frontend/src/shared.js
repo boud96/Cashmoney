@@ -613,6 +613,31 @@ export function formatAmountWithCurrency(value, currency, hideAmounts = false) {
   return hideAmounts || !currency ? formatted : `${formatted} ${currency}`;
 }
 
+export function formatBytes(value, fallback = "") {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes)) {
+    return fallback;
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function formatDateTime(value, fallback = "") {
+  if (!value) {
+    return fallback;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return date.toLocaleString();
+}
+
 export function formatNumber(value, options = {}) {
   return new Intl.NumberFormat("en-US", options).format(Number(value || 0)).replace(/,/g, " ");
 }

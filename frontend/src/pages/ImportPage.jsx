@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
-import { formatAmountValue, formatCount } from "../shared.js";
+import { formatAmountValue, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
 export default function ImportPage({ hideAmounts = false, importReport, notify, refs, reloadAll, reloadDashboard, setImportReport }) {
   const [dragActive, setDragActive] = useState(false);
@@ -219,14 +219,14 @@ function ImportPreview({ hideAmounts, preview }) {
   return (
     <div className="import-preview-content">
       <div className="import-preview-summary">
-        <Metric label="Rows loaded" value={preview.loaded || 0} />
-        <Metric label="Valid sample" value={summary.valid || 0} />
-        <Metric label="Duplicates" value={summary.duplicates || 0} />
-        <Metric label="Errors" tone={summary.errors ? "negative" : ""} value={summary.errors || 0} />
+        <Metric label="Rows loaded" value={formatCount(preview.loaded)} />
+        <Metric label="Valid sample" value={formatCount(summary.valid)} />
+        <Metric label="Duplicates" value={formatCount(summary.duplicates)} />
+        <Metric label="Errors" tone={summary.errors ? "negative" : ""} value={formatCount(summary.errors)} />
       </div>
       <div className="import-header-list">
         {headers.slice(0, 18).map((header) => <span className="pill" key={header}>{header}</span>)}
-        {headers.length > 18 ? <span className="pill tag-more-pill">+{headers.length - 18}</span> : null}
+        {headers.length > 18 ? <span className="pill tag-more-pill">+{formatCount(headers.length - 18)}</span> : null}
       </div>
       <div className="import-sample-list">
         {rows.map((row, index) => {
@@ -292,10 +292,10 @@ function ImportReport({ report }) {
   return (
     <div className="import-report-content">
       <div className="metrics-grid report-grid">
-        <Metric label="Loaded" value={report.loaded} />
-        <Metric label="Created" tone="positive" value={report.created?.count || 0} />
-        <Metric label="Duplicates" value={duplicates.length} />
-        <Metric label="Errors" tone="negative" value={report.skipped?.errors?.length || 0} />
+        <Metric label="Loaded" value={formatCount(report.loaded)} />
+        <Metric label="Created" tone="positive" value={formatCount(report.created?.count)} />
+        <Metric label="Duplicates" value={formatCount(duplicates.length)} />
+        <Metric label="Errors" tone="negative" value={formatCount(report.skipped?.errors?.length)} />
       </div>
       {duplicates.length ? <DuplicateList duplicates={duplicates} /> : null}
     </div>
@@ -364,32 +364,12 @@ function RecentImports({ imports }) {
             <span>{item.bank_account?.name || "No account"} | {formatDateTime(item.created_at)}</span>
           </div>
           <div className="recent-import-counts">
-            <span>{item.created_count} created</span>
-            <span>{item.skipped_count} skipped</span>
-            <span>{item.error_count} errors</span>
+            <span>{formatCount(item.created_count)} created</span>
+            <span>{formatCount(item.skipped_count)} skipped</span>
+            <span>{formatCount(item.error_count)} errors</span>
           </div>
         </div>
       ))}
     </div>
   );
-}
-
-function formatBytes(size) {
-  if (!Number.isFinite(size)) {
-    return "";
-  }
-  if (size < 1024) {
-    return `${size} B`;
-  }
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(1)} KB`;
-  }
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDateTime(value) {
-  if (!value) {
-    return "";
-  }
-  return new Date(value).toLocaleString();
 }
