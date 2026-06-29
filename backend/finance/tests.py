@@ -1675,6 +1675,29 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(payload["want_need_investment"][0]["name"], "want")
 
+    def test_dashboard_summary_tag_filter_does_not_double_count(self):
+        second_tag = Tag.objects.create(name="Dinner")
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Tagged twice",
+            amount=Decimal("-12.50"),
+            subcategory=self.subcategory,
+            want_need_investment=WantNeedInvestment.NEED,
+        )
+        transaction_obj.tags.add(self.tag, second_tag)
+
+        response = self.client.get(
+            "/api/dashboard/summary/",
+            {"tag": f"{self.tag.id},{second_tag.id}"},
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["monthly"][0]["expense"], 12.5)
+        self.assertEqual(payload["expense_categories"][0]["amount"], 12.5)
+        self.assertEqual(payload["want_need_investment"][0]["amount"], 12.5)
+
     def test_dashboard_checkbox_none_marker_returns_no_transactions(self):
         Transaction.objects.create(
             bank_account=self.account,

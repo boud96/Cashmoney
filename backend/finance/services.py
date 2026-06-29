@@ -12,7 +12,19 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from django.db import IntegrityError, transaction
-from django.db.models import Max, Min, Q
+from django.db.models import (
+    Case,
+    DecimalField,
+    ExpressionWrapper,
+    F,
+    Max,
+    Min,
+    Q,
+    Sum,
+    Value,
+    When,
+)
+from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
 from .constants import DEFAULT_CATEGORIZATION_FIELDS
@@ -31,7 +43,6 @@ from .serializers import (
     serialize_tag,
     serialize_transaction,
     transaction_converted_amount,
-    transaction_display_amount,
 )
 
 ENCODING_CANDIDATES = ["utf-8-sig", "utf-8", "cp1250", "windows-1250", "latin-1"]
@@ -2246,94 +2257,163 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     default_currency = normalize_currency_code(
         default_currency or FinanceSettings.load().default_currency
     )
+    amount_field = DecimalField(max_digits=24, decimal_places=8)
+    base_queryset = Transaction.objects.filter(
+        id__in=queryset.order_by().values("id")
+    ).order_by()
+    converted_amount = Case(
+        When(
+            converted_amount__isnull=False,
+            converted_currency=default_currency,
+            then=F("converted_amount"),
+        ),
+        When(currency=default_currency, then=F("amount")),
+        default=Value(None),
+        output_field=amount_field,
+    )
+    if split_by_owners:
+        amount = ExpressionWrapper(
+            converted_amount / Coalesce(F("bank_account__owners"), Value(1)),
+            output_field=amount_field,
+        )
+    else:
+        amount = converted_amount
+    amount_abs = Case(
+        When(
+            _summary_amount__lt=0,
+            then=ExpressionWrapper(
+                F("_summary_amount") * Value(-1),
+                output_field=amount_field,
+            ),
+        ),
+        default=F("_summary_amount"),
+        output_field=amount_field,
+    )
+    annotated = base_queryset.annotate(_summary_amount=amount)
+    valid = annotated.filter(_summary_amount__isnull=False)
     summary = {
         "default_currency": default_currency,
-        "missing_conversions": 0,
+        "missing_conversions": annotated.filter(_summary_amount__isnull=True).count(),
         "monthly": [],
         "income_categories": [],
         "expense_categories": [],
         "want_need_investment": [],
     }
 
-    monthly = defaultdict(lambda: {"income": Decimal("0"), "expense": Decimal("0")})
     income_categories = {}
     expense_categories = {}
-    wni = defaultdict(Decimal)
 
-    for transaction_obj in queryset.select_related(
-        "bank_account", "subcategory", "subcategory__category"
-    ):
-        month_key = transaction_obj.transaction_date.strftime("%Y-%m")
-        amount = transaction_display_amount(
-            transaction_obj,
-            split_by_owners,
-            default_currency=default_currency,
-            converted=True,
+    monthly_rows = (
+        valid.annotate(_summary_month=TruncMonth("transaction_date"))
+        .values("_summary_month")
+        .annotate(
+            income=Coalesce(
+                Sum(
+                    Case(
+                        When(_summary_amount__gte=0, then=F("_summary_amount")),
+                        default=Value(Decimal("0")),
+                        output_field=amount_field,
+                    )
+                ),
+                Value(Decimal("0")),
+                output_field=amount_field,
+            ),
+            expense=Coalesce(
+                Sum(
+                    Case(
+                        When(_summary_amount__lt=0, then=amount_abs),
+                        default=Value(Decimal("0")),
+                        output_field=amount_field,
+                    )
+                ),
+                Value(Decimal("0")),
+                output_field=amount_field,
+            ),
         )
-        if amount is None:
-            summary["missing_conversions"] += 1
-            continue
-        category = (
-            transaction_obj.subcategory.category
-            if transaction_obj.subcategory
-            else None
-        )
-        if amount >= 0:
-            monthly[month_key]["income"] += amount
-            category_name = category.name if category else "Uncategorized"
-            subcategory_name = (
-                transaction_obj.subcategory.name
-                if transaction_obj.subcategory
-                else "Other"
-            )
-            _add_category_amount(
-                income_categories,
-                category_name,
-                subcategory_name,
-                amount,
-                category.color if category else "",
-                transaction_obj.subcategory.color
-                if transaction_obj.subcategory
-                else "",
-            )
-        else:
-            absolute_amount = abs(amount)
-            monthly[month_key]["expense"] += absolute_amount
-            category_name = category.name if category else "Uncategorized"
-            subcategory_name = (
-                transaction_obj.subcategory.name
-                if transaction_obj.subcategory
-                else "Other"
-            )
-            _add_category_amount(
-                expense_categories,
-                category_name,
-                subcategory_name,
-                absolute_amount,
-                category.color if category else "",
-                transaction_obj.subcategory.color
-                if transaction_obj.subcategory
-                else "",
-            )
-
-        if amount < 0:
-            wni_key = transaction_obj.want_need_investment or "uncategorized"
-            wni[wni_key] += abs(amount)
-
-    for month, values in sorted(monthly.items()):
+        .order_by("_summary_month")
+    )
+    for row in monthly_rows:
+        month = row["_summary_month"]
         summary["monthly"].append(
             {
-                "month": month,
-                "income": float(values["income"]),
-                "expense": float(values["expense"]),
+                "month": month.strftime("%Y-%m"),
+                "income": float(row["income"] or Decimal("0")),
+                "expense": float(row["expense"] or Decimal("0")),
             }
         )
+
+    category_values = {
+        "category_name": Coalesce(
+            F("subcategory__category__name"),
+            Value("Uncategorized"),
+        ),
+        "subcategory_name": Coalesce(F("subcategory__name"), Value("Other")),
+        "category_color": Coalesce(F("subcategory__category__color"), Value("")),
+        "subcategory_color": Coalesce(F("subcategory__color"), Value("")),
+    }
+    income_category_rows = (
+        valid.filter(_summary_amount__gte=0)
+        .annotate(**category_values)
+        .values(
+            "category_name",
+            "subcategory_name",
+            "category_color",
+            "subcategory_color",
+        )
+        .annotate(amount=Sum("_summary_amount"))
+        .order_by("category_name", "subcategory_name")
+    )
+    for row in income_category_rows:
+        _add_category_amount(
+            income_categories,
+            row["category_name"],
+            row["subcategory_name"],
+            row["amount"] or Decimal("0"),
+            row["category_color"],
+            row["subcategory_color"],
+        )
+
+    expense_category_rows = (
+        valid.filter(_summary_amount__lt=0)
+        .annotate(_summary_abs_amount=amount_abs, **category_values)
+        .values(
+            "category_name",
+            "subcategory_name",
+            "category_color",
+            "subcategory_color",
+        )
+        .annotate(amount=Sum("_summary_abs_amount"))
+        .order_by("category_name", "subcategory_name")
+    )
+    for row in expense_category_rows:
+        _add_category_amount(
+            expense_categories,
+            row["category_name"],
+            row["subcategory_name"],
+            row["amount"] or Decimal("0"),
+            row["category_color"],
+            row["subcategory_color"],
+        )
+
+    wni_rows = (
+        valid.filter(_summary_amount__lt=0)
+        .annotate(
+            _summary_abs_amount=amount_abs,
+            wni_name=Coalesce(
+                F("want_need_investment"),
+                Value("uncategorized"),
+            ),
+        )
+        .values("wni_name")
+        .annotate(amount=Sum("_summary_abs_amount"))
+        .order_by("wni_name")
+    )
 
     summary["income_categories"] = _category_tree(income_categories)
     summary["expense_categories"] = _category_tree(expense_categories)
     summary["want_need_investment"] = [
-        {"name": name, "amount": float(amount)}
-        for name, amount in sorted(wni.items(), key=lambda item: item[0])
+        {"name": row["wni_name"], "amount": float(row["amount"] or Decimal("0"))}
+        for row in wni_rows
     ]
     return summary
 
