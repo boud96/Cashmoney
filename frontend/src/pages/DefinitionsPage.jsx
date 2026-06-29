@@ -3,7 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPatch, apiPost } from "../api.js";
-import { HelpTooltip, LoadingButton, Select } from "../components.jsx";
+import { CloseButton, HelpTooltip, LoadingButton, Select } from "../components.jsx";
 import {
   categorizationFieldOptions,
   coerceArray,
@@ -723,7 +723,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
                 <h3 id="account-modal-title">{isEditing ? "Edit Bank Account" : "Add Bank Account"}</h3>
                 <span>{editingItem?.name || "New bank account"}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeAccountModal} type="button">x</button>
+              <CloseButton disabled={saving} onClick={closeAccountModal} />
             </div>
             <div className="definition-modal-body">
               <div className="compact-form">
@@ -1123,7 +1123,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
                 <h3 id="mapping-wizard-title">{isEditing ? "Edit CSV Mapping" : "Add CSV Mapping"}</h3>
                 <span>{mappingDetails.name || "New mapping"}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving || detecting} onClick={closeWizard} type="button">x</button>
+              <CloseButton disabled={saving || detecting} onClick={closeWizard} />
             </div>
             <div aria-label="CSV mapping steps" className="mapping-wizard-steps">
               {mappingWizardSteps.map((label, index) => (
@@ -1274,7 +1274,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record
                 <h3 id={`${endpoint.replace(/\W/g, "")}-modal-title`}>{isEditing ? `Edit ${entityLabel}` : `Add ${entityLabel}`}</h3>
                 <span>{editingItem?.name || `New ${entityLabel.toLowerCase()}`}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeItemModal} type="button">x</button>
+              <CloseButton disabled={saving} onClick={closeItemModal} />
             </div>
             <div className="definition-modal-body">
               <div className="compact-form">
@@ -1366,7 +1366,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
                 <h3 id="subcategory-modal-title">{isEditing ? "Edit Subcategory" : "Add Subcategory"}</h3>
                 <span>{editingItem?.name || "New subcategory"}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeSubcategoryModal} type="button">x</button>
+              <CloseButton disabled={saving} onClick={closeSubcategoryModal} />
             </div>
             <div className="definition-modal-body">
               <div className="compact-form">
@@ -1590,7 +1590,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
                 <h3 id="keyword-modal-title">{isEditing ? "Edit Keyword" : "Add Keyword"}</h3>
                 <span>{editingItem?.name || "New keyword"}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving || previewing} onClick={closeKeywordModal} type="button">x</button>
+              <CloseButton disabled={saving || previewing} onClick={closeKeywordModal} />
             </div>
             <div className="definition-modal-body">
               <div className="compact-form keyword-form">

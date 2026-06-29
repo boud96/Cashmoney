@@ -38,6 +38,14 @@ export function HelpTooltip({ text }) {
   );
 }
 
+export function CloseButton({ className = "", label = "Close", ...props }) {
+  return (
+    <button {...props} aria-label={label} className={`icon-button ${className}`.trim()} type="button">
+      x
+    </button>
+  );
+}
+
 function useModalEscape(onClose, closeDisabled = false) {
   const modalIdRef = useRef(Symbol("modal"));
 
@@ -101,9 +109,7 @@ export function ModalShell({
             <h2 id={dialogTitleId}>{title}</h2>
             {description ? <p className="action-modal-description">{description}</p> : null}
           </div>
-          <button aria-label={closeLabel} className="icon-button" disabled={closeDisabled} onClick={onClose} type="button">
-            x
-          </button>
+          <CloseButton disabled={closeDisabled} label={closeLabel} onClick={onClose} />
         </div>
         {children}
       </div>
