@@ -3,7 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPatch, apiPost } from "../api.js";
-import { LoadingButton, Select } from "../components.jsx";
+import { HelpTooltip, LoadingButton, Select } from "../components.jsx";
 import {
   categorizationFieldOptions,
   coerceArray,
@@ -608,15 +608,6 @@ function KeywordDefinitionGrid({ confirmAction, endpoint, items, notify, onDelet
   ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
 
   return <DefinitionAgGridList className="keyword-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
-}
-
-function HelpTooltip({ text }) {
-  return (
-    <span className="help-tooltip">
-      <button aria-label={text} className="help-tooltip-button" type="button">?</button>
-      <span className="help-tooltip-bubble" role="tooltip">{text}</span>
-    </span>
-  );
 }
 
 function DeleteButton({ confirmAction, endpoint, name, notify, onDeleted, reloadAll }) {

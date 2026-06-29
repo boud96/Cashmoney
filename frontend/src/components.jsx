@@ -29,6 +29,15 @@ export function Metric({ label, tone = "", value }) {
   return <div className="metric"><div className="metric-label">{label}</div><div className={`metric-value ${tone}`}>{value}</div></div>;
 }
 
+export function HelpTooltip({ text }) {
+  return (
+    <span className="help-tooltip">
+      <button aria-label={text} className="help-tooltip-button" type="button">?</button>
+      <span className="help-tooltip-bubble" role="tooltip">{text}</span>
+    </span>
+  );
+}
+
 function useModalEscape(onClose, closeDisabled = false) {
   const modalIdRef = useRef(Symbol("modal"));
 

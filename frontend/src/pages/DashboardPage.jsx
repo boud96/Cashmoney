@@ -6,7 +6,7 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
-import { LoadingButton, ModalShell } from "../components.jsx";
+import { HelpTooltip, LoadingButton, ModalShell } from "../components.jsx";
 import {
   UNASSIGNED,
   baseLayout,
@@ -917,15 +917,6 @@ function textLines(value) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-}
-
-function HelpTooltip({ text }) {
-  return (
-    <span className="help-tooltip">
-      <button aria-label={text} className="help-tooltip-button" type="button">?</button>
-      <span className="help-tooltip-bubble" role="tooltip">{text}</span>
-    </span>
-  );
 }
 
 function RecategorizeModal({
