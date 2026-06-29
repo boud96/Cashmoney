@@ -175,7 +175,12 @@ def serialize_keyword(keyword):
     }
 
 
-def serialize_transaction(transaction, split_by_owners=False, default_currency=None):
+def serialize_transaction(
+    transaction,
+    split_by_owners=False,
+    default_currency=None,
+    include_raw_data=True,
+):
     category = transaction.subcategory.category if transaction.subcategory else None
     display_currency = str(
         default_currency or transaction.converted_currency or ""
@@ -186,7 +191,7 @@ def serialize_transaction(transaction, split_by_owners=False, default_currency=N
         default_currency=display_currency,
         converted=True,
     )
-    return {
+    payload = {
         "id": str(transaction.id),
         "original_id": transaction.original_id,
         "transaction_date": iso(transaction.transaction_date),
@@ -210,10 +215,13 @@ def serialize_transaction(transaction, split_by_owners=False, default_currency=N
         "want_need_investment": transaction.want_need_investment,
         "is_ignored": transaction.is_ignored,
         "is_categorization_locked": transaction.is_categorization_locked,
-        "raw_data": transaction.raw_data,
+        "has_raw_data": bool(transaction.raw_data),
         "created_at": iso(transaction.created_at),
         "updated_at": iso(transaction.updated_at),
     }
+    if include_raw_data:
+        payload["raw_data"] = transaction.raw_data
+    return payload
 
 
 def serialize_csv_import(csv_import):

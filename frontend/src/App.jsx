@@ -1,7 +1,7 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiGet, apiPatch } from "./api.js";
-import { ConfirmDialog, Spinner } from "./components.jsx";
+import { ConfirmDialog, ModalShell, Spinner } from "./components.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import {
   accentPresets,
@@ -26,6 +26,7 @@ const ImportPage = lazy(() => import("./pages/ImportPage.jsx"));
 const DefinitionsPage = lazy(() => import("./pages/DefinitionsPage.jsx"));
 const MaintenancePage = lazy(() => import("./pages/MaintenancePage.jsx"));
 const HelpPage = lazy(() => import("./pages/HelpPage.jsx"));
+const DASHBOARD_TRANSACTION_LOAD_DELAY_MS = 180;
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
@@ -33,7 +34,6 @@ export default function App() {
   const [accent, setAccent] = useState(getStoredAccent);
   const [hideAmounts, setHideAmounts] = useState(getStoredHideAmounts);
   const [isAccentPickerOpen, setIsAccentPickerOpen] = useState(false);
-  const [draftAccent, setDraftAccent] = useState("");
   const [status, setStatus] = useState("Checking backend");
   const [toast, setToast] = useState("");
   const [refs, setRefs] = useState({
@@ -50,7 +50,8 @@ export default function App() {
   const [summary, setSummary] = useState(null);
   const [transactionPage, setTransactionPage] = useState({ count: 0, total_count: 0, results: [] });
   const [recategorizeResult, setRecategorizeResult] = useState(null);
-  const [loadingDashboard, setLoadingDashboard] = useState(false);
+  const [loadingDashboardSummary, setLoadingDashboardSummary] = useState(false);
+  const [loadingDashboardTransactions, setLoadingDashboardTransactions] = useState(false);
   const [importReport, setImportReport] = useState(null);
   const [maintenanceSummary, setMaintenanceSummary] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
@@ -62,6 +63,8 @@ export default function App() {
   });
   const filterSelectionsInitialized = useRef(false);
   const confirmationResolver = useRef(null);
+  const dashboardLoadSequence = useRef(0);
+  const dashboardSummarySequence = useRef(0);
 
   const notify = useCallback((message) => {
     setToast(message);
@@ -142,22 +145,82 @@ export default function App() {
   }, [loadFilterDefaults, loadReferenceData, notify]);
 
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
+  const dashboardBusy = loadingDashboardSummary || loadingDashboardTransactions;
 
-  const loadDashboard = useCallback(async () => {
-    setLoadingDashboard(true);
+  const runDashboardLoad = useCallback(async (params, loadSequence, summarySequence) => {
+    if (loadSequence !== dashboardLoadSequence.current) {
+      return;
+    }
+    const summaryPromise = (async () => {
+      setLoadingDashboardSummary(true);
+      try {
+        const nextSummary = await apiGet("/dashboard/summary/", params);
+        if (summarySequence === dashboardSummarySequence.current) {
+          setSummary(nextSummary);
+        }
+      } catch (error) {
+        if (summarySequence === dashboardSummarySequence.current) {
+          notify(error.message);
+        }
+      } finally {
+        if (summarySequence === dashboardSummarySequence.current) {
+          setLoadingDashboardSummary(false);
+        }
+      }
+    })();
+
+    const transactionsPromise = (async () => {
+      setLoadingDashboardTransactions(true);
+      try {
+        await new Promise((resolve) => window.setTimeout(resolve, DASHBOARD_TRANSACTION_LOAD_DELAY_MS));
+        if (loadSequence !== dashboardLoadSequence.current) {
+          return;
+        }
+        const nextTransactions = await apiGet("/transactions/", { ...params, limit: 10000 });
+        if (loadSequence === dashboardLoadSequence.current) {
+          setTransactionPage(nextTransactions);
+        }
+      } catch (error) {
+        if (loadSequence === dashboardLoadSequence.current) {
+          notify(error.message);
+        }
+      } finally {
+        if (loadSequence === dashboardLoadSequence.current) {
+          setLoadingDashboardTransactions(false);
+        }
+      }
+    })();
+
+    await Promise.allSettled([summaryPromise, transactionsPromise]);
+  }, [notify]);
+
+  const loadDashboardSummary = useCallback(async () => {
+    const summarySequence = dashboardSummarySequence.current + 1;
+    dashboardSummarySequence.current = summarySequence;
+    setLoadingDashboardSummary(true);
     try {
-      const [nextSummary, nextTransactions] = await Promise.all([
-        apiGet("/dashboard/summary/", filterParams),
-        apiGet("/transactions/", { ...filterParams, limit: 10000 }),
-      ]);
-      setSummary(nextSummary);
-      setTransactionPage(nextTransactions);
+      const nextSummary = await apiGet("/dashboard/summary/", filterParams);
+      if (summarySequence === dashboardSummarySequence.current) {
+        setSummary(nextSummary);
+      }
     } catch (error) {
-      notify(error.message);
+      if (summarySequence === dashboardSummarySequence.current) {
+        notify(error.message);
+      }
     } finally {
-      setLoadingDashboard(false);
+      if (summarySequence === dashboardSummarySequence.current) {
+        setLoadingDashboardSummary(false);
+      }
     }
   }, [filterParams, notify]);
+
+  const loadDashboard = useCallback(async (params = filterParams) => {
+    const loadSequence = dashboardLoadSequence.current + 1;
+    const summarySequence = dashboardSummarySequence.current + 1;
+    dashboardLoadSequence.current = loadSequence;
+    dashboardSummarySequence.current = summarySequence;
+    await runDashboardLoad(params, loadSequence, summarySequence);
+  }, [filterParams, runDashboardLoad]);
 
   const loadMaintenance = useCallback(async () => {
     try {
@@ -180,24 +243,18 @@ export default function App() {
   }, [accent]);
 
   useEffect(() => {
-    if (!isAccentPickerOpen) {
-      return undefined;
-    }
-    setDraftAccent(accent || defaultAccentForTheme(theme));
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        setIsAccentPickerOpen(false);
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [accent, isAccentPickerOpen, theme]);
-
-  useEffect(() => {
     if (filterDefaults.to || filterDefaults.from) {
-      loadDashboard();
+      const loadSequence = dashboardLoadSequence.current + 1;
+      const summarySequence = dashboardSummarySequence.current + 1;
+      dashboardLoadSequence.current = loadSequence;
+      dashboardSummarySequence.current = summarySequence;
+      const timeoutId = window.setTimeout(() => {
+        runDashboardLoad(filterParams, loadSequence, summarySequence);
+      }, 250);
+      return () => window.clearTimeout(timeoutId);
     }
-  }, [filterDefaults, filterParams, loadDashboard]);
+    return undefined;
+  }, [filterDefaults.from, filterDefaults.to, filterParams, runDashboardLoad]);
 
   useEffect(() => {
     if (activePage === "maintenance") {
@@ -232,15 +289,15 @@ export default function App() {
     setIsAccentPickerOpen(false);
   };
 
-  const updateTransaction = async (transaction, patch) => {
-    const updated = await apiPatch(`/transactions/${transaction.id}/`, patch);
+  const updateTransaction = useCallback(async (transaction, patch) => {
+    const updated = await apiPatch(`/transactions/${transaction.id}/`, patch, filterParams);
     setTransactionPage((current) => ({
       ...current,
       results: current.results.map((item) => (item.id === updated.id ? updated : item)),
     }));
-    await loadDashboard();
+    loadDashboardSummary();
     return updated;
-  };
+  }, [filterParams, loadDashboardSummary]);
 
   const [title, kicker] = pages[activePage];
 
@@ -306,7 +363,9 @@ export default function App() {
             <DashboardPage
               filters={filters}
               hideAmounts={hideAmounts}
-              importBusy={loadingDashboard}
+              importBusy={dashboardBusy}
+              summaryBusy={loadingDashboardSummary}
+              transactionsBusy={loadingDashboardTransactions}
               onFilterChange={updateFilter}
               refs={refs}
               recategorizeResult={recategorizeResult}
@@ -352,45 +411,12 @@ export default function App() {
         </PageErrorBoundary>
       </main>
       {isAccentPickerOpen && (
-        <div className="modal-backdrop" onMouseDown={() => setIsAccentPickerOpen(false)} role="presentation">
-          <div aria-labelledby="accent-modal-title" aria-modal="true" className="accent-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-            <div className="accent-modal-header">
-              <h2 id="accent-modal-title">Accent</h2>
-              <button className="icon-button" onClick={() => setIsAccentPickerOpen(false)} type="button" aria-label="Close accent picker">x</button>
-            </div>
-            <label className="accent-custom-picker">
-              <span>Custom color</span>
-              <input
-                onChange={(event) => setDraftAccent(event.target.value)}
-                type="color"
-                value={draftAccent || accent || defaultAccentForTheme(theme)}
-              />
-            </label>
-            <button className="primary-action accent-confirm-button" onClick={() => updateAccent(draftAccent || defaultAccentForTheme(theme))} type="button">
-              Apply custom color
-            </button>
-            <div className="accent-preset-label">Presets</div>
-            <div className="accent-preset-grid">
-              {accentPresets.map((color) => {
-                const isSelected = normalizeHexColor(accent || defaultAccentForTheme(theme)).toLowerCase() === color.toLowerCase();
-                return (
-                  <button
-                    aria-label={`Use accent ${color}`}
-                    aria-pressed={isSelected}
-                    className={`accent-preset ${isSelected ? "is-selected" : ""}`}
-                    key={color}
-                    onClick={() => updateAccent(color)}
-                    title={color}
-                    style={{ "--preset-color": color }}
-                    type="button"
-                  >
-                    <span className="accent-preset-swatch" />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
+        <AccentModal
+          accent={accent}
+          onApply={updateAccent}
+          onClose={() => setIsAccentPickerOpen(false)}
+          theme={theme}
+        />
       )}
       {confirmation && (
         <ConfirmDialog
@@ -405,6 +431,59 @@ export default function App() {
       )}
       <div className={`toast ${toast ? "is-visible" : ""}`}>{toast}</div>
     </div>
+  );
+}
+
+function AccentModal({ accent, onApply, onClose, theme }) {
+  const fallbackAccent = defaultAccentForTheme(theme);
+  const appliedAccent = normalizeHexColor(accent || fallbackAccent) || fallbackAccent;
+  const [draftAccent, setDraftAccent] = useState(appliedAccent);
+
+  useEffect(() => {
+    setDraftAccent(appliedAccent);
+  }, [appliedAccent]);
+
+  return (
+    <ModalShell
+      className="accent-modal"
+      closeLabel="Close accent picker"
+      headerClassName="accent-modal-header"
+      onClose={onClose}
+      title="Accent"
+      titleId="accent-modal-title"
+    >
+        <label className="accent-custom-picker">
+          <span>Custom color</span>
+          <input
+            onChange={(event) => setDraftAccent(event.target.value)}
+            type="color"
+            value={draftAccent || appliedAccent}
+          />
+        </label>
+        <button className="primary-action accent-confirm-button" onClick={() => onApply(draftAccent || fallbackAccent)} type="button">
+          Apply custom color
+        </button>
+        <div className="accent-preset-label">Presets</div>
+        <div className="accent-preset-grid">
+          {accentPresets.map((color) => {
+            const isSelected = appliedAccent.toLowerCase() === color.toLowerCase();
+            return (
+              <button
+                aria-label={`Use accent ${color}`}
+                aria-pressed={isSelected}
+                className={`accent-preset ${isSelected ? "is-selected" : ""}`}
+                key={color}
+                onClick={() => onApply(color)}
+                title={color}
+                style={{ "--preset-color": color }}
+                type="button"
+              >
+                <span className="accent-preset-swatch" />
+              </button>
+            );
+          })}
+        </div>
+    </ModalShell>
   );
 }
 

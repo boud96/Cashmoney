@@ -268,8 +268,7 @@ h2 {
 }
 
 .primary-action,
-.link-button,
-.compact-form button {
+.link-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -283,8 +282,7 @@ h2 {
   text-decoration: none;
 }
 
-.link-button,
-.compact-form button.link-button {
+.link-button {
   background: var(--surface);
   color: var(--action);
 }
@@ -379,14 +377,6 @@ h2 {
 }
 
 .accent-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.bulk-assign-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -586,7 +576,7 @@ h2 {
   background: var(--subtle-bg);
 }
 
-.definition-modal-actions button:first-child {
+.modal-action-cancel {
   justify-self: start;
 }
 
@@ -758,10 +748,6 @@ h2 {
   padding: 14px;
   border-top: 1px solid var(--border);
   background: var(--subtle-bg);
-}
-
-.mapping-wizard-actions button:first-child {
-  justify-self: start;
 }
 
 .mapping-wizard-actions button {
@@ -940,8 +926,7 @@ h2 {
 }
 
 .primary-action:disabled,
-.link-button:disabled,
-.compact-form button:disabled {
+.link-button:disabled {
   cursor: default;
   opacity: 0.65;
 }
@@ -1579,7 +1564,7 @@ select option {
   align-items: center;
 }
 
-.saved-filter-row > button:first-child {
+.saved-filter-load-button {
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1591,7 +1576,7 @@ select option {
   text-align: left;
 }
 
-.saved-filter-row > button:first-child:hover {
+.saved-filter-load-button:hover {
   border-color: var(--action);
 }
 
@@ -1630,6 +1615,17 @@ select option {
   font-size: 0.9rem;
 }
 
+.transaction-cap-warning {
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+}
+
 .dashboard-stats-section {
   min-width: 0;
 }
@@ -1637,6 +1633,20 @@ select option {
 .dashboard-section-title {
   font-size: 15px;
   margin: 0;
+}
+
+.dashboard-section-header,
+.transaction-panel-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-section-header {
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .metrics-grid {
@@ -2764,6 +2774,13 @@ select option {
   cursor: pointer;
 }
 
+.transaction-grid .ag-cell.filter-retained-cell {
+  background: color-mix(in srgb, var(--action) 8%, var(--surface));
+  border-color: var(--action);
+  outline: 2px solid var(--action);
+  outline-offset: -3px;
+}
+
 .transaction-grid .ag-cell:has(.color-cell) {
   align-items: stretch;
   padding: 0;
@@ -3432,19 +3449,9 @@ select option {
   color: var(--warning);
 }
 
-.compact-form button {
+.app-settings-action,
+.mapping-detect-button {
   align-self: end;
-}
-
-.form-actions {
-  display: flex;
-  align-items: end;
-  gap: 8px;
-  align-self: end;
-}
-
-.form-actions button {
-  min-height: 38px;
 }
 
 .color-input {
@@ -4174,8 +4181,7 @@ td {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .mapping-wizard-actions button:first-child,
-  .definition-modal-actions button:first-child {
+  .modal-action-cancel {
     justify-self: stretch;
   }
 

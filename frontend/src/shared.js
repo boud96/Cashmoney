@@ -249,8 +249,8 @@ export function buildMetrics(summary, transactionPage, hideAmounts = false, defa
     ["Incomes", formatMoneyWithCurrency(income, currency, hideAmounts), "positive", { value: formatMoneyWithCurrency(income / monthCount, currency, hideAmounts), tone: "positive" }],
     ["Expenses", formatMoneyWithCurrency(expense, currency, hideAmounts), "negative", { value: formatMoneyWithCurrency(expense / monthCount, currency, hideAmounts), tone: "negative" }],
     ["Net", formatMoneyWithCurrency(net, currency, hideAmounts), "metric-blue", { value: formatMoneyWithCurrency(net / monthCount, currency, hideAmounts), tone: "metric-blue" }],
-    ["Transactions", `${transactionPage.count.toLocaleString()} / ${(transactionPage.total_count ?? transactionPage.count).toLocaleString()}`, ""],
-    ["Uncategorized", uncategorized.toLocaleString(), ""],
+    ["Transactions", `${formatCount(transactionPage.count)} / ${formatCount(transactionPage.total_count ?? transactionPage.count)}`, ""],
+    ["Uncategorized", formatCount(uncategorized), ""],
   ];
 }
 
@@ -613,12 +613,37 @@ export function formatAmountWithCurrency(value, currency, hideAmounts = false) {
   return hideAmounts || !currency ? formatted : `${formatted} ${currency}`;
 }
 
+export function formatBytes(value, fallback = "") {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes)) {
+    return fallback;
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function formatDateTime(value, fallback = "") {
+  if (!value) {
+    return fallback;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  return date.toLocaleString();
+}
+
 export function formatNumber(value, options = {}) {
   return new Intl.NumberFormat("en-US", options).format(Number(value || 0)).replace(/,/g, " ");
 }
 
 export function formatCount(value) {
-  return Number(value || 0).toLocaleString();
+  return formatNumber(value, { maximumFractionDigits: 0 });
 }
 
 export function colorPillStyle(color) {

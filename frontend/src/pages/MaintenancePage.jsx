@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
 import { LoadingButton, Metric } from "../components.jsx";
-import { formatCount } from "../shared.js";
+import { formatBytes, formatCount, formatDateTime } from "../shared.js";
 
 export default function MaintenancePage({ confirmAction, notify, reloadAll, reloadDashboard, reloadMaintenance, summary }) {
   const [deleting, setDeleting] = useState("");
@@ -298,7 +298,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
                   <h3>{backup.filename}</h3>
                   <p>{backup.label || "Backup"}</p>
                   <div className="backup-meta">
-                    {formatBackupDate(backup.modified_at)} | {formatBytes(backup.size_bytes)}
+                    {formatDateTime(backup.modified_at, "Unknown date")} | {formatBytes(backup.size_bytes, "0 B")}
                   </div>
                 </div>
                 <div className="backup-actions">
@@ -478,28 +478,6 @@ async function downloadResponseAttachment(response, fallbackFilename, fallbackEr
   link.click();
   link.remove();
   window.URL.revokeObjectURL(url);
-}
-
-function formatBytes(value) {
-  const bytes = Number(value || 0);
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatBackupDate(value) {
-  if (!value) {
-    return "Unknown date";
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString();
 }
 
 function maintenancePanelStorageKey(storageId) {

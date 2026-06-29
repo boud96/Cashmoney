@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+const modalStack = [];
+
 export function Select({ blank, defaultValue = "", name, onChange, options, required = false, value }) {
   const controlledProps = value === undefined ? { defaultValue } : { value };
   return (
@@ -27,6 +29,94 @@ export function Metric({ label, tone = "", value }) {
   return <div className="metric"><div className="metric-label">{label}</div><div className={`metric-value ${tone}`}>{value}</div></div>;
 }
 
+export function HelpTooltip({ text }) {
+  return (
+    <span className="help-tooltip">
+      <button aria-label={text} className="help-tooltip-button" type="button">?</button>
+      <span className="help-tooltip-bubble" role="tooltip">{text}</span>
+    </span>
+  );
+}
+
+export function CloseButton({ className = "", label = "Close", ...props }) {
+  return (
+    <button {...props} aria-label={label} className={`icon-button ${className}`.trim()} type="button">
+      x
+    </button>
+  );
+}
+
+function useModalEscape(onClose, closeDisabled = false) {
+  const modalIdRef = useRef(Symbol("modal"));
+
+  useEffect(() => {
+    const modalId = modalIdRef.current;
+    modalStack.push(modalId);
+    return () => {
+      const index = modalStack.indexOf(modalId);
+      if (index >= 0) {
+        modalStack.splice(index, 1);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const modalId = modalIdRef.current;
+    function handleKeyDown(event) {
+      if (event.key !== "Escape" || closeDisabled || modalStack[modalStack.length - 1] !== modalId) {
+        return;
+      }
+      event.preventDefault();
+      onClose?.();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [closeDisabled, onClose]);
+}
+
+export function ModalShell({
+  children,
+  className = "",
+  closeDisabled = false,
+  closeLabel = "Close",
+  description = "",
+  headerClassName = "",
+  onClose,
+  title,
+  titleId,
+}) {
+  const dialogTitleId = titleId || "modal-title";
+
+  useModalEscape(onClose, closeDisabled);
+
+  function closeFromBackdrop(event) {
+    if (event.target === event.currentTarget && !closeDisabled) {
+      onClose?.();
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onMouseDown={closeFromBackdrop} role="presentation">
+      <div
+        aria-labelledby={dialogTitleId}
+        aria-modal="true"
+        className={className}
+        onMouseDown={(event) => event.stopPropagation()}
+        role="dialog"
+      >
+        <div className={`action-modal-header ${headerClassName}`.trim()}>
+          <div className="action-modal-title-block">
+            <h2 id={dialogTitleId}>{title}</h2>
+            {description ? <p className="action-modal-description">{description}</p> : null}
+          </div>
+          <CloseButton disabled={closeDisabled} label={closeLabel} onClick={onClose} />
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function ConfirmDialog({
   cancelLabel = "Cancel",
   confirmLabel = "Confirm",
@@ -38,16 +128,11 @@ export function ConfirmDialog({
 }) {
   const cancelButtonRef = useRef(null);
 
+  useModalEscape(onCancel);
+
   useEffect(() => {
     cancelButtonRef.current?.focus();
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        onCancel();
-      }
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onCancel]);
+  }, []);
 
   return (
     <div

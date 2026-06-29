@@ -37,8 +37,10 @@ export async function apiPost(path, data = {}, params = {}) {
   return readJson(response);
 }
 
-export async function apiPatch(path, data = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
+export async function apiPatch(path, data = {}, params = {}) {
+  const url = new URL(`${API_BASE}${path}`, window.location.origin);
+  appendParams(url, params);
+  const response = await fetch(url, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),

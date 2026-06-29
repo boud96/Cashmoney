@@ -885,6 +885,31 @@ class APITests(FinanceTestCase):
         self.assertEqual(json_body(visible)["total_count"], 1)
         self.assertEqual(json_body(visible)["limit"], 1)
 
+    def test_transaction_list_omits_raw_data_but_exposes_on_demand(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Raw row",
+            amount=Decimal("-12.50"),
+            raw_data={"Description": "Raw row", "Amount": "-12.50"},
+        )
+
+        list_response = self.client.get("/api/transactions/", {"limit": "1"})
+        list_payload = json_body(list_response)
+        row = list_payload["results"][0]
+        raw_data_response = self.client.get(
+            f"/api/transactions/{transaction_obj.id}/raw-data/"
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertTrue(row["has_raw_data"])
+        self.assertNotIn("raw_data", row)
+        self.assertEqual(raw_data_response.status_code, 200)
+        self.assertEqual(
+            json_body(raw_data_response)["raw_data"],
+            {"Description": "Raw row", "Amount": "-12.50"},
+        )
+
     def test_transaction_categorization_edits_lock_and_can_unlock(self):
         transaction_obj = Transaction.objects.create(
             bank_account=self.account,
@@ -1650,6 +1675,29 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(payload["want_need_investment"][0]["name"], "want")
 
+    def test_dashboard_summary_tag_filter_does_not_double_count(self):
+        second_tag = Tag.objects.create(name="Dinner")
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Tagged twice",
+            amount=Decimal("-12.50"),
+            subcategory=self.subcategory,
+            want_need_investment=WantNeedInvestment.NEED,
+        )
+        transaction_obj.tags.add(self.tag, second_tag)
+
+        response = self.client.get(
+            "/api/dashboard/summary/",
+            {"tag": f"{self.tag.id},{second_tag.id}"},
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["monthly"][0]["expense"], 12.5)
+        self.assertEqual(payload["expense_categories"][0]["amount"], 12.5)
+        self.assertEqual(payload["want_need_investment"][0]["amount"], 12.5)
+
     def test_dashboard_checkbox_none_marker_returns_no_transactions(self):
         Transaction.objects.create(
             bank_account=self.account,
@@ -1704,6 +1752,30 @@ class APITests(FinanceTestCase):
         self.assertEqual(summary["expense_categories"][0]["amount"], 45.0)
         self.assertEqual(summary["want_need_investment"][0]["amount"], 45.0)
         self.assertEqual(transactions["results"][0]["amount"], -45.0)
+        self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
+
+    def test_transaction_patch_respects_split_by_owners_response_amount(self):
+        self.account.owners = 2
+        self.account.save(update_fields=["owners"])
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Shared lunch",
+            amount=Decimal("-90.00"),
+            subcategory=self.subcategory,
+        )
+
+        response = self.client.patch(
+            f"/api/transactions/{transaction_obj.id}/?split_by_owners=true",
+            data=json.dumps({"want_need_investment": WantNeedInvestment.NEED}),
+            content_type="application/json",
+        )
+        transaction_obj.refresh_from_db()
+
+        payload = json_body(response)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["amount"], -45.0)
+        self.assertEqual(payload["want_need_investment"], WantNeedInvestment.NEED)
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
 
     def test_dashboard_summary_uses_converted_default_currency_amounts(self):

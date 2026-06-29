@@ -6,7 +6,7 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
-import { LoadingButton } from "../components.jsx";
+import { HelpTooltip, LoadingButton, ModalShell, Spinner } from "../components.jsx";
 import {
   UNASSIGNED,
   baseLayout,
@@ -18,6 +18,7 @@ import {
   cssVar,
   formatAmountWithCurrency,
   formatAmountValue,
+  formatCount,
   formatDateInput,
   formatMoneyValue,
   formatNumber,
@@ -113,7 +114,9 @@ export default function DashboardPage({
   setFilters,
   setRecategorizeResult,
   summary,
+  summaryBusy = false,
   transactionPage,
+  transactionsBusy = false,
   updateTransaction,
 }) {
   const defaultCurrency = summary?.default_currency || refs.settings?.default_currency || "CZK";
@@ -121,12 +124,18 @@ export default function DashboardPage({
     () => buildMetrics(summary, transactionPage, hideAmounts, defaultCurrency),
     [defaultCurrency, hideAmounts, summary, transactionPage],
   );
+  const loadedTransactionCount = transactionPage.results?.length || 0;
+  const filteredTransactionCount = transactionPage.count || 0;
+  const transactionsAreCapped = loadedTransactionCount > 0 && filteredTransactionCount > loadedTransactionCount;
+  const transactionCountLabel = transactionsAreCapped
+    ? `${formatCount(loadedTransactionCount)} of ${formatCount(filteredTransactionCount)} shown`
+    : `${formatCount(filteredTransactionCount)} shown`;
   const conflictIds = useMemo(
     () => new Set(recategorizeResult?.conflict_transaction_ids || []),
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
-  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false);
+  const [bulkAssignEditorOpen, setBulkAssignEditorOpen] = useState(false);
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
@@ -297,7 +306,7 @@ export default function DashboardPage({
       const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeIncludeLocked }, params);
       setRecategorizeResult(result);
       setRecategorizeModalOpen(false);
-      notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
+      notify(`${formatCount(result.updated)} transactions updated`);
       await reloadDashboard();
     } catch (error) {
       notify(error.message);
@@ -435,7 +444,7 @@ export default function DashboardPage({
     }
     const confirmed = await confirmAction({
       confirmLabel: "Apply",
-      message: `Mark ${selectedTransferIds.length.toLocaleString()} selected transfer pairs as internal transfers? Both sides will be ignored and locked.`,
+      message: `Mark ${formatCount(selectedTransferIds.length)} selected transfer pairs as internal transfers? Both sides will be ignored and locked.`,
       title: "Apply Internal Transfers",
     });
     if (!confirmed) {
@@ -453,7 +462,7 @@ export default function DashboardPage({
         },
         transferFilterParams,
       );
-      notify(`${Number(result.created || 0).toLocaleString()} transfer pairs applied`);
+      notify(`${formatCount(result.created)} transfer pairs applied`);
       setSelectedTransferIds([]);
       await Promise.all([reloadDashboard(), loadTransferCandidates()]);
     } catch (error) {
@@ -464,16 +473,16 @@ export default function DashboardPage({
     }
   }
 
-  function openBulkAssignModal() {
+  function openBulkAssignEditor() {
     setBulkAssignDraft(emptyBulkAssignDraft);
-    setBulkAssignModalOpen(true);
+    setBulkAssignEditorOpen(true);
   }
 
-  function closeBulkAssignModal() {
+  function closeBulkAssignEditor() {
     if (bulkAssignBusy) {
       return;
     }
-    setBulkAssignModalOpen(false);
+    setBulkAssignEditorOpen(false);
     setBulkAssignDraft(emptyBulkAssignDraft);
   }
 
@@ -528,8 +537,8 @@ export default function DashboardPage({
     setBulkAssignBusy(true);
     try {
       const result = await apiPost("/transactions/bulk-assign/", payload, filterParams);
-      notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
-      setBulkAssignModalOpen(false);
+      notify(`${formatCount(result.updated)} transactions updated`);
+      setBulkAssignEditorOpen(false);
       setBulkAssignDraft(emptyBulkAssignDraft);
       await reloadDashboard();
     } catch (error) {
@@ -585,7 +594,7 @@ export default function DashboardPage({
           transaction_ids: selectedSuggestion.transaction_ids || [],
         });
         setRecategorizeResult(result);
-        notify(`${Number(result.updated || 0).toLocaleString()} transactions updated`);
+        notify(`${formatCount(result.updated)} transactions updated`);
         await Promise.all([reloadDashboard(), loadUncategorizedSuggestions()]);
       } else {
         notify("Keyword added");
@@ -729,7 +738,10 @@ export default function DashboardPage({
 
       <div className="dashboard-summary-row">
         <section className="filter-panel dashboard-stats-section" aria-labelledby="dashboard-stats-title">
-          <h2 id="dashboard-stats-title" className="dashboard-section-title">Stats</h2>
+          <div className="dashboard-section-header">
+            <h2 id="dashboard-stats-title" className="dashboard-section-title">Stats</h2>
+            {summaryBusy ? <span className="inline-status"><Spinner /> Updating stats and charts</span> : null}
+          </div>
           <div className="metrics-grid">
             {metrics.map(([label, value, tone, secondary], index) => (
               <div className={`metric stats-metric stats-metric-${index + 1}`} key={label}>
@@ -760,7 +772,7 @@ export default function DashboardPage({
               >
                 Recategorize
               </LoadingButton>
-              <button className="link-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignModal} type="button">
+              <button className="link-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignEditor} type="button">
                 Bulk assign
               </button>
               <LoadingButton
@@ -852,13 +864,13 @@ export default function DashboardPage({
           suggestions={uncategorizedSuggestions}
         />
       )}
-      {bulkAssignModalOpen && (
+      {bulkAssignEditorOpen && (
         <BulkAssignMultiModal
           busy={bulkAssignBusy}
           count={transactionPage.count}
           draft={bulkAssignDraft}
           hasChanges={bulkAssignHasChanges()}
-          onClose={closeBulkAssignModal}
+          onClose={closeBulkAssignEditor}
           onSubmit={submitBulkAssign}
           onTagToggle={toggleBulkAssignTag}
           onUpdate={updateBulkAssignDraft}
@@ -871,7 +883,7 @@ export default function DashboardPage({
       {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
       {summary?.missing_conversions ? (
         <div className="dashboard-warning">
-          {Number(summary.missing_conversions).toLocaleString()} filtered transactions are missing exchange rates and are excluded from converted totals.
+          {formatCount(summary.missing_conversions)} filtered transactions are missing exchange rates and are excluded from converted totals.
         </div>
       ) : null}
 
@@ -886,9 +898,18 @@ export default function DashboardPage({
       <section className="panel transaction-panel">
         <div className="panel-header">
           <h2>Transactions</h2>
-          <span className="muted">{transactionPage.count.toLocaleString()} shown</span>
+          <div className="transaction-panel-status">
+            {transactionsBusy ? <span className="inline-status"><Spinner /> Updating table</span> : null}
+            <span className="muted">{transactionCountLabel}</span>
+          </div>
         </div>
-        <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        {transactionsAreCapped ? (
+          <div className="transaction-cap-warning">
+            Showing the newest {formatCount(loadedTransactionCount)} of {formatCount(filteredTransactionCount)} filtered transactions.
+            Older matching transactions are omitted from the table. Stats and charts still use the full filtered set.
+          </div>
+        ) : null}
+        <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
@@ -918,15 +939,6 @@ function textLines(value) {
     .filter(Boolean);
 }
 
-function HelpTooltip({ text }) {
-  return (
-    <span className="help-tooltip">
-      <button aria-label={text} className="help-tooltip-button" type="button">?</button>
-      <span className="help-tooltip-bubble" role="tooltip">{text}</span>
-    </span>
-  );
-}
-
 function RecategorizeModal({
   busy,
   count,
@@ -936,19 +948,17 @@ function RecategorizeModal({
   onSubmit,
 }) {
   return (
-    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
-      <div aria-labelledby="recategorize-modal-title" aria-modal="true" className="recategorize-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="action-modal-header">
-          <div className="action-modal-title-block">
-            <h2 id="recategorize-modal-title">Recategorize</h2>
-            <p className="action-modal-description">
-              This will rerun keyword categorization for the current filtered scope. Locked transactions are skipped unless included here.
-            </p>
-          </div>
-          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
-        </div>
+    <ModalShell
+      className="recategorize-modal"
+      closeDisabled={busy}
+      closeLabel="Close recategorize modal"
+      description="This will rerun keyword categorization for the current filtered scope. Locked transactions are skipped unless included here."
+      onClose={onClose}
+      title="Recategorize"
+      titleId="recategorize-modal-title"
+    >
         <div className="bulk-assign-warning">
-          Current filters show {count.toLocaleString()} transactions.
+          Current filters show {formatCount(count)} transactions.
         </div>
         <label className="check-row recategorize-modal-toggle">
           <input checked={includeLocked} disabled={busy} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
@@ -965,8 +975,7 @@ function RecategorizeModal({
             Recategorize
           </LoadingButton>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -986,17 +995,15 @@ function BulkAssignMultiModal({
 }) {
   const tagSelectionDisabled = !["add", "replace"].includes(draft.tagMode);
   return (
-    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
-      <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="action-modal-header">
-          <div className="action-modal-title-block">
-            <h2 id="bulk-assign-modal-title">Bulk Assign</h2>
-            <p className="action-modal-description">
-              This will update {count.toLocaleString()} currently filtered transactions. Category, tag, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.
-            </p>
-          </div>
-          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">x</button>
-        </div>
+    <ModalShell
+      className="bulk-assign-modal"
+      closeDisabled={busy}
+      closeLabel="Close bulk assign modal"
+      description={`This will update ${formatCount(count)} currently filtered transactions. Subcategory, tags, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.`}
+      onClose={onClose}
+      title="Bulk Assign"
+      titleId="bulk-assign-modal-title"
+    >
         <div className="bulk-assign-form">
           <label className="form-field">
             <span>Subcategory</span>
@@ -1059,69 +1066,7 @@ function BulkAssignMultiModal({
             Apply
           </LoadingButton>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, options, selectedLabel, type, value }) {
-  const config = {
-    subcategory: {
-      blank: "Choose subcategory",
-      confirm: "Assign subcategory",
-      label: "Subcategory",
-      title: "Assign Filtered to Subcategory",
-      warning: selectedLabel
-        ? `This will assign ${count.toLocaleString()} currently filtered transactions to ${selectedLabel} and lock their categorization.`
-        : `Choose a subcategory to assign ${count.toLocaleString()} currently filtered transactions.`,
-    },
-    tag: {
-      blank: "Choose tag",
-      confirm: "Assign tag",
-      label: "Tag",
-      title: "Assign Tag to Filtered",
-      warning: selectedLabel
-        ? `This will add the ${selectedLabel} tag to ${count.toLocaleString()} currently filtered transactions and lock their categorization. Existing tags will stay in place.`
-        : `Choose a tag to add to ${count.toLocaleString()} currently filtered transactions.`,
-    },
-    want_need_investment: {
-      blank: "Choose WNI",
-      confirm: "Assign WNI",
-      label: "WNI",
-      title: "Assign WNI to Filtered",
-      warning: selectedLabel
-        ? `This will set ${count.toLocaleString()} currently filtered transactions to ${selectedLabel} and lock their categorization.`
-        : `Choose a WNI value to assign ${count.toLocaleString()} currently filtered transactions.`,
-    },
-  }[type];
-
-  return (
-    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
-      <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="bulk-assign-modal-header">
-          <h2 id="bulk-assign-modal-title">{config.title}</h2>
-          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">×</button>
-        </div>
-        <label className="form-field">
-          <span>{config.label}</span>
-          <select autoFocus disabled={busy} onChange={(event) => onValueChange(event.target.value)} value={value}>
-            <option value="">{config.blank}</option>
-            {options.map(([optionValue, optionLabel]) => (
-              <option key={optionValue} value={optionValue}>{optionLabel}</option>
-            ))}
-          </select>
-        </label>
-        <div className="bulk-assign-warning">
-          {config.warning}
-        </div>
-        <div className="bulk-assign-modal-actions">
-          <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
-          <LoadingButton busy={busy} busyLabel="Assigning" className="primary-action" disabled={!value} onClick={onSubmit} type="button">
-            {config.confirm}
-          </LoadingButton>
-        </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -1148,20 +1093,19 @@ function InternalTransferReviewPanel({
 }) {
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
-      <div aria-labelledby="transfer-review-title" aria-modal="true" className="transfer-review-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="action-modal-header transfer-review-modal-header">
-          <div className="action-modal-title-block">
-            <h2 id="transfer-review-title">Find Transfers</h2>
-            <p className="action-modal-description">
-              Scan the current filtered scope for matching outgoing and incoming transactions across defined accounts.
-            </p>
-          </div>
-          <button className="icon-button" disabled={applying} onClick={onClose} type="button" aria-label="Close transfer review">x</button>
-        </div>
+    <ModalShell
+      className="transfer-review-modal"
+      closeDisabled={applying}
+      closeLabel="Close transfer review"
+      description="Scan the current filtered scope for matching outgoing and incoming transactions across defined accounts."
+      headerClassName="transfer-review-modal-header"
+      onClose={onClose}
+      title="Find Transfers"
+      titleId="transfer-review-title"
+    >
         <div className="transfer-review-layout">
           <div className="bulk-assign-warning transfer-review-summary">
-            {Number(meta.count || 0).toLocaleString()} candidates. {Number(meta.high_confidence_count || 0).toLocaleString()} high confidence, {Number(meta.ambiguous_count || 0).toLocaleString()} ambiguous.
+            {formatCount(meta.count)} candidates. {formatCount(meta.high_confidence_count)} high confidence, {formatCount(meta.ambiguous_count)} ambiguous.
           </div>
           <div className="transfer-review-controls">
             <label className="form-field">
@@ -1202,7 +1146,7 @@ function InternalTransferReviewPanel({
             )}
           </div>
           <div className="transfer-review-actions">
-            <span>{selectedIds.length.toLocaleString()} selected</span>
+            <span>{formatCount(selectedIds.length)} selected</span>
             <label className="transfer-apply-subcategory">
               <span>Subcategory</span>
               <select disabled={applying} onChange={(event) => onSubcategoryChange(event.target.value)} value={subcategoryId}>
@@ -1214,8 +1158,7 @@ function InternalTransferReviewPanel({
             </LoadingButton>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -1297,39 +1240,20 @@ function UncategorizedReviewPanel({
   }
 
   return (
-    <div
-      className="modal-backdrop"
-      onMouseDown={(event) => event.target === event.currentTarget && !submitting && onClose()}
-      role="presentation"
+    <ModalShell
+      className="uncategorized-review-modal"
+      closeDisabled={Boolean(submitting)}
+      closeLabel="Close uncategorized review"
+      description="Review uncategorized transaction groups and create a keyword rule from the selected suggestion."
+      headerClassName="uncategorized-review-modal-header"
+      onClose={onClose}
+      title="Review Uncategorized"
+      titleId="uncategorized-review-title"
     >
-      <section
-        aria-labelledby="uncategorized-review-title"
-        aria-modal="true"
-        className="uncategorized-review-modal"
-        onMouseDown={(event) => event.stopPropagation()}
-        role="dialog"
-      >
-        <div className="action-modal-header uncategorized-review-modal-header">
-          <div className="action-modal-title-block">
-            <h2 id="uncategorized-review-title">Review Uncategorized</h2>
-            <p className="action-modal-description">
-              Review uncategorized transaction groups and create a keyword rule from the selected suggestion.
-            </p>
-          </div>
-          <button
-            aria-label="Close uncategorized review"
-            className="icon-button"
-            disabled={Boolean(submitting)}
-            onClick={onClose}
-            type="button"
-          >
-            x
-          </button>
-        </div>
         <div className="uncategorized-review-layout">
           <div className="bulk-assign-warning uncategorized-review-summary">
-            {Number(meta.transaction_count || 0).toLocaleString()} transactions in{" "}
-            {Number(meta.count || 0).toLocaleString()} groups
+            {formatCount(meta.transaction_count)} transactions in{" "}
+            {formatCount(meta.count)} groups
           </div>
           {error ? <div className="uncategorized-review-error">{error}</div> : null}
           <div className="uncategorized-suggestion-list">
@@ -1347,7 +1271,7 @@ function UncategorizedReviewPanel({
               >
                 <span className="suggestion-card-title">{suggestion.sample_description}</span>
                 <span className="suggestion-card-meta">
-                  {suggestion.reason} | {suggestion.transaction_count.toLocaleString()} transactions
+                  {suggestion.reason} | {formatCount(suggestion.transaction_count)} transactions
                 </span>
                 <span className="suggestion-card-amount">
                   {formatAmountWithCurrency(
@@ -1465,7 +1389,7 @@ function UncategorizedReviewPanel({
               <div className="uncategorized-sample-table">
                 <div className="uncategorized-sample-header">
                   <span>Sample transactions</span>
-                  <span>{selectedSuggestion.transaction_count.toLocaleString()} total</span>
+                  <span>{formatCount(selectedSuggestion.transaction_count)} total</span>
                 </div>
                 {selectedSuggestion.sample_transactions.map((transaction) => (
                   <div className="uncategorized-sample-row" key={transaction.id}>
@@ -1509,8 +1433,7 @@ function UncategorizedReviewPanel({
           )}
           </div>
         </div>
-      </section>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -1545,10 +1468,18 @@ function InfoIcon() {
   );
 }
 
-function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, refs, rows, updateTransaction }) {
+const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filters, so this row is kept visible temporarily.";
+
+function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
+  const [rawDataLoadingId, setRawDataLoadingId] = useState("");
+  const [filterRetainedCells, setFilterRetainedCells] = useState({});
+  const rawDataCacheRef = useRef(new Map());
   const rawDataPopoverRef = useRef(null);
-  const subcategoryOptions = useMemo(() => ["", ...refs.subcategories.map((item) => item.id)], [refs.subcategories]);
+  const subcategoryOptions = useMemo(
+    () => [["", "Unassigned"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])],
+    [refs.subcategories],
+  );
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
   const accountLookup = useMemo(() => new Map(refs.accounts.map((item) => [item.id, item.name])), [refs.accounts]);
@@ -1557,6 +1488,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
     [refs.accounts],
   );
   const mappingLookup = useMemo(() => new Map(refs.mappings.map((item) => [item.id, item])), [refs.mappings]);
+  const filterSignature = useMemo(() => JSON.stringify(filters), [filters]);
 
   const rowData = useMemo(() => rows.map((row) => ({
     ...row,
@@ -1564,6 +1496,46 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
     categorization_conflict: conflictIds.has(row.id),
     subcategory_id: row.subcategory?.id || "",
   })), [conflictIds, rows]);
+
+  useEffect(() => {
+    setFilterRetainedCells({});
+  }, [filterSignature]);
+
+  const getRetainedCellMarker = useCallback((params) => {
+    const field = params.colDef?.field;
+    const rowId = params.data?.id;
+    if (!field || !rowId) {
+      return false;
+    }
+    return Boolean(filterRetainedCells[rowId]?.[field]);
+  }, [filterRetainedCells]);
+
+  const retainedCellClass = useCallback((params, baseClass = "") => {
+    return joinClassNames(baseClass, getRetainedCellMarker(params) ? "filter-retained-cell" : "");
+  }, [getRetainedCellMarker]);
+
+  const retainedCellTooltip = useCallback((params) => (
+    getRetainedCellMarker(params) ? FILTER_RETAINED_TOOLTIP : null
+  ), [getRetainedCellMarker]);
+
+  const saveTransaction = useCallback(async (row, patch) => {
+    const updated = await updateTransaction(row, patch);
+    const changedFields = changedTransactionCellFields(patch);
+    const isRetainedByEdit = changedFields.length > 0 && !transactionMatchesCurrentFilters(updated, filters);
+    setFilterRetainedCells((current) => {
+      const next = { ...current };
+      if (!isRetainedByEdit) {
+        delete next[updated.id];
+        return next;
+      }
+      next[updated.id] = {
+        ...(next[updated.id] || {}),
+        ...Object.fromEntries(changedFields.map((field) => [field, true])),
+      };
+      return next;
+    });
+    return updated;
+  }, [filters, updateTransaction]);
 
   useEffect(() => {
     if (!rawDataPopover) {
@@ -1599,36 +1571,55 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
     };
   }, [rawDataPopover]);
 
-  const toggleRawDataPopover = useCallback((row, rawData, button) => {
+  const toggleRawDataPopover = useCallback(async (row, button) => {
+    if (!row?.id || (!row.has_raw_data && !row.raw_data)) {
+      setRawDataPopover(null);
+      return;
+    }
+    if (rawDataPopover?.rowId === row.id) {
+      setRawDataPopover(null);
+      return;
+    }
     const mappingId = accountMappingLookup.get(row?.account_id || row?.bank_account?.id || "");
     const mapping = mappingLookup.get(mappingId);
+    const position = rawDataPopoverPosition(button.getBoundingClientRect());
+    let rawData = row.raw_data || rawDataCacheRef.current.get(row.id);
+    if (!rawData) {
+      setRawDataLoadingId(row.id);
+      try {
+        const payload = await apiGet(`/transactions/${row.id}/raw-data/`);
+        rawData = payload.raw_data;
+        rawDataCacheRef.current.set(row.id, rawData);
+      } catch (error) {
+        notify(error.message);
+        return;
+      } finally {
+        setRawDataLoadingId((current) => (current === row.id ? "" : current));
+      }
+    }
     const entries = rawDataEntries(rawData, hideAmounts, categorizationRawDataKeys(mapping));
     if (!entries.length) {
       setRawDataPopover(null);
       return;
     }
-    setRawDataPopover((current) => {
-      if (current?.rowId === row?.id) {
-        return null;
-      }
-      return {
-        entries,
-        position: rawDataPopoverPosition(button.getBoundingClientRect()),
-        rowId: row?.id,
-      };
+    setRawDataPopover({
+      entries,
+      position,
+      rowId: row.id,
     });
-  }, [accountMappingLookup, hideAmounts, mappingLookup]);
+  }, [accountMappingLookup, hideAmounts, mappingLookup, notify, rawDataPopover]);
 
   const columnDefs = useMemo(() => [
     {
       cellClass: "raw-data-grid-cell",
       cellRenderer: (params) => (
         <RawDataButton
-          onToggle={(button) => toggleRawDataPopover(params.data, params.value, button)}
-          rawData={params.value}
+          hasRawData={Boolean(params.data?.has_raw_data || params.data?.raw_data)}
+          loading={rawDataLoadingId === params.data?.id}
+          onToggle={(button) => toggleRawDataPopover(params.data, button)}
         />
       ),
-      field: "raw_data",
+      field: "has_raw_data",
       headerName: "",
       resizable: false,
       sortable: false,
@@ -1668,8 +1659,8 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
       width: 150,
     },
     {
-      cellEditor: "agSelectCellEditor",
-      cellEditorParams: { values: subcategoryOptions },
+      cellEditor: SubcategorySelectEditor,
+      cellEditorParams: { options: subcategoryOptions },
       editable: true,
       field: "subcategory_id",
       headerClass: "editable-header",
@@ -1685,7 +1676,8 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
         const subcategory = subcategoryLookup.get(params.value);
         return subcategory?.name || "Unassigned";
       },
-      cellClass: (params) => `editable-cell ${!params.value ? "muted-cell" : ""}`,
+      cellClass: (params) => retainedCellClass(params, `editable-cell ${!params.value ? "muted-cell" : ""}`),
+      tooltipValueGetter: retainedCellTooltip,
       width: 170,
     },
     {
@@ -1697,7 +1689,8 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
       headerName: "WNI",
       cellRenderer: (params) => <WniCell value={params.value} />,
       valueFormatter: (params) => (params.value ? titleCase(params.value) : "Unassigned"),
-      cellClass: (params) => `editable-cell ${!params.value ? "muted-cell" : ""}`,
+      cellClass: (params) => retainedCellClass(params, `editable-cell ${!params.value ? "muted-cell" : ""}`),
+      tooltipValueGetter: retainedCellTooltip,
       width: 135,
     },
     {
@@ -1710,10 +1703,12 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
           notify={notify}
           row={params.data}
           tags={params.value || []}
-          updateTransaction={updateTransaction}
+          updateTransaction={saveTransaction}
         />
       ),
       valueFormatter: (params) => (params.value || []).map((tag) => tag.name).join(", ") || "No tags",
+      cellClass: retainedCellClass,
+      tooltipValueGetter: retainedCellTooltip,
       sortable: false,
       flex: 1,
       minWidth: 240,
@@ -1727,7 +1722,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
           checked={Boolean(params.value)}
           onChange={async (event) => {
             try {
-              await updateTransaction(params.data, { is_ignored: event.target.checked });
+              await saveTransaction(params.data, { is_ignored: event.target.checked });
               notify("Transaction saved");
             } catch (error) {
               notify(error.message);
@@ -1736,10 +1731,12 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
           type="checkbox"
         />
       ),
+      cellClass: retainedCellClass,
+      tooltipValueGetter: retainedCellTooltip,
       width: 110,
     },
     {
-      cellClass: "lock-cell",
+      cellClass: (params) => retainedCellClass(params, "lock-cell"),
       field: "is_categorization_locked",
       headerName: "Locked",
       cellRenderer: (params) => {
@@ -1752,7 +1749,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
             onClick={async (event) => {
               event.stopPropagation();
               try {
-                await updateTransaction(params.data, { is_categorization_locked: !locked });
+                await saveTransaction(params.data, { is_categorization_locked: !locked });
                 notify(locked ? "Transaction unlocked" : "Transaction locked");
               } catch (error) {
                 notify(error.message);
@@ -1766,9 +1763,10 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
         );
       },
       valueFormatter: (params) => (params.value ? "Locked" : "Unlocked"),
+      tooltipValueGetter: retainedCellTooltip,
       width: 96,
     },
-  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, refs.tags, subcategoryLookup, subcategoryOptions, toggleRawDataPopover, updateTransaction]);
+  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, rawDataLoadingId, refs.tags, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {
@@ -1778,7 +1776,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
       ? { subcategory_id: event.newValue || "" }
       : { want_need_investment: event.newValue || "" };
     try {
-      await updateTransaction(event.data, patch);
+      await saveTransaction(event.data, patch);
       notify("Transaction saved");
     } catch (error) {
       event.node.setDataValue(event.colDef.field, event.oldValue);
@@ -1793,11 +1791,14 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
         defaultColDef={{ resizable: true, sortable: true }}
         enableCellTextSelection
         ensureDomOrder
+        getRowId={(params) => params.data.id}
         onCellValueChanged={onCellValueChanged}
         rowData={rowData}
         rowHeight={48}
         stopEditingWhenCellsLoseFocus
+        suppressScrollOnNewData
         theme={transactionGridTheme}
+        tooltipShowDelay={250}
       />
       {rawDataPopover && (
         <RawDataPopover
@@ -1808,6 +1809,135 @@ function TransactionGrid({ conflictIds, defaultCurrency, hideAmounts, notify, re
       )}
     </div>
   );
+}
+
+function SubcategorySelectEditor({ onKeyDown, onValueChange, options = [], stopEditing, value }) {
+  const selectRef = useRef(null);
+  const currentValue = value || "";
+
+  useEffect(() => {
+    selectRef.current?.focus();
+  }, []);
+
+  return (
+    <select
+      className="ag-cell-edit-select"
+      onChange={(event) => {
+        onValueChange?.(event.target.value);
+        stopEditing?.();
+      }}
+      onKeyDown={(event) => onKeyDown?.(event.nativeEvent)}
+      ref={selectRef}
+      value={currentValue}
+    >
+      {options.map(([optionValue, optionLabel]) => (
+        <option key={optionValue || "unassigned"} value={optionValue}>
+          {optionLabel}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function changedTransactionCellFields(patch) {
+  const fields = [];
+  if (Object.prototype.hasOwnProperty.call(patch, "subcategory_id")) {
+    fields.push("subcategory_id");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "want_need_investment")) {
+    fields.push("want_need_investment");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "tag_ids")) {
+    fields.push("tags");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "is_ignored")) {
+    fields.push("is_ignored");
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, "is_categorization_locked")) {
+    fields.push("is_categorization_locked");
+  }
+  return fields;
+}
+
+function transactionMatchesCurrentFilters(row, filters = {}) {
+  if (!row) {
+    return false;
+  }
+  if (!filters.include_ignored && row.is_ignored) {
+    return false;
+  }
+  if (!filters.include_locked && row.is_categorization_locked) {
+    return false;
+  }
+  if (filters.date_from && (!row.transaction_date || row.transaction_date < filters.date_from)) {
+    return false;
+  }
+  if (filters.date_to && (!row.transaction_date || row.transaction_date > filters.date_to)) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.direction, row.direction || "")) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.bank_account, row.bank_account?.id || "")) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.category, row.category?.id || UNASSIGNED)) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.subcategory, row.subcategory?.id || UNASSIGNED)) {
+    return false;
+  }
+  if (!checklistSelectionMatches(filters.want_need_investment, row.want_need_investment || UNASSIGNED)) {
+    return false;
+  }
+  if (!tagSelectionMatches(filters.tag, row.tags || [])) {
+    return false;
+  }
+  if (!transactionSearchMatches(row, filters.q)) {
+    return false;
+  }
+  return true;
+}
+
+function checklistSelectionMatches(selection, value) {
+  if (!Array.isArray(selection)) {
+    return true;
+  }
+  return selection.length > 0 && selection.includes(value);
+}
+
+function tagSelectionMatches(selection, tags) {
+  if (!Array.isArray(selection)) {
+    return true;
+  }
+  if (!selection.length) {
+    return false;
+  }
+  if (!tags.length) {
+    return selection.includes(UNASSIGNED);
+  }
+  return tags.some((tag) => selection.includes(tag.id));
+}
+
+function transactionSearchMatches(row, query) {
+  const normalizedQuery = normalizeName(query);
+  if (!normalizedQuery) {
+    return true;
+  }
+  const searchableText = [
+    row.description,
+    row.counterparty_name,
+    row.counterparty_account_number,
+    row.transaction_type,
+    row.counterparty_note,
+    row.my_note,
+    row.other_note,
+  ].map((value) => normalizeName(value)).join(" ");
+  return searchableText.includes(normalizedQuery);
+}
+
+function joinClassNames(...classNames) {
+  return classNames.filter(Boolean).join(" ");
 }
 
 
@@ -1822,6 +1952,11 @@ function MonthlyChart({ hideAmounts, rows }) {
   const incomes = monthlyRows.map((row) => row.income);
   const expenses = monthlyRows.map((row) => -row.expense);
   const net = monthlyRows.map((row) => row.net);
+  const monthlyHoverData = monthlyRows.map((row) => [
+    formatMoneyValue(row.income, hideAmounts),
+    formatMoneyValue(row.expense, hideAmounts),
+    formatMoneyValue(row.net, hideAmounts),
+  ]);
   const barWidth = monthlyRows.map(() => 0.78);
   const netColors = monthlyRows.map(() => cssVar("--net-overlay", "rgba(230, 237, 243, 0.26)"));
   return (
@@ -1829,8 +1964,8 @@ function MonthlyChart({ hideAmounts, rows }) {
       config={{ displaylogo: false, responsive: true }}
       data={[
         {
-          customdata: monthlyRows.map((row) => [row.expense, row.net]),
-          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Incomes: %{y:,.0f}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          customdata: monthlyHoverData,
+          hovertemplate: "Incomes: %{customdata[0]}<extra></extra>",
           marker: { color: cssVar("--green", "#2f8f65") },
           name: "Incomes",
           type: "bar",
@@ -1839,8 +1974,8 @@ function MonthlyChart({ hideAmounts, rows }) {
           y: incomes,
         },
         {
-          customdata: monthlyRows.map((row) => [row.expense, row.net]),
-          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Expenses: %{customdata[0]:,.0f}<br>Net: %{customdata[1]:,.0f}<extra></extra>",
+          customdata: monthlyHoverData,
+          hovertemplate: "Expenses: %{customdata[1]}<extra></extra>",
           marker: { color: cssVar("--red", "#dc2626") },
           name: "Expenses",
           type: "bar",
@@ -1849,8 +1984,8 @@ function MonthlyChart({ hideAmounts, rows }) {
           y: expenses,
         },
         {
-          customdata: monthlyRows.map((row) => [row.income, row.expense]),
-          hovertemplate: hideAmounts ? "Month: %{x}<extra></extra>" : "Month: %{x}<br>Net: %{y:,.0f}<br>Incomes: %{customdata[0]:,.0f}<br>Expenses: %{customdata[1]:,.0f}<extra></extra>",
+          customdata: monthlyHoverData,
+          hovertemplate: "Net: %{customdata[2]}<extra></extra>",
           marker: {
             color: netColors,
             line: { width: 0 },
@@ -1926,13 +2061,15 @@ function WniChart({ hideAmounts, rows }) {
 function TopExpenseChart({ hideAmounts, rows }) {
   const topRows = topExpenseSubcategories(rows);
   if (!topRows.length) return <EmptyChart />;
+  const topExpenseHoverData = topRows.map((row) => formatMoneyValue(row.amount, hideAmounts));
   return (
     <Plot
       config={{ displaylogo: false, responsive: true }}
       data={[{
+        customdata: topExpenseHoverData,
         marker: { color: cssVar("--blue", "#58a6ff") },
         orientation: "h",
-        hovertemplate: hideAmounts ? "%{y}<extra></extra>" : "%{y}<br>Amount: %{x:,.0f}<extra></extra>",
+        hovertemplate: hideAmounts ? "%{y}<extra></extra>" : "%{y}<br>Amount: %{customdata}<extra></extra>",
         text: topRows.map((row) => formatMoneyValue(row.amount, hideAmounts)),
         textposition: "auto",
         type: "bar",
@@ -2016,10 +2153,10 @@ function RecategorizeMetric({ metric }) {
   return (
     <div className={`metric recategorize-metric${hasDetails ? " metric-has-details" : ""}`}>
       <div className="metric-label">{metric.label}</div>
-      <div className="metric-value">{count.toLocaleString()}</div>
+      <div className="metric-value">{formatCount(count)}</div>
       {hasDetails ? (
         <details className="metric-details">
-          <summary>{detailCount.toLocaleString()} details</summary>
+          <summary>{formatCount(detailCount)} details</summary>
           {metric.details || (transactions.length ? <TransactionSummaryList transactions={transactions} /> : <TransactionIdList ids={ids} />)}
         </details>
       ) : (
@@ -2035,7 +2172,7 @@ function TransactionIdList({ ids }) {
     <div className="metric-id-list">
       {visibleIds.map((id) => <code key={id}>{id}</code>)}
       {ids.length > visibleIds.length ? (
-        <span className="muted">+{(ids.length - visibleIds.length).toLocaleString()} more</span>
+        <span className="muted">+{formatCount(ids.length - visibleIds.length)} more</span>
       ) : null}
     </div>
   );
@@ -2060,7 +2197,7 @@ function TransactionSummaryList({ transactions }) {
         </div>
       ))}
       {transactions.length > visibleTransactions.length ? (
-        <span className="muted">+{(transactions.length - visibleTransactions.length).toLocaleString()} more</span>
+        <span className="muted">+{formatCount(transactions.length - visibleTransactions.length)} more</span>
       ) : null}
     </div>
   );
@@ -2087,7 +2224,7 @@ function ConflictDetailList({ details }) {
         </article>
       ))}
       {details.length > visibleDetails.length ? (
-        <div className="muted">+{(details.length - visibleDetails.length).toLocaleString()} more conflicts</div>
+        <div className="muted">+{formatCount(details.length - visibleDetails.length)} more conflicts</div>
       ) : null}
     </div>
   );
@@ -2164,9 +2301,9 @@ function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave,
       <div className="saved-filter-list">
         {presets.length ? presets.map((preset) => (
           <div className="saved-filter-row" key={preset.id}>
-            <button disabled={busy} onClick={() => onLoad(preset)} type="button">
+            <button className="saved-filter-load-button" disabled={busy} onClick={() => onLoad(preset)} type="button">
               <span>{preset.name}</span>
-              <small>{countActiveFilters(preset.filters).toLocaleString()} filters</small>
+              <small>{formatCount(countActiveFilters(preset.filters))} filters</small>
             </button>
             <button aria-label={`Delete ${preset.name}`} className="icon-button" disabled={busy} onClick={() => onDelete(preset.id)} type="button">x</button>
           </div>
@@ -2267,9 +2404,8 @@ function WniCell({ value }) {
   return <span className="color-cell" style={colorPillStyle(wniColor(value))}><span className="color-cell-label">{titleCase(value)}</span></span>;
 }
 
-function RawDataButton({ onToggle, rawData }) {
+function RawDataButton({ hasRawData, loading = false, onToggle }) {
   const buttonRef = useRef(null);
-  const hasEntries = rawData && typeof rawData === "object" && Object.keys(rawData).length > 0;
 
   function stopGridEvent(event) {
     event.stopPropagation();
@@ -2286,15 +2422,15 @@ function RawDataButton({ onToggle, rawData }) {
     <div className="raw-data-cell-inner" onClick={stopGridEvent} onDoubleClick={stopGridEvent} onMouseDown={stopGridEvent} onPointerDown={stopGridEvent}>
       <button
         aria-haspopup="dialog"
-        aria-label={hasEntries ? "Show original transaction data" : "No original transaction data saved"}
+        aria-label={hasRawData ? "Show original transaction data" : "No original transaction data saved"}
         className="raw-data-button"
-        disabled={!hasEntries}
+        disabled={!hasRawData || loading}
         onClick={togglePopover}
         ref={buttonRef}
-        title={hasEntries ? "Show original data" : "No original data saved"}
+        title={hasRawData ? "Show original data" : "No original data saved"}
         type="button"
       >
-        <InfoIcon />
+        {loading ? <Spinner /> : <InfoIcon />}
       </button>
     </div>
   );
@@ -2318,7 +2454,7 @@ const RawDataPopover = forwardRef(function RawDataPopover({ entries, position },
     >
       <div className="raw-data-popover-header">
         <strong>Original Data</strong>
-        <span>{entries.length.toLocaleString()} fields</span>
+        <span>{formatCount(entries.length)} fields</span>
       </div>
       <dl className="raw-data-list">
         {entries.map((entry) => (

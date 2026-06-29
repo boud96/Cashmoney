@@ -113,6 +113,11 @@ urlpatterns = [
         name="transaction-detail",
     ),
     path(
+        "transactions/<uuid:pk>/raw-data/",
+        views.TransactionRawDataView.as_view(),
+        name="transaction-raw-data",
+    ),
+    path(
         "transactions/recategorize/",
         views.RecategorizeTransactionsView.as_view(),
         name="recategorize-transactions",

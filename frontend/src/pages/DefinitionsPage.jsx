@@ -3,7 +3,7 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPatch, apiPost } from "../api.js";
-import { LoadingButton, Select } from "../components.jsx";
+import { CloseButton, HelpTooltip, LoadingButton, Select } from "../components.jsx";
 import {
   categorizationFieldOptions,
   coerceArray,
@@ -13,6 +13,7 @@ import {
   fieldLabel,
   findDuplicate,
   findDuplicateSubcategory,
+  formatCount,
   formObject,
   guessColumnMap,
   lines,
@@ -177,8 +178,8 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
     setSyncingRates(true);
     try {
       const result = await apiPost("/exchange-rates/sync/");
-      const createdRates = Number(result.created_rates || 0).toLocaleString();
-      const recalculated = Number(result.recalculation?.updated || 0).toLocaleString();
+      const createdRates = formatCount(result.created_rates);
+      const recalculated = formatCount(result.recalculation?.updated);
       if (showNotification) {
         notify(`${createdRates} rates downloaded, ${recalculated} transactions recalculated`);
       }
@@ -215,7 +216,7 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
       if (nextDefaultCurrency !== previousDefaultCurrency) {
         try {
           const result = await syncExchangeRates(false);
-          notify(`${Number(result.created_rates || 0).toLocaleString()} rates downloaded, default currency changed to ${nextDefaultCurrency}`);
+          notify(`${formatCount(result.created_rates)} rates downloaded, default currency changed to ${nextDefaultCurrency}`);
         } catch (error) {
           notify(`Settings saved, but rate sync failed: ${error.message}`);
           await refreshAfterCurrencyChange();
@@ -262,9 +263,9 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
           value={internalTransferSubcategoryId}
         />
       </FormField>
-      <LoadingButton busy={saving} busyLabel="Saving" type="submit">Save</LoadingButton>
+      <LoadingButton busy={saving} busyLabel="Saving" className="primary-action app-settings-action" type="submit">Save</LoadingButton>
       {missingRateCount ? (
-        <LoadingButton busy={syncingRates} busyLabel="Retrying" onClick={handleSyncExchangeRates} type="button">
+        <LoadingButton busy={syncingRates} busyLabel="Retrying" className="primary-action app-settings-action" onClick={handleSyncExchangeRates} type="button">
           Retry Rate Sync
         </LoadingButton>
       ) : null}
@@ -273,7 +274,7 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
         <strong>{formatExchangeRateStatus(rateStatus)}</strong>
         {missingRateCount ? (
           <span className="warning-text">
-            {missingRateCount.toLocaleString()} transactions need rates
+            {formatCount(missingRateCount)} transactions need rates
           </span>
         ) : currencyOptionsFallback ? (
           <span className="warning-text">Currency list is using fallback options.</span>
@@ -305,7 +306,7 @@ function formatExchangeRateStatus(status) {
   if (!status) {
     return "Loading";
   }
-  const count = Number(status.cached_rate_count || 0).toLocaleString();
+  const count = formatCount(status.cached_rate_count);
   if (!status.latest_cached_rate_date) {
     return `${count} cached rates`;
   }
@@ -359,7 +360,7 @@ function CollapsiblePanel({ children, count, defaultExpanded = false, helpText, 
           <span className="definition-panel-heading">
             <span className="definition-panel-title-line">
               <span className="definition-panel-title">{title}</span>
-              {typeof count === "number" ? <span className="definition-panel-count">{count.toLocaleString()}</span> : null}
+              {typeof count === "number" ? <span className="definition-panel-count">{formatCount(count)}</span> : null}
             </span>
             {subtitle ? <span className="definition-panel-subtitle">{subtitle}</span> : null}
           </span>
@@ -609,15 +610,6 @@ function KeywordDefinitionGrid({ confirmAction, endpoint, items, notify, onDelet
   return <DefinitionAgGridList className="keyword-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
 }
 
-function HelpTooltip({ text }) {
-  return (
-    <span className="help-tooltip">
-      <button aria-label={text} className="help-tooltip-button" type="button">?</button>
-      <span className="help-tooltip-bubble" role="tooltip">{text}</span>
-    </span>
-  );
-}
-
 function DeleteButton({ confirmAction, endpoint, name, notify, onDeleted, reloadAll }) {
   const [deleting, setDeleting] = useState(false);
   async function remove() {
@@ -731,7 +723,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
                 <h3 id="account-modal-title">{isEditing ? "Edit Bank Account" : "Add Bank Account"}</h3>
                 <span>{editingItem?.name || "New bank account"}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeAccountModal} type="button">x</button>
+              <CloseButton disabled={saving} onClick={closeAccountModal} />
             </div>
             <div className="definition-modal-body">
               <div className="compact-form">
@@ -744,7 +736,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
               </div>
             </div>
             <div className="definition-modal-actions">
-              <button className="link-button" disabled={saving} onClick={closeAccountModal} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving} onClick={closeAccountModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
                 {isEditing ? "Save Account" : "Create Account"}
               </LoadingButton>
@@ -1131,7 +1123,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
                 <h3 id="mapping-wizard-title">{isEditing ? "Edit CSV Mapping" : "Add CSV Mapping"}</h3>
                 <span>{mappingDetails.name || "New mapping"}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving || detecting} onClick={closeWizard} type="button">x</button>
+              <CloseButton disabled={saving || detecting} onClick={closeWizard} />
             </div>
             <div aria-label="CSV mapping steps" className="mapping-wizard-steps">
               {mappingWizardSteps.map((label, index) => (
@@ -1147,7 +1139,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
               {renderSamplePreview()}
             </div>
             <div className="mapping-wizard-actions">
-              <button className="link-button" disabled={saving || detecting} onClick={closeWizard} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving || detecting} onClick={closeWizard} type="button">Cancel</button>
               <button className="link-button mapping-back-button" disabled={currentStep === 0 || saving || detecting} onClick={() => setStep((value) => Math.max(value - 1, 0))} type="button">Back</button>
               {currentStep < mappingWizardSteps.length - 1 ? (
                 <button className="primary-action" disabled={saving || detecting} onClick={goNext} type="button">Next</button>
@@ -1282,7 +1274,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record
                 <h3 id={`${endpoint.replace(/\W/g, "")}-modal-title`}>{isEditing ? `Edit ${entityLabel}` : `Add ${entityLabel}`}</h3>
                 <span>{editingItem?.name || `New ${entityLabel.toLowerCase()}`}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeItemModal} type="button">x</button>
+              <CloseButton disabled={saving} onClick={closeItemModal} />
             </div>
             <div className="definition-modal-body">
               <div className="compact-form">
@@ -1294,7 +1286,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record
               </div>
             </div>
             <div className="definition-modal-actions">
-              <button className="link-button" disabled={saving} onClick={closeItemModal} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving} onClick={closeItemModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
                 {isEditing ? `Save ${entityLabel}` : `Create ${entityLabel}`}
               </LoadingButton>
@@ -1374,7 +1366,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
                 <h3 id="subcategory-modal-title">{isEditing ? "Edit Subcategory" : "Add Subcategory"}</h3>
                 <span>{editingItem?.name || "New subcategory"}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving} onClick={closeSubcategoryModal} type="button">x</button>
+              <CloseButton disabled={saving} onClick={closeSubcategoryModal} />
             </div>
             <div className="definition-modal-body">
               <div className="compact-form">
@@ -1384,7 +1376,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
               </div>
             </div>
             <div className="definition-modal-actions">
-              <button className="link-button" disabled={saving} onClick={closeSubcategoryModal} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving} onClick={closeSubcategoryModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
                 {isEditing ? "Save Subcategory" : "Create Subcategory"}
               </LoadingButton>
@@ -1598,7 +1590,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
                 <h3 id="keyword-modal-title">{isEditing ? "Edit Keyword" : "Add Keyword"}</h3>
                 <span>{editingItem?.name || "New keyword"}</span>
               </div>
-              <button aria-label="Close" className="icon-button" disabled={saving || previewing} onClick={closeKeywordModal} type="button">x</button>
+              <CloseButton disabled={saving || previewing} onClick={closeKeywordModal} />
             </div>
             <div className="definition-modal-body">
               <div className="compact-form keyword-form">
@@ -1628,7 +1620,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
               </div>
             </div>
             <div className="definition-modal-actions">
-              <button className="link-button" disabled={saving || previewing} onClick={closeKeywordModal} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving || previewing} onClick={closeKeywordModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" disabled={previewing} type="submit">
                 {isEditing ? "Save Keyword" : "Create Keyword"}
               </LoadingButton>
