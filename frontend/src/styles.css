@@ -384,14 +384,6 @@ h2 {
   margin-bottom: 14px;
 }
 
-.bulk-assign-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
 .action-modal-header {
   align-items: flex-start;
   display: flex;

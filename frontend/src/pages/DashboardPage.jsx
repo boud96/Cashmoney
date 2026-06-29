@@ -127,7 +127,7 @@ export default function DashboardPage({
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
-  const [bulkAssignModalOpen, setBulkAssignModalOpen] = useState(false);
+  const [bulkAssignEditorOpen, setBulkAssignEditorOpen] = useState(false);
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
@@ -465,16 +465,16 @@ export default function DashboardPage({
     }
   }
 
-  function openBulkAssignModal() {
+  function openBulkAssignEditor() {
     setBulkAssignDraft(emptyBulkAssignDraft);
-    setBulkAssignModalOpen(true);
+    setBulkAssignEditorOpen(true);
   }
 
-  function closeBulkAssignModal() {
+  function closeBulkAssignEditor() {
     if (bulkAssignBusy) {
       return;
     }
-    setBulkAssignModalOpen(false);
+    setBulkAssignEditorOpen(false);
     setBulkAssignDraft(emptyBulkAssignDraft);
   }
 
@@ -530,7 +530,7 @@ export default function DashboardPage({
     try {
       const result = await apiPost("/transactions/bulk-assign/", payload, filterParams);
       notify(`${formatCount(result.updated)} transactions updated`);
-      setBulkAssignModalOpen(false);
+      setBulkAssignEditorOpen(false);
       setBulkAssignDraft(emptyBulkAssignDraft);
       await reloadDashboard();
     } catch (error) {
@@ -761,7 +761,7 @@ export default function DashboardPage({
               >
                 Recategorize
               </LoadingButton>
-              <button className="link-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignModal} type="button">
+              <button className="link-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignEditor} type="button">
                 Bulk assign
               </button>
               <LoadingButton
@@ -853,13 +853,13 @@ export default function DashboardPage({
           suggestions={uncategorizedSuggestions}
         />
       )}
-      {bulkAssignModalOpen && (
+      {bulkAssignEditorOpen && (
         <BulkAssignMultiModal
           busy={bulkAssignBusy}
           count={transactionPage.count}
           draft={bulkAssignDraft}
           hasChanges={bulkAssignHasChanges()}
-          onClose={closeBulkAssignModal}
+          onClose={closeBulkAssignEditor}
           onSubmit={submitBulkAssign}
           onTagToggle={toggleBulkAssignTag}
           onUpdate={updateBulkAssignDraft}
@@ -1056,67 +1056,6 @@ function BulkAssignMultiModal({
           </LoadingButton>
         </div>
     </ModalShell>
-  );
-}
-
-function BulkAssignModal({ busy, count, onClose, onSubmit, onValueChange, options, selectedLabel, type, value }) {
-  const config = {
-    subcategory: {
-      blank: "Choose subcategory",
-      confirm: "Assign subcategory",
-      label: "Subcategory",
-      title: "Assign Filtered to Subcategory",
-      warning: selectedLabel
-        ? `This will assign ${formatCount(count)} currently filtered transactions to ${selectedLabel} and lock their categorization.`
-        : `Choose a subcategory to assign ${formatCount(count)} currently filtered transactions.`,
-    },
-    tag: {
-      blank: "Choose tag",
-      confirm: "Assign tag",
-      label: "Tag",
-      title: "Assign Tag to Filtered",
-      warning: selectedLabel
-        ? `This will add the ${selectedLabel} tag to ${formatCount(count)} currently filtered transactions and lock their categorization. Existing tags will stay in place.`
-        : `Choose a tag to add to ${formatCount(count)} currently filtered transactions.`,
-    },
-    want_need_investment: {
-      blank: "Choose WNI",
-      confirm: "Assign WNI",
-      label: "WNI",
-      title: "Assign WNI to Filtered",
-      warning: selectedLabel
-        ? `This will set ${formatCount(count)} currently filtered transactions to ${selectedLabel} and lock their categorization.`
-        : `Choose a WNI value to assign ${formatCount(count)} currently filtered transactions.`,
-    },
-  }[type];
-
-  return (
-    <div className="modal-backdrop" onMouseDown={onClose} role="presentation">
-      <div aria-labelledby="bulk-assign-modal-title" aria-modal="true" className="bulk-assign-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-        <div className="bulk-assign-modal-header">
-          <h2 id="bulk-assign-modal-title">{config.title}</h2>
-          <button aria-label="Close" className="icon-button" disabled={busy} onClick={onClose} type="button">×</button>
-        </div>
-        <label className="form-field">
-          <span>{config.label}</span>
-          <select autoFocus disabled={busy} onChange={(event) => onValueChange(event.target.value)} value={value}>
-            <option value="">{config.blank}</option>
-            {options.map(([optionValue, optionLabel]) => (
-              <option key={optionValue} value={optionValue}>{optionLabel}</option>
-            ))}
-          </select>
-        </label>
-        <div className="bulk-assign-warning">
-          {config.warning}
-        </div>
-        <div className="bulk-assign-modal-actions">
-          <button className="link-button" disabled={busy} onClick={onClose} type="button">Cancel</button>
-          <LoadingButton busy={busy} busyLabel="Assigning" className="primary-action" disabled={!value} onClick={onSubmit} type="button">
-            {config.confirm}
-          </LoadingButton>
-        </div>
-      </div>
-    </div>
   );
 }
 
