@@ -263,9 +263,9 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
           value={internalTransferSubcategoryId}
         />
       </FormField>
-      <LoadingButton busy={saving} busyLabel="Saving" type="submit">Save</LoadingButton>
+      <LoadingButton busy={saving} busyLabel="Saving" className="primary-action app-settings-action" type="submit">Save</LoadingButton>
       {missingRateCount ? (
-        <LoadingButton busy={syncingRates} busyLabel="Retrying" onClick={handleSyncExchangeRates} type="button">
+        <LoadingButton busy={syncingRates} busyLabel="Retrying" className="primary-action app-settings-action" onClick={handleSyncExchangeRates} type="button">
           Retry Rate Sync
         </LoadingButton>
       ) : null}
@@ -745,7 +745,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
               </div>
             </div>
             <div className="definition-modal-actions">
-              <button className="link-button" disabled={saving} onClick={closeAccountModal} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving} onClick={closeAccountModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
                 {isEditing ? "Save Account" : "Create Account"}
               </LoadingButton>
@@ -1148,7 +1148,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
               {renderSamplePreview()}
             </div>
             <div className="mapping-wizard-actions">
-              <button className="link-button" disabled={saving || detecting} onClick={closeWizard} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving || detecting} onClick={closeWizard} type="button">Cancel</button>
               <button className="link-button mapping-back-button" disabled={currentStep === 0 || saving || detecting} onClick={() => setStep((value) => Math.max(value - 1, 0))} type="button">Back</button>
               {currentStep < mappingWizardSteps.length - 1 ? (
                 <button className="primary-action" disabled={saving || detecting} onClick={goNext} type="button">Next</button>
@@ -1295,7 +1295,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record
               </div>
             </div>
             <div className="definition-modal-actions">
-              <button className="link-button" disabled={saving} onClick={closeItemModal} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving} onClick={closeItemModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
                 {isEditing ? `Save ${entityLabel}` : `Create ${entityLabel}`}
               </LoadingButton>
@@ -1385,7 +1385,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
               </div>
             </div>
             <div className="definition-modal-actions">
-              <button className="link-button" disabled={saving} onClick={closeSubcategoryModal} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving} onClick={closeSubcategoryModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
                 {isEditing ? "Save Subcategory" : "Create Subcategory"}
               </LoadingButton>
@@ -1629,7 +1629,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
               </div>
             </div>
             <div className="definition-modal-actions">
-              <button className="link-button" disabled={saving || previewing} onClick={closeKeywordModal} type="button">Cancel</button>
+              <button className="link-button modal-action-cancel" disabled={saving || previewing} onClick={closeKeywordModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" disabled={previewing} type="submit">
                 {isEditing ? "Save Keyword" : "Create Keyword"}
               </LoadingButton>

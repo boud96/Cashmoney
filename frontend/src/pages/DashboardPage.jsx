@@ -2324,7 +2324,7 @@ function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave,
       <div className="saved-filter-list">
         {presets.length ? presets.map((preset) => (
           <div className="saved-filter-row" key={preset.id}>
-            <button disabled={busy} onClick={() => onLoad(preset)} type="button">
+            <button className="saved-filter-load-button" disabled={busy} onClick={() => onLoad(preset)} type="button">
               <span>{preset.name}</span>
               <small>{formatCount(countActiveFilters(preset.filters))} filters</small>
             </button>
