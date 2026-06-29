@@ -142,7 +142,7 @@ export default function HelpPage() {
         <HelpCard title="Editing Transactions">
           <p>
             The transaction grid is editable where a small pencil appears in the header. Changes are
-            saved immediately and the dashboard refreshes after a successful update.
+            saved immediately and the edited row updates in place.
           </p>
           <ul>
             <li><strong>Subcategory:</strong> edits the subcategory and therefore the derived category.</li>
@@ -154,6 +154,8 @@ export default function HelpPage() {
           <p>
             Manual changes to subcategory, WNI, tags, ignored, or category-related fields lock the
             transaction so future recategorization does not overwrite your correction by default.
+            If a saved value no longer matches the current filters, the row can remain visible
+            temporarily with an accent marker until filters refresh or change.
           </p>
         </HelpCard>
 
@@ -163,10 +165,11 @@ export default function HelpPage() {
             transaction count before confirming any action.
           </p>
           <ul>
-            <li><strong>Recategorize Filtered:</strong> reruns keyword matching for the filtered transactions.</li>
+            <li><strong>Recategorize:</strong> reruns keyword matching for the filtered transactions.</li>
             <li><strong>Include locked:</strong> resets locked filtered transactions and lets recategorization overwrite them.</li>
             <li><strong>Bulk assign:</strong> updates subcategory, tags, WNI, ignored, or locked fields for all filtered transactions.</li>
             <li><strong>Find Transfers:</strong> previews likely transfers between defined accounts by matching opposite same-currency amounts across nearby dates.</li>
+            <li><strong>Review uncategorized:</strong> reviews uncategorized transaction groups and creates keyword rules from suggested terms.</li>
           </ul>
         </HelpCard>
 
