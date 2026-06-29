@@ -18,6 +18,8 @@ jobs:
   build-windows:
     name: Build Windows installer
     runs-on: windows-latest
+    env:
+      VITE_CASHMONEY_DONATION_URL: ${{ vars.VITE_CASHMONEY_DONATION_URL }}
 
     steps:
       - name: Checkout repository
