@@ -1615,6 +1615,17 @@ select option {
   font-size: 0.9rem;
 }
 
+.transaction-cap-warning {
+  border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warning) 12%, var(--surface));
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+}
+
 .dashboard-stats-section {
   min-width: 0;
 }
@@ -1622,6 +1633,20 @@ select option {
 .dashboard-section-title {
   font-size: 15px;
   margin: 0;
+}
+
+.dashboard-section-header,
+.transaction-panel-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-section-header {
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
 .metrics-grid {

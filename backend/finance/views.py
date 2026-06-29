@@ -1006,6 +1006,7 @@ class TransactionCollectionView(JsonView):
                         transaction,
                         split_by_owners,
                         default_currency=settings_obj.default_currency,
+                        include_raw_data=False,
                     )
                     for transaction in items
                 ],
@@ -1259,6 +1260,19 @@ class TransactionDetailView(JsonView):
     def delete(self, request, pk):
         get_object_or_404(Transaction, id=pk).delete()
         return json_response({"deleted": True})
+
+
+class TransactionRawDataView(JsonView):
+    def get(self, request, pk):
+        transaction = get_object_or_404(
+            Transaction.objects.only("id", "raw_data"), id=pk
+        )
+        return json_response(
+            {
+                "id": str(transaction.id),
+                "raw_data": transaction.raw_data,
+            }
+        )
 
 
 class RecategorizeTransactionsView(JsonView):

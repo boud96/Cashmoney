@@ -885,6 +885,31 @@ class APITests(FinanceTestCase):
         self.assertEqual(json_body(visible)["total_count"], 1)
         self.assertEqual(json_body(visible)["limit"], 1)
 
+    def test_transaction_list_omits_raw_data_but_exposes_on_demand(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Raw row",
+            amount=Decimal("-12.50"),
+            raw_data={"Description": "Raw row", "Amount": "-12.50"},
+        )
+
+        list_response = self.client.get("/api/transactions/", {"limit": "1"})
+        list_payload = json_body(list_response)
+        row = list_payload["results"][0]
+        raw_data_response = self.client.get(
+            f"/api/transactions/{transaction_obj.id}/raw-data/"
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertTrue(row["has_raw_data"])
+        self.assertNotIn("raw_data", row)
+        self.assertEqual(raw_data_response.status_code, 200)
+        self.assertEqual(
+            json_body(raw_data_response)["raw_data"],
+            {"Description": "Raw row", "Amount": "-12.50"},
+        )
+
     def test_transaction_categorization_edits_lock_and_can_unlock(self):
         transaction_obj = Transaction.objects.create(
             bank_account=self.account,

@@ -6,7 +6,7 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
-import { HelpTooltip, LoadingButton, ModalShell } from "../components.jsx";
+import { HelpTooltip, LoadingButton, ModalShell, Spinner } from "../components.jsx";
 import {
   UNASSIGNED,
   baseLayout,
@@ -114,7 +114,9 @@ export default function DashboardPage({
   setFilters,
   setRecategorizeResult,
   summary,
+  summaryBusy = false,
   transactionPage,
+  transactionsBusy = false,
   updateTransaction,
 }) {
   const defaultCurrency = summary?.default_currency || refs.settings?.default_currency || "CZK";
@@ -122,6 +124,12 @@ export default function DashboardPage({
     () => buildMetrics(summary, transactionPage, hideAmounts, defaultCurrency),
     [defaultCurrency, hideAmounts, summary, transactionPage],
   );
+  const loadedTransactionCount = transactionPage.results?.length || 0;
+  const filteredTransactionCount = transactionPage.count || 0;
+  const transactionsAreCapped = loadedTransactionCount > 0 && filteredTransactionCount > loadedTransactionCount;
+  const transactionCountLabel = transactionsAreCapped
+    ? `${formatCount(loadedTransactionCount)} of ${formatCount(filteredTransactionCount)} shown`
+    : `${formatCount(filteredTransactionCount)} shown`;
   const conflictIds = useMemo(
     () => new Set(recategorizeResult?.conflict_transaction_ids || []),
     [recategorizeResult],
@@ -730,7 +738,10 @@ export default function DashboardPage({
 
       <div className="dashboard-summary-row">
         <section className="filter-panel dashboard-stats-section" aria-labelledby="dashboard-stats-title">
-          <h2 id="dashboard-stats-title" className="dashboard-section-title">Stats</h2>
+          <div className="dashboard-section-header">
+            <h2 id="dashboard-stats-title" className="dashboard-section-title">Stats</h2>
+            {summaryBusy ? <span className="inline-status"><Spinner /> Updating stats and charts</span> : null}
+          </div>
           <div className="metrics-grid">
             {metrics.map(([label, value, tone, secondary], index) => (
               <div className={`metric stats-metric stats-metric-${index + 1}`} key={label}>
@@ -887,8 +898,17 @@ export default function DashboardPage({
       <section className="panel transaction-panel">
         <div className="panel-header">
           <h2>Transactions</h2>
-          <span className="muted">{formatCount(transactionPage.count)} shown</span>
+          <div className="transaction-panel-status">
+            {transactionsBusy ? <span className="inline-status"><Spinner /> Updating table</span> : null}
+            <span className="muted">{transactionCountLabel}</span>
+          </div>
         </div>
+        {transactionsAreCapped ? (
+          <div className="transaction-cap-warning">
+            Showing the newest {formatCount(loadedTransactionCount)} of {formatCount(filteredTransactionCount)} filtered transactions.
+            Older matching transactions are omitted from the table. Stats and charts still use the full filtered set.
+          </div>
+        ) : null}
         <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
@@ -1452,7 +1472,9 @@ const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filte
 
 function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
+  const [rawDataLoadingId, setRawDataLoadingId] = useState("");
   const [filterRetainedCells, setFilterRetainedCells] = useState({});
+  const rawDataCacheRef = useRef(new Map());
   const rawDataPopoverRef = useRef(null);
   const subcategoryOptions = useMemo(
     () => [["", "Unassigned"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])],
@@ -1549,36 +1571,55 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
     };
   }, [rawDataPopover]);
 
-  const toggleRawDataPopover = useCallback((row, rawData, button) => {
+  const toggleRawDataPopover = useCallback(async (row, button) => {
+    if (!row?.id || (!row.has_raw_data && !row.raw_data)) {
+      setRawDataPopover(null);
+      return;
+    }
+    if (rawDataPopover?.rowId === row.id) {
+      setRawDataPopover(null);
+      return;
+    }
     const mappingId = accountMappingLookup.get(row?.account_id || row?.bank_account?.id || "");
     const mapping = mappingLookup.get(mappingId);
+    const position = rawDataPopoverPosition(button.getBoundingClientRect());
+    let rawData = row.raw_data || rawDataCacheRef.current.get(row.id);
+    if (!rawData) {
+      setRawDataLoadingId(row.id);
+      try {
+        const payload = await apiGet(`/transactions/${row.id}/raw-data/`);
+        rawData = payload.raw_data;
+        rawDataCacheRef.current.set(row.id, rawData);
+      } catch (error) {
+        notify(error.message);
+        return;
+      } finally {
+        setRawDataLoadingId((current) => (current === row.id ? "" : current));
+      }
+    }
     const entries = rawDataEntries(rawData, hideAmounts, categorizationRawDataKeys(mapping));
     if (!entries.length) {
       setRawDataPopover(null);
       return;
     }
-    setRawDataPopover((current) => {
-      if (current?.rowId === row?.id) {
-        return null;
-      }
-      return {
-        entries,
-        position: rawDataPopoverPosition(button.getBoundingClientRect()),
-        rowId: row?.id,
-      };
+    setRawDataPopover({
+      entries,
+      position,
+      rowId: row.id,
     });
-  }, [accountMappingLookup, hideAmounts, mappingLookup]);
+  }, [accountMappingLookup, hideAmounts, mappingLookup, notify, rawDataPopover]);
 
   const columnDefs = useMemo(() => [
     {
       cellClass: "raw-data-grid-cell",
       cellRenderer: (params) => (
         <RawDataButton
-          onToggle={(button) => toggleRawDataPopover(params.data, params.value, button)}
-          rawData={params.value}
+          hasRawData={Boolean(params.data?.has_raw_data || params.data?.raw_data)}
+          loading={rawDataLoadingId === params.data?.id}
+          onToggle={(button) => toggleRawDataPopover(params.data, button)}
         />
       ),
-      field: "raw_data",
+      field: "has_raw_data",
       headerName: "",
       resizable: false,
       sortable: false,
@@ -1725,7 +1766,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
       tooltipValueGetter: retainedCellTooltip,
       width: 96,
     },
-  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, refs.tags, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
+  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, rawDataLoadingId, refs.tags, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {
@@ -1883,15 +1924,14 @@ function transactionSearchMatches(row, query) {
   if (!normalizedQuery) {
     return true;
   }
-  const rawDataValues = row.raw_data && typeof row.raw_data === "object"
-    ? Object.values(row.raw_data)
-    : [];
   const searchableText = [
     row.description,
     row.counterparty_name,
     row.counterparty_account_number,
     row.transaction_type,
-    ...rawDataValues,
+    row.counterparty_note,
+    row.my_note,
+    row.other_note,
   ].map((value) => normalizeName(value)).join(" ");
   return searchableText.includes(normalizedQuery);
 }
@@ -2364,9 +2404,8 @@ function WniCell({ value }) {
   return <span className="color-cell" style={colorPillStyle(wniColor(value))}><span className="color-cell-label">{titleCase(value)}</span></span>;
 }
 
-function RawDataButton({ onToggle, rawData }) {
+function RawDataButton({ hasRawData, loading = false, onToggle }) {
   const buttonRef = useRef(null);
-  const hasEntries = rawData && typeof rawData === "object" && Object.keys(rawData).length > 0;
 
   function stopGridEvent(event) {
     event.stopPropagation();
@@ -2383,15 +2422,15 @@ function RawDataButton({ onToggle, rawData }) {
     <div className="raw-data-cell-inner" onClick={stopGridEvent} onDoubleClick={stopGridEvent} onMouseDown={stopGridEvent} onPointerDown={stopGridEvent}>
       <button
         aria-haspopup="dialog"
-        aria-label={hasEntries ? "Show original transaction data" : "No original transaction data saved"}
+        aria-label={hasRawData ? "Show original transaction data" : "No original transaction data saved"}
         className="raw-data-button"
-        disabled={!hasEntries}
+        disabled={!hasRawData || loading}
         onClick={togglePopover}
         ref={buttonRef}
-        title={hasEntries ? "Show original data" : "No original data saved"}
+        title={hasRawData ? "Show original data" : "No original data saved"}
         type="button"
       >
-        <InfoIcon />
+        {loading ? <Spinner /> : <InfoIcon />}
       </button>
     </div>
   );
