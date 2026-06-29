@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, screen } = require("electron");
+const { app, BrowserWindow, Menu, screen, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -30,6 +30,31 @@ if (gotSingleInstanceLock) {
     mainWindow.show();
     mainWindow.focus();
   });
+}
+
+function isAppOriginUrl(url) {
+  try {
+    return new URL(url).origin === new URL(APP_URL).origin;
+  } catch {
+    return false;
+  }
+}
+
+function isExternalHttpUrl(url) {
+  try {
+    const parsedUrl = new URL(url);
+    return ["http:", "https:"].includes(parsedUrl.protocol) && !isAppOriginUrl(url);
+  } catch {
+    return false;
+  }
+}
+
+function openExternalUrl(url) {
+  if (isExternalHttpUrl(url)) {
+    shell.openExternal(url).catch(() => {});
+    return true;
+  }
+  return false;
 }
 
 function appIconPath() {
@@ -294,6 +319,17 @@ function createWindow(options = {}) {
   mainWindow = window;
   window.setMenu(null);
   window.setMenuBarVisibility(false);
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    if (openExternalUrl(url)) {
+      return { action: "deny" };
+    }
+    return isAppOriginUrl(url) ? { action: "allow" } : { action: "deny" };
+  });
+  window.webContents.on("will-navigate", (event, url) => {
+    if (openExternalUrl(url)) {
+      event.preventDefault();
+    }
+  });
   if (windowState.isMaximized) {
     window.maximize();
   }

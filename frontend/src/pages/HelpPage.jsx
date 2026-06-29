@@ -28,6 +28,8 @@ const troubleshootingItems = [
 ];
 
 const appVersion = __CASHMONEY_APP_VERSION__ === "unknown" ? "Unknown" : `v${__CASHMONEY_APP_VERSION__}`;
+const rawDonationUrl = String(import.meta.env.VITE_CASHMONEY_DONATION_URL || "").trim();
+const donationUrl = /^https:\/\//i.test(rawDonationUrl) ? rawDonationUrl : "";
 
 export default function HelpPage() {
   return (
@@ -220,6 +222,23 @@ export default function HelpPage() {
               <dd>{appVersion}</dd>
             </div>
           </dl>
+          {donationUrl && (
+            <div className="help-support-panel">
+              <div className="help-support-copy">
+                <span aria-hidden="true" className="help-support-mark">
+                  <CoffeeIcon />
+                </span>
+                <div>
+                  <strong>Support me</strong>
+                  <span>If you like Cashmoney, consider buying me a coffee.</span>
+                </div>
+              </div>
+              <a className="primary-action help-support-button" href={donationUrl} rel="noreferrer" target="_blank">
+                <CoffeeIcon />
+                Buy me a coffee
+              </a>
+            </div>
+          )}
         </HelpCard>
       </section>
     </div>
@@ -232,5 +251,18 @@ function HelpCard({ children, title, wide = false }) {
       <h2>{title}</h2>
       {children}
     </article>
+  );
+}
+
+function CoffeeIcon() {
+  return (
+    <svg aria-hidden="true" className="help-support-icon" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
+      <path d="M10 2v2" />
+      <path d="M14 2v2" />
+      <path d="M4 8h12a1 1 0 0 1 1 1v1a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1Z" />
+      <path d="M17 9h1a2 2 0 0 1 0 4h-1" />
+      <path d="M6 18h8" />
+      <path d="M6 22h8" />
+    </svg>
   );
 }
