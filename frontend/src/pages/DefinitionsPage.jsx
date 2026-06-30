@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
-import { apiDelete, apiGet, apiPatch, apiPost } from "../api.js";
+import { apiDelete, apiFetch, apiGet, apiPatch, apiPost } from "../api.js";
 import { CloseButton, HelpTooltip, LoadingButton, Select } from "../components.jsx";
 import {
   categorizationFieldOptions,
@@ -856,7 +856,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     formData.append("sample_size", "5");
     setDetecting(true);
     try {
-      const response = await fetch("/api/csv-mappings/detect-columns/", { method: "POST", body: formData });
+      const response = await apiFetch("/api/csv-mappings/detect-columns/", { method: "POST", body: formData });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Column detection failed");

@@ -22,7 +22,8 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
 from django.views import View
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.csrf import csrf_failure as django_csrf_failure
 
 from .constants import Direction, WantNeedInvestment
 from .models import (
@@ -120,6 +121,15 @@ def json_response(data, status=200):
 def parse_json_body(request):
     if not request.body:
         return {}
+    content_type = request.content_type.split(";", 1)[0].strip().lower()
+    if content_type != "application/json":
+        raise APIValidationError(
+            "Unsupported content type",
+            {
+                "expected": "application/json",
+                "received": request.content_type or "",
+            },
+        )
     data = json.loads(request.body.decode("utf-8"))
     if not isinstance(data, dict):
         raise APIValidationError("JSON body must be an object")
@@ -316,6 +326,7 @@ def split_unassigned_filter(params, field_name):
     return assigned_values, UNASSIGNED_FILTER_VALUE in values
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class AppShellView(TemplateView):
     template_name = "finance/app.html"
 
@@ -338,7 +349,6 @@ class AppShellView(TemplateView):
         return context
 
 
-@method_decorator(csrf_exempt, name="dispatch")
 class JsonView(View):
     def dispatch(self, request, *args, **kwargs):
         try:
@@ -2017,3 +2027,15 @@ def handler400(request, exception=None):
 
 def handler500(request):
     return json_response({"error": "Server error"}, status=500)
+
+
+def csrf_failure(request, reason=""):
+    if not request.path.startswith("/api/"):
+        return django_csrf_failure(request, reason=reason)
+    return json_response(
+        {
+            "error": "CSRF verification failed",
+            "details": {"reason": reason},
+        },
+        status=403,
+    )

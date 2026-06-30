@@ -581,6 +581,130 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["error"], "Missing required field")
         self.assertEqual(payload["details"]["field"], "name")
 
+    def test_app_shell_sets_csrf_cookie(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        response = csrf_client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("csrftoken", csrf_client.cookies)
+
+    def test_json_mutation_requires_csrf_token(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        response = csrf_client.post(
+            "/api/bank-accounts/",
+            data=json.dumps({"name": "CSRF Test", "currency": "CZK", "owners": 1}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json_body(response)["error"], "CSRF verification failed")
+
+    def test_json_mutation_accepts_valid_csrf_token(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.get("/")
+        token = csrf_client.cookies["csrftoken"].value
+
+        response = csrf_client.post(
+            "/api/bank-accounts/",
+            data=json.dumps({"name": "CSRF Test", "currency": "CZK", "owners": 1}),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+            HTTP_ORIGIN="http://127.0.0.1:8000",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(json_body(response)["name"], "CSRF Test")
+
+    def test_unsafe_request_rejects_untrusted_origin(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.get("/")
+        token = csrf_client.cookies["csrftoken"].value
+
+        response = csrf_client.post(
+            "/api/bank-accounts/",
+            data=json.dumps({"name": "Origin Test", "currency": "CZK", "owners": 1}),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+            HTTP_ORIGIN="https://example.com",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json_body(response)["error"], "Origin is not allowed")
+
+    def test_trusted_origin_receives_cors_headers(self):
+        response = self.client.get(
+            "/api/health/",
+            HTTP_ORIGIN="http://127.0.0.1:5173",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Access-Control-Allow-Origin"],
+            "http://127.0.0.1:5173",
+        )
+        self.assertEqual(response["Access-Control-Allow-Credentials"], "true")
+
+    def test_untrusted_read_origin_receives_no_cors_headers(self):
+        response = self.client.get(
+            "/api/health/",
+            HTTP_ORIGIN="https://example.com",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    def test_untrusted_unsafe_preflight_is_rejected(self):
+        response = self.client.options(
+            "/api/bank-accounts/",
+            HTTP_ORIGIN="https://example.com",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json_body(response)["error"], "Origin is not allowed")
+
+    def test_trusted_unsafe_preflight_is_allowed(self):
+        response = self.client.options(
+            "/api/bank-accounts/",
+            HTTP_ORIGIN="http://127.0.0.1:5173",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Access-Control-Allow-Origin"],
+            "http://127.0.0.1:5173",
+        )
+
+    def test_multipart_mutation_requires_csrf_token(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        response = csrf_client.post(
+            "/api/imports/preview/",
+            data={
+                "bank_account_id": str(self.account.id),
+                "csv_file": self.csv_file(
+                    "ID,Date,Description,Amount,Currency\n"
+                    "1,2026-01-01,Lunch,-10.00,CZK"
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json_body(response)["error"], "CSRF verification failed")
+
+    def test_json_body_rejects_non_json_content_type(self):
+        response = self.client.post(
+            "/api/bank-accounts/",
+            data=json.dumps({"name": "Wrong Content Type"}),
+            content_type="text/plain",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(json_body(response)["error"], "Unsupported content type")
+
     def test_bank_account_api_allows_blank_account_number(self):
         first = self.post_json(
             "/api/bank-accounts/",
