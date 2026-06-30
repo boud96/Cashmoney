@@ -1918,6 +1918,107 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["tags"], 1)
         self.assertEqual(payload["keywords"], 0)
         self.assertEqual(payload["sample_transactions"], 0)
+        self.assertFalse(payload["has_admin_user"])
+        self.assertEqual(payload["admin_user_count"], 0)
+
+    def test_maintenance_summary_reports_existing_admin_users(self):
+        get_user_model().objects.create_superuser(
+            username="local-admin",
+            email="",
+            password="River-Account-7429!",
+        )
+
+        response = self.client.get("/api/maintenance/summary/")
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["has_admin_user"])
+        self.assertEqual(payload["admin_user_count"], 1)
+
+    def test_maintenance_admin_user_rejects_wrong_confirmation(self):
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "wrong",
+                "mode": "create",
+                "password": "River-Account-7429!",
+                "password_confirmation": "River-Account-7429!",
+                "username": "local-admin",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = json_body(response)
+        self.assertEqual(payload["error"], "Confirmation text does not match")
+        self.assertEqual(payload["details"]["expected"], "CREATE ADMIN USER")
+
+    def test_maintenance_admin_user_creates_superuser(self):
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "CREATE ADMIN USER",
+                "mode": "create",
+                "password": "River-Account-7429!",
+                "password_confirmation": "River-Account-7429!",
+                "username": "local-admin",
+            },
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 201)
+        user = get_user_model().objects.get(username="local-admin")
+        self.assertTrue(user.is_active)
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertEqual(user.email, "")
+        self.assertTrue(user.check_password("River-Account-7429!"))
+        self.assertTrue(payload["summary"]["has_admin_user"])
+        self.assertEqual(payload["summary"]["admin_user_count"], 1)
+
+    def test_maintenance_admin_user_resets_and_promotes_existing_user(self):
+        user = get_user_model().objects.create_user(
+            username="local-admin",
+            email="old@example.local",
+            password="Old-Password-7429!",
+        )
+
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "RESET ADMIN PASSWORD",
+                "mode": "reset",
+                "password": "New-River-Account-7429!",
+                "password_confirmation": "New-River-Account-7429!",
+                "username": "local-admin",
+            },
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertEqual(user.email, "old@example.local")
+        self.assertTrue(user.check_password("New-River-Account-7429!"))
+        self.assertFalse(payload["admin"]["created"])
+        self.assertEqual(payload["summary"]["admin_user_count"], 1)
+
+    def test_maintenance_admin_user_rejects_password_mismatch(self):
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "CREATE ADMIN USER",
+                "mode": "create",
+                "password": "River-Account-7429!",
+                "password_confirmation": "Different-Account-7429!",
+                "username": "local-admin",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = json_body(response)
+        self.assertEqual(payload["error"], "Password confirmation does not match")
 
     def test_maintenance_delete_rejects_wrong_confirmation(self):
         response = self.delete_json(

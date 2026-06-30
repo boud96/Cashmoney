@@ -6,6 +6,8 @@ from decimal import Decimal
 from decimal import InvalidOperation
 from pathlib import Path
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.management import call_command
@@ -82,6 +84,8 @@ CONFIRM_DELETE_SAMPLE_DATA = "DELETE SAMPLE DATA"
 CONFIRM_DELETE_ALL_TRANSACTIONS = "DELETE ALL TRANSACTIONS"
 CONFIRM_DELETE_ALL_FINANCE_DATA = "DELETE ALL FINANCE DATA"
 CONFIRM_DELETE_BACKUP = "DELETE BACKUP"
+CONFIRM_CREATE_ADMIN_USER = "CREATE ADMIN USER"
+CONFIRM_RESET_ADMIN_PASSWORD = "RESET ADMIN PASSWORD"
 CONFIRM_RESTORE_DATABASE = "RESTORE DATABASE"
 REQUIRED_BACKUP_TABLES = {
     "finance_bankaccount",
@@ -1583,7 +1587,7 @@ class DashboardSummaryView(JsonView):
 
 
 def maintenance_counts():
-    return {
+    counts = {
         "transactions": Transaction.objects.count(),
         "internal_transfer_matches": InternalTransferMatch.objects.count(),
         "imports": CSVImport.objects.count(),
@@ -1617,6 +1621,21 @@ def maintenance_counts():
         "tags": Tag.objects.count(),
         "keywords": Keyword.objects.count(),
         "saved_filters": SavedFilter.objects.count(),
+    }
+    counts.update(admin_user_status())
+    return counts
+
+
+def admin_user_queryset():
+    User = get_user_model()
+    return User.objects.filter(is_superuser=True, is_staff=True, is_active=True)
+
+
+def admin_user_status():
+    admin_user_count = admin_user_queryset().count()
+    return {
+        "admin_user_count": admin_user_count,
+        "has_admin_user": admin_user_count > 0,
     }
 
 
@@ -1684,6 +1703,70 @@ class MaintenanceRecreateSampleDataView(JsonView):
                 "summary": maintenance_counts(),
             },
             status=201,
+        )
+
+
+class MaintenanceAdminUserView(JsonView):
+    def post(self, request):
+        data = parse_json_body(request)
+        mode = clean_text(data.get("mode"), "mode") or "create"
+        expected_confirmation = (
+            CONFIRM_RESET_ADMIN_PASSWORD
+            if mode == "reset"
+            else CONFIRM_CREATE_ADMIN_USER
+        )
+        if data.get("confirmation") != expected_confirmation:
+            raise APIValidationError(
+                "Confirmation text does not match",
+                {"expected": expected_confirmation},
+            )
+
+        username = clean_text(data.get("username"), "username", required=True)
+        password = clean_text(data.get("password"), "password", required=True)
+        password_confirmation = clean_text(
+            data.get("password_confirmation"),
+            "password_confirmation",
+            required=True,
+        )
+        email_provided = "email" in data
+        email = clean_text(data.get("email"), "email") if email_provided else ""
+        if password != password_confirmation:
+            raise APIValidationError(
+                "Password confirmation does not match",
+                {"field": "password_confirmation"},
+            )
+
+        User = get_user_model()
+        user = User.objects.filter(username=username).first()
+        validation_user = user or User(username=username, email=email)
+        try:
+            validate_password(password, validation_user)
+        except ValidationError as exc:
+            raise APIValidationError(
+                "Password does not meet the requirements",
+                {"messages": list(exc.messages)},
+            ) from exc
+
+        created = user is None
+        if created:
+            user = User(username=username)
+        if created or email_provided:
+            user.email = email
+        user.is_active = True
+        user.is_staff = True
+        user.is_superuser = True
+        user.set_password(password)
+        user.save()
+
+        return json_response(
+            {
+                "admin": {
+                    "created": created,
+                    "username": user.get_username(),
+                },
+                "summary": maintenance_counts(),
+            },
+            status=201 if created else 200,
         )
 
 

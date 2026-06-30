@@ -76,14 +76,17 @@ If your shell does not like the spaced path examples above, use:
 ## Django Admin
 
 The app does not create a default admin account or ship hardcoded admin
-credentials. To use the Django admin, create a local superuser yourself:
+credentials. In the app, open Maintenance -> Danger Zone and use the Django
+admin card to create or reset a local admin user. After an admin user exists,
+the same card shows an Open Admin button for `/admin/`.
+
+For development, you can also create a local superuser from the command line:
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\manage.py createsuperuser
 ```
 
-Then open `/admin/` from the running app and sign in with the credentials you
-created.
+Then open `/admin/` from the running app and sign in.
 
 ## Packaging
 

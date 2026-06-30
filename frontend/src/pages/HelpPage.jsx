@@ -199,7 +199,7 @@ export default function HelpPage() {
             <li><strong>Export database backup:</strong> downloads a SQLite backup of the current local database.</li>
             <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically.</li>
             <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
-            <li><strong>Admin:</strong> opens Django admin for power users.</li>
+            <li><strong>Admin:</strong> create or reset a local Django admin user, then open Django admin for power users.</li>
             <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Export a backup first.</li>
           </ul>
         </HelpCard>
