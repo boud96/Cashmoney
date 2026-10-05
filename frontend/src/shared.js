@@ -64,6 +64,16 @@ export const categorizationFieldOptions = mappingFields.filter(
   ([key]) => !["original_id", "transaction_date", "posted_date", "amount", "currency"].includes(key),
 );
 export const defaultCategorizationFields = categorizationFieldOptions.map(([key]) => key);
+export const mappingFileFormats = [
+  ["csv", "CSV"],
+  ["camt053", "camt.053 XML (ISO 20022)"],
+];
+export function mappingFileFormatLabel(value) {
+  return mappingFileFormats.find(([key]) => key === value)?.[1] || "CSV";
+}
+export function isStatementFileFormat(value) {
+  return Boolean(value) && value !== "csv";
+}
 export const defaultParsingSettings = {
   delimiter: ",",
   quotechar: '"',

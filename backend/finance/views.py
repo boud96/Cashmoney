@@ -25,7 +25,7 @@ from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.csrf import csrf_failure as django_csrf_failure
 
-from .constants import Direction, WantNeedInvestment
+from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .models import (
     BankAccount,
     CSVImport,
@@ -544,6 +544,10 @@ class CSVMappingCollectionView(JsonView):
         mapping = CSVMapping.objects.create(
             name=clean_text(require_field(data, "name"), "name", required=True),
             description=clean_text(data.get("description"), "description"),
+            file_format=clean_choice(
+                data.get("file_format"), "file_format", ImportFileFormat.CHOICES
+            )
+            or ImportFileFormat.CSV,
             delimiter=clean_csv_char(data.get("delimiter"), "delimiter", ","),
             quotechar=clean_csv_char(data.get("quotechar"), "quotechar", '"'),
             encoding=clean_text(
@@ -639,6 +643,13 @@ class CSVMappingDetailView(JsonView):
     def patch(self, request, pk):
         mapping = get_object_or_404(CSVMapping, id=pk)
         data = parse_json_body(request)
+        if "file_format" in data:
+            mapping.file_format = clean_choice(
+                data["file_format"],
+                "file_format",
+                ImportFileFormat.CHOICES,
+                allow_blank=False,
+            )
         for field in [
             "name",
             "description",

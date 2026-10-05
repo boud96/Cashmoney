@@ -4,7 +4,13 @@ from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Q
 
-from .constants import DEFAULT_CATEGORIZATION_FIELDS, Direction, WantNeedInvestment
+from .constants import (
+    CAMT053_COLUMN_MAP,
+    DEFAULT_CATEGORIZATION_FIELDS,
+    Direction,
+    ImportFileFormat,
+    WantNeedInvestment,
+)
 
 
 HEX_COLOR_VALIDATOR = RegexValidator(
@@ -99,6 +105,11 @@ class FinanceSettings(TimestampedModel):
 class CSVMapping(TimestampedModel):
     name = models.CharField(max_length=128, unique=True)
     description = models.TextField(blank=True)
+    file_format = models.CharField(
+        max_length=16,
+        choices=ImportFileFormat.CHOICES,
+        default=ImportFileFormat.CSV,
+    )
     delimiter = models.CharField(max_length=8, default=",")
     quotechar = models.CharField(max_length=1, default='"')
     encoding = models.CharField(max_length=64, default="utf-8-sig")
@@ -120,6 +131,25 @@ class CSVMapping(TimestampedModel):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if self.is_statement_format:
+            # Statement parsers produce normalized values, so the CSV parsing
+            # settings and column map are fixed for these formats.
+            self.delimiter = ","
+            self.quotechar = '"'
+            self.encoding = "utf-8"
+            self.header_row = 0
+            self.date_format = "%Y-%m-%d"
+            self.fallback_date_formats = []
+            self.decimal_separator = "."
+            self.thousands_separator = ""
+            self.column_map = dict(CAMT053_COLUMN_MAP)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_statement_format(self):
+        return self.file_format == ImportFileFormat.CAMT053
 
     def get_column(self, logical_field):
         return self.column_map.get(logical_field)

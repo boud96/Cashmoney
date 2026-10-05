@@ -141,13 +141,13 @@ export default function ImportPage({ hideAmounts = false, importReport, notify, 
               onDrop={handleDrop}
             >
               <input
-                accept=".csv,text/csv"
+                accept=".csv,.xml,text/csv,text/xml,application/xml"
                 name="csv_file"
                 onChange={(event) => setFile(event.target.files?.[0])}
                 ref={fileInputRef}
                 type="file"
               />
-              <span className="csv-drop-title">{selectedFile ? selectedFile.name : "Drop CSV file here"}</span>
+              <span className="csv-drop-title">{selectedFile ? selectedFile.name : "Drop CSV or XML statement here"}</span>
               <span className="csv-drop-meta">{selectedFile ? `${formatBytes(selectedFile.size)} selected` : "or click to browse"}</span>
             </label>
             <label className="form-field">
@@ -224,6 +224,7 @@ function ImportPreview({ hideAmounts, preview }) {
         <Metric label="Duplicates" value={formatCount(summary.duplicates)} />
         <Metric label="Errors" tone={summary.errors ? "negative" : ""} value={formatCount(summary.errors)} />
       </div>
+      <StatementChecks statement={preview.statement} />
       <div className="import-header-list">
         {headers.slice(0, 18).map((header) => <span className="pill" key={header}>{header}</span>)}
         {headers.length > 18 ? <span className="pill tag-more-pill">+{formatCount(headers.length - 18)}</span> : null}
@@ -297,9 +298,23 @@ function ImportReport({ report }) {
         <Metric label="Duplicates" value={formatCount(duplicates.length)} />
         <Metric label="Errors" tone="negative" value={formatCount(report.skipped?.errors?.length)} />
       </div>
+      <StatementChecks statement={report.statement} />
       {duplicates.length ? <DuplicateList duplicates={duplicates} /> : null}
     </div>
   );
+}
+
+function StatementChecks({ statement }) {
+  if (!statement) {
+    return null;
+  }
+  const warnings = statement.warnings || [];
+  if (!warnings.length) {
+    return <div className="mapping-status">Statement checks passed.</div>;
+  }
+  return warnings.map((warning) => (
+    <div className="mapping-status mapping-status-warning" key={warning}>{warning}</div>
+  ));
 }
 
 function DuplicateList({ duplicates }) {

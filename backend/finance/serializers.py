@@ -95,6 +95,7 @@ def serialize_csv_mapping(mapping):
         "id": str(mapping.id),
         "name": mapping.name,
         "description": mapping.description,
+        "file_format": mapping.file_format,
         "delimiter": mapping.delimiter,
         "quotechar": mapping.quotechar,
         "encoding": mapping.encoding,

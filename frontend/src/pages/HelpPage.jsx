@@ -88,6 +88,7 @@ export default function HelpPage() {
             <li><strong>Description:</strong> can combine multiple CSV columns into the dashboard description.</li>
             <li><strong>Categorization Fields:</strong> decide which parsed transaction fields Keywords inspect during import and recategorization.</li>
             <li><strong>Advanced parsing:</strong> delimiter, quote character, encoding, header row, date format, and separators stay editable.</li>
+            <li><strong>camt.053 XML:</strong> choose this format for ISO 20022 XML bank statements. Columns are mapped automatically, and the preview checks that the statement balances add up and that its account matches the bank account.</li>
           </ul>
         </HelpCard>
 
@@ -97,7 +98,7 @@ export default function HelpPage() {
             CSV mapping; there is no separate mapping picker in the import flow.
           </p>
           <ol>
-            <li>Drop or browse for a CSV file.</li>
+            <li>Drop or browse for a CSV file or camt.053 XML statement.</li>
             <li>Select the bank account.</li>
             <li>Confirm the shown default CSV mapping. If there is a warning, set the default mapping in Definitions first.</li>
             <li>Run Preview Import. The preview shows parsed date, amount, description, status, headers, and summary counts.</li>

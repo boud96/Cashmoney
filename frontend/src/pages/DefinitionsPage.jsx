@@ -16,9 +16,12 @@ import {
   formatCount,
   formObject,
   guessColumnMap,
+  isStatementFileFormat,
   lines,
   mappedColumnOptions,
   mappingFields,
+  mappingFileFormatLabel,
+  mappingFileFormats,
   normalizeHexColor,
   parsingSettingsFromMapping,
   sanitizeColumnMap,
@@ -470,10 +473,12 @@ function CsvMappingDefinitionGrid({ confirmAction, endpoint, items, notify, onDe
   const rowData = useMemo(() => items.map((item) => ({
     ...item,
     categorization_fields_text: (item.categorization_fields || []).map((field) => fieldLabel(field)).join(", "),
-    delimiter_text: item.delimiter === "\t" ? "\\t" : item.delimiter,
+    delimiter_text: isStatementFileFormat(item.file_format) ? "" : item.delimiter === "\t" ? "\\t" : item.delimiter,
+    file_format_text: mappingFileFormatLabel(item.file_format),
   })), [items]);
   const columnDefs = useMemo(() => [
     { field: "name", flex: 1.2, headerName: "Name", minWidth: 220 },
+    { field: "file_format_text", headerName: "Format", minWidth: 150, width: 160 },
     { field: "default_currency", headerName: "Currency", minWidth: 115, width: 120 },
     { field: "delimiter_text", headerName: "Delimiter", minWidth: 110, width: 115 },
     { field: "date_format", headerName: "Date Format", minWidth: 145, width: 150 },
@@ -759,7 +764,7 @@ const mappingWizardSteps = ["Source", "Parsing", "Columns", "Confirm"];
 function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll, setDraft }) {
   const [isAdding, setIsAdding] = useState(false);
   const [step, setStep] = useState(0);
-  const [mappingDetails, setMappingDetails] = useState({ name: "", default_currency: "CZK" });
+  const [mappingDetails, setMappingDetails] = useState({ name: "", default_currency: "CZK", file_format: "csv" });
   const [sampleFile, setSampleFile] = useState(null);
   const formRef = useRef(null);
   const sampleFileRef = useRef(null);
@@ -769,6 +774,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
   );
   const isEditing = Boolean(editingItem);
   const isOpen = isAdding || isEditing;
+  const isStatementFormat = isStatementFileFormat(mappingDetails.file_format);
   const currentStep = Math.min(step, mappingWizardSteps.length - 1);
   const [parsingSettings, setParsingSettings] = useState(() => parsingSettingsFromMapping(editingItem));
   const [manualParsingSettings, setManualParsingSettings] = useState(Boolean(editingItem));
@@ -787,6 +793,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     setMappingDetails({
       name: editingItem.name || "",
       default_currency: normalizeCurrencyCode(editingItem.default_currency || "CZK"),
+      file_format: editingItem.file_format || "csv",
     });
     setParsingSettings(parsingSettingsFromMapping(editingItem));
     setManualParsingSettings(true);
@@ -800,7 +807,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
 
   function resetWizardState() {
     setStep(0);
-    setMappingDetails({ name: "", default_currency: "CZK" });
+    setMappingDetails({ name: "", default_currency: "CZK", file_format: "csv" });
     setSampleFile(null);
     setParsingSettings(defaultParsingSettings);
     setManualParsingSettings(false);
@@ -903,6 +910,9 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
   }
 
   function validateParsingStep() {
+    if (isStatementFormat) {
+      return true;
+    }
     const requiredSettings = [
       ["delimiter", "Delimiter"],
       ["quotechar", "Quote character"],
@@ -931,7 +941,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
   }
 
   function validateColumnsStep() {
-    if (!validateRequiredColumnMap(draft.column_map, notify)) {
+    if (!isStatementFormat && !validateRequiredColumnMap(draft.column_map, notify)) {
       setStep(2);
       return false;
     }
@@ -964,6 +974,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     const data = {
       name: mappingDetails.name.trim(),
       default_currency: normalizeCurrencyCode(mappingDetails.default_currency),
+      file_format: mappingDetails.file_format,
       delimiter: parsingSettings.delimiter,
       quotechar: parsingSettings.quotechar,
       encoding: parsingSettings.encoding,
@@ -1017,10 +1028,26 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
                 value={mappingDetails.default_currency}
               />
             </FormField>
-            <label className="mapping-file-field">
-              <span>Sample CSV</span>
-              <input accept=".csv,text/csv" name="sample_csv" onChange={(event) => setSampleFile(event.target.files?.[0] || null)} ref={sampleFileRef} type="file" />
-            </label>
+            <FormField label="Format">
+              <select name="file_format" onChange={(event) => updateMappingDetail("file_format", event.target.value)} value={mappingDetails.file_format}>
+                {mappingFileFormats.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </FormField>
+            {isStatementFormat ? null : (
+              <label className="mapping-file-field">
+                <span>Sample CSV</span>
+                <input accept=".csv,text/csv" name="sample_csv" onChange={(event) => setSampleFile(event.target.files?.[0] || null)} ref={sampleFileRef} type="file" />
+              </label>
+            )}
+          </div>
+        </div>
+      );
+    }
+    if (currentStep === 1 && isStatementFormat) {
+      return (
+        <div className="mapping-wizard-step-panel">
+          <div className="mapping-empty-state">
+            {mappingFileFormatLabel(mappingDetails.file_format)} statements are read directly, so no parsing settings are needed.
           </div>
         </div>
       );
@@ -1047,6 +1074,11 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     if (currentStep === 2) {
       return (
         <div className="mapping-wizard-step-panel">
+          {isStatementFormat ? (
+            <div className="mapping-empty-state">
+              Columns are mapped automatically for {mappingFileFormatLabel(mappingDetails.file_format)} statements.
+            </div>
+          ) : (
           <div className="mapping-column-map">
             {mappingFields.map(([key, label]) => (
               key === "description" ? (
@@ -1075,6 +1107,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
               )
             ))}
           </div>
+          )}
           <DefinitionCheckboxField
             className="mapping-categorization-field"
             label="Categorization Fields"
@@ -1091,6 +1124,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       <MappingReview
         draft={draft}
         headers={headers}
+        isStatementFormat={isStatementFormat}
         mappingDetails={mappingDetails}
         parsingSettings={parsingSettings}
       />
@@ -1098,6 +1132,9 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
   }
 
   function renderSamplePreview() {
+    if (isStatementFormat) {
+      return null;
+    }
     return (
       <div className="mapping-wizard-sample">
         {draft.detected?.warnings?.length ? (
@@ -1156,7 +1193,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
   );
 }
 
-function MappingReview({ draft, headers, mappingDetails, parsingSettings }) {
+function MappingReview({ draft, headers, isStatementFormat, mappingDetails, parsingSettings }) {
   const mappedFields = mappingFields
     .map(([key, label]) => [label, coerceArray(draft.column_map[key]).filter(Boolean).join(", ")])
     .filter(([, value]) => value);
@@ -1165,11 +1202,17 @@ function MappingReview({ draft, headers, mappingDetails, parsingSettings }) {
       <div className="mapping-review-grid">
         <div><span>Name</span><strong>{mappingDetails.name || "Unnamed"}</strong></div>
         <div><span>Default currency</span><strong>{mappingDetails.default_currency || "CZK"}</strong></div>
-        <div><span>Detected columns</span><strong>{headers.length}</strong></div>
-        <div><span>Date format</span><strong>{parsingSettings.date_format}</strong></div>
-        <div><span>Delimiter</span><strong>{parsingSettings.delimiter}</strong></div>
-        <div><span>Encoding</span><strong>{parsingSettings.encoding}</strong></div>
+        <div><span>Format</span><strong>{mappingFileFormatLabel(mappingDetails.file_format)}</strong></div>
+        {isStatementFormat ? null : (
+          <>
+            <div><span>Detected columns</span><strong>{headers.length}</strong></div>
+            <div><span>Date format</span><strong>{parsingSettings.date_format}</strong></div>
+            <div><span>Delimiter</span><strong>{parsingSettings.delimiter}</strong></div>
+            <div><span>Encoding</span><strong>{parsingSettings.encoding}</strong></div>
+          </>
+        )}
       </div>
+      {isStatementFormat ? null : (
       <div className="mapping-review-section">
         <span>Column map</span>
         <div className="mapping-review-list">
@@ -1178,6 +1221,7 @@ function MappingReview({ draft, headers, mappingDetails, parsingSettings }) {
           )) : <div className="muted">No columns mapped.</div>}
         </div>
       </div>
+      )}
       <div className="mapping-review-section">
         <span>Categorization fields</span>
         <div className="mapping-review-tags">
