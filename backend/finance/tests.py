@@ -41,6 +41,7 @@ from .services import (
     recalculate_transaction_conversions,
     sync_missing_exchange_rates,
 )
+from .statement_parsers import parse_camt053
 
 
 def json_body(response):
@@ -2370,6 +2371,14 @@ class APITests(FinanceTestCase):
 @override_settings(ALLOWED_HOSTS=["testserver", "127.0.0.1", "localhost"])
 class MaintenanceRestoreTests(TransactionTestCase):
     def setUp(self):
+        # Restores write pre-restore backups under DATA_DIR; keep them out of the
+        # developer's real backups folder.
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        data_dir_override = self.settings(DATA_DIR=Path(temp_dir.name))
+        data_dir_override.enable()
+        self.addCleanup(data_dir_override.disable)
+
         self.client = Client()
         self.mapping = CSVMapping.objects.create(
             name="Restore Mapping",
@@ -2449,8 +2458,9 @@ class MaintenanceRestoreTests(TransactionTestCase):
             legacy_connection.execute(
                 "DROP TABLE IF EXISTS finance_internaltransfermatch"
             )
+            # A real pre-0010 backup has no record of 0010 or any later migration.
             legacy_connection.execute(
-                "DELETE FROM django_migrations WHERE app = ? AND name = ?",
+                "DELETE FROM django_migrations WHERE app = ? AND name >= ?",
                 ("finance", "0010_internal_transfer_match"),
             )
             legacy_connection.commit()
@@ -2542,3 +2552,285 @@ class MaintenanceRestoreTests(TransactionTestCase):
                     description="Current saved backup transaction"
                 ).exists()
             )
+
+
+CAMT053_ENTRY_TEMPLATE = """
+            <Ntry>
+                <NtryRef>{ref}</NtryRef>
+                <Amt Ccy="CZK">{amount}</Amt>
+                <CdtDbtInd>{indicator}</CdtDbtInd>
+                <RvslInd>false</RvslInd>
+                <Sts>{status}</Sts>
+                <BookgDt><Dt>{booked}</Dt></BookgDt>
+                <ValDt><Dt>{value}</Dt></ValDt>
+                <BkTxCd><Prtry><Cd>{code}</Cd><Issr>CBA</Issr></Prtry></BkTxCd>
+                <NtryDtls>
+                    <TxDtls>
+                        <Refs><AcctSvcrRef>{ref}</AcctSvcrRef></Refs>
+                        <AmtDtls>{instructed}</AmtDtls>
+                        <RltdPties>{parties}</RltdPties>
+                        {remittance}
+                    </TxDtls>
+                </NtryDtls>
+            </Ntry>"""
+
+
+def camt053_entry(
+    ref,
+    amount,
+    indicator,
+    parties,
+    remittance="",
+    instructed=None,
+    status="BOOK",
+    booked="2026-09-02",
+    value="2026-09-01",
+    code="90000501000",
+):
+    instructed = instructed or f'<InstdAmt><Amt Ccy="CZK">{amount}</Amt></InstdAmt>'
+    return CAMT053_ENTRY_TEMPLATE.format(
+        ref=ref,
+        amount=amount,
+        indicator=indicator,
+        status=status,
+        booked=booked,
+        value=value,
+        code=code,
+        instructed=instructed,
+        parties=parties,
+        remittance=remittance,
+    )
+
+
+CAMT053_ENTRIES = [
+    camt053_entry(
+        "C1",
+        "249.00",
+        "DBIT",
+        "<Cdtr><Nm>Internal clearing CZK</Nm></Cdtr>"
+        "<CdtrAcct><Id><Othr><Id>null-null/null</Id></Othr></Id></CdtrAcct>"
+        "<Prtry><Pty><Nm>COFFEE SHOP, Brno, CZ</Nm></Pty></Prtry>",
+        code="30000201000",
+    ),
+    camt053_entry(
+        "T1",
+        "1000.00",
+        "DBIT",
+        "<Cdtr><Nm>Landlord</Nm></Cdtr>"
+        "<CdtrAcct><Id><IBAN>CZ6508000000192000145399</IBAN></Id></CdtrAcct>",
+        "<RmtInf><Ustrd>Rent September</Ustrd>"
+        "<Strd><CdtrRefInf><Ref>VS:2026</Ref></CdtrRefInf></Strd>"
+        "<Strd><CdtrRefInf><Ref>KS:308</Ref></CdtrRefInf></Strd></RmtInf>",
+    ),
+    camt053_entry(
+        "S1",
+        "5000.00",
+        "CRDT",
+        "<Dbtr><Nm>Employer s.r.o.</Nm></Dbtr>"
+        "<DbtrAcct><Id><Othr><Id>null-2302719247/2010</Id></Othr></Id></DbtrAcct>",
+        "<RmtInf><Ustrd>Salary</Ustrd>"
+        "<Strd><CdtrRefInf><Ref>SS:77</Ref></CdtrRefInf></Strd></RmtInf>",
+    ),
+    camt053_entry(
+        "F1",
+        "256.14",
+        "DBIT",
+        "<Cdtr><Nm>Internal clearing CZK</Nm></Cdtr>"
+        "<CdtrAcct><Id><Othr><Id>null-null/null</Id></Othr></Id></CdtrAcct>"
+        "<Prtry><Pty><Nm>HOSTING INC, SAN FRANCISCO, US</Nm></Pty></Prtry>",
+        instructed='<InstdAmt><Amt Ccy="USD">12</Amt>'
+        "<CcyXchg><SrcCcy>USD</SrcCcy><TrgtCcy>CZK</TrgtCcy>"
+        "<XchgRate>21.345</XchgRate></CcyXchg></InstdAmt>",
+        code="30000201000",
+    ),
+]
+
+
+def camt053_document(
+    entries=None,
+    opening="10000.00",
+    closing="13494.86",
+    iban="CZ0001000000000000000123",
+    declared=None,
+):
+    entries = CAMT053_ENTRIES if entries is None else entries
+    declared = len(entries) if declared is None else declared
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+    <BkToCstmrStmt>
+        <GrpHdr><MsgId>test</MsgId><CreDtTm>2026-10-01T10:00:00+02:00</CreDtTm></GrpHdr>
+        <Stmt>
+            <Id>STMT-1</Id>
+            <FrToDt>
+                <FrDtTm>2026-09-01T00:00:00+02:00</FrDtTm>
+                <ToDtTm>2026-09-30T23:59:59+02:00</ToDtTm>
+            </FrToDt>
+            <Acct><Id><IBAN>{iban}</IBAN></Id><Ccy>CZK</Ccy></Acct>
+            <Bal>
+                <Tp><CdOrPrtry><Cd>PRCD</Cd></CdOrPrtry></Tp>
+                <Amt Ccy="CZK">{opening}</Amt><CdtDbtInd>CRDT</CdtDbtInd>
+                <Dt><Dt>2026-08-31</Dt></Dt>
+            </Bal>
+            <Bal>
+                <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
+                <Amt Ccy="CZK">{closing}</Amt><CdtDbtInd>CRDT</CdtDbtInd>
+                <Dt><Dt>2026-09-30</Dt></Dt>
+            </Bal>
+            <TxsSummry><TtlNtries><NbOfNtries>{declared}</NbOfNtries></TtlNtries></TxsSummry>
+            {"".join(entries)}
+        </Stmt>
+    </BkToCstmrStmt>
+</Document>
+""".encode("utf-8")
+
+
+class Camt053ParserTests(TestCase):
+    def rows_by_id(self, result):
+        return {row["original_id"]: row for _line, row in result.rows}
+
+    def test_parses_entries_into_logical_fields(self):
+        result = parse_camt053(camt053_document())
+        rows = self.rows_by_id(result)
+
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(result.warnings(), [])
+        self.assertEqual(result.statements[0].account_number, "123/0100")
+
+        card = rows["C1"]
+        self.assertEqual(card["amount"], "-249.00")
+        self.assertEqual(card["transaction_date"], "2026-09-02")
+        self.assertEqual(card["posted_date"], "2026-09-01")
+        self.assertEqual(card["counterparty_name"], "COFFEE SHOP, Brno, CZ")
+        self.assertEqual(card["counterparty_account_number"], "")
+        self.assertEqual(card["description"], "COFFEE SHOP, Brno, CZ")
+        self.assertEqual(card["transaction_type"], "30000201000")
+
+        rent = rows["T1"]
+        self.assertEqual(rent["counterparty_account_number"], "19-2000145399/0800")
+        self.assertEqual(rent["description"], "Rent September Landlord")
+        self.assertEqual(rent["variable_symbol"], "2026")
+        self.assertEqual(rent["constant_symbol"], "308")
+
+        salary = rows["S1"]
+        self.assertEqual(salary["amount"], "5000.00")
+        self.assertEqual(salary["counterparty_name"], "Employer s.r.o.")
+        self.assertEqual(salary["counterparty_account_number"], "2302719247/2010")
+        self.assertEqual(salary["specific_symbol"], "77")
+
+        foreign = rows["F1"]
+        self.assertEqual(foreign["currency"], "CZK")
+        self.assertEqual(foreign["instructed_amount"], "12")
+        self.assertEqual(foreign["instructed_currency"], "USD")
+        self.assertEqual(foreign["exchange_rate"], "21.345")
+        self.assertNotIn("instructed_currency", card)
+
+    def test_skips_pending_entries_and_reports_them(self):
+        pending = camt053_entry(
+            "P1", "10.00", "DBIT", "<Cdtr><Nm>Shop</Nm></Cdtr>", status="PDNG"
+        )
+        result = parse_camt053(camt053_document(CAMT053_ENTRIES + [pending]))
+
+        self.assertNotIn("P1", self.rows_by_id(result))
+        self.assertEqual(result.statements[0].skipped_unbooked, 1)
+        self.assertEqual(len(result.warnings()), 1)
+        self.assertIn("not booked", result.warnings()[0])
+
+    def test_warns_when_balances_or_entry_count_do_not_reconcile(self):
+        result = parse_camt053(camt053_document(closing="1.00", declared=7))
+        warnings = " ".join(result.warnings())
+
+        self.assertIn("does not equal closing balance", warnings)
+        self.assertIn("declares 7 entries", warnings)
+
+    def test_rejects_invalid_documents(self):
+        with self.assertRaisesMessage(ValueError, "DOCTYPE"):
+            parse_camt053(
+                b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "b">]><Document/>'
+            )
+        with self.assertRaisesMessage(ValueError, "not a camt.053"):
+            parse_camt053(b"<Document><Other/></Document>")
+        with self.assertRaisesMessage(ValueError, "Could not read XML"):
+            parse_camt053(b"<Document>")
+        with self.assertRaisesMessage(ValueError, "empty"):
+            parse_camt053(b"  ")
+
+
+class Camt053ImportAPITests(FinanceTestCase):
+    def setUp(self):
+        super().setUp()
+        response = self.client.post(
+            "/api/csv-mappings/",
+            data=json.dumps({"name": "Statement XML", "file_format": "camt053"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.camt_mapping = CSVMapping.objects.get(id=json_body(response)["id"])
+
+    def xml_file(self, body=None):
+        return SimpleUploadedFile(
+            "statement.xml",
+            body or camt053_document(),
+            content_type="application/xml",
+        )
+
+    def import_data(self, **overrides):
+        data = {
+            "bank_account_id": str(self.account.id),
+            "csv_mapping_id": str(self.camt_mapping.id),
+            "csv_file": self.xml_file(),
+        }
+        data.update(overrides)
+        return data
+
+    def test_creating_statement_mapping_uses_fixed_column_map(self):
+        self.assertEqual(self.camt_mapping.file_format, "camt053")
+        self.assertEqual(self.camt_mapping.column_map["amount"], "amount")
+        self.assertEqual(self.camt_mapping.decimal_separator, ".")
+
+        response = self.client.patch(
+            f"/api/csv-mappings/{self.camt_mapping.id}/",
+            data=json.dumps({"file_format": "pdf"}),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_preview_reports_statement_checks(self):
+        response = self.client.post("/api/imports/preview/", self.import_data())
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(payload["loaded"], 4)
+        self.assertEqual(payload["summary"]["valid"], 4)
+        self.assertEqual(payload["statement"]["warnings"], [])
+        self.assertEqual(
+            payload["statement"]["statements"][0]["closing_balance"], "13494.86"
+        )
+
+        self.account.account_number = "999/0100"
+        self.account.save()
+        mismatch = json_body(
+            self.client.post("/api/imports/preview/", self.import_data())
+        )
+        self.assertIn("does not match", mismatch["statement"]["warnings"][0])
+
+    def test_import_categorizes_and_skips_duplicates_on_reimport(self):
+        self.keyword("Coffee", ["coffee shop"])
+
+        with patch("finance.views.sync_missing_exchange_rates") as sync_rates:
+            sync_rates.return_value = {}
+            first = self.client.post("/api/imports/", self.import_data())
+            second = self.client.post("/api/imports/", self.import_data())
+
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(json_body(first)["report"]["created"]["count"], 4)
+        self.assertEqual(Transaction.objects.count(), 4)
+        self.assertEqual(json_body(second)["report"]["created"]["count"], 0)
+        self.assertEqual(len(json_body(second)["report"]["skipped"]["duplicates"]), 4)
+
+        card = Transaction.objects.get(original_id="C1")
+        self.assertEqual(card.amount, Decimal("-249.00"))
+        self.assertEqual(card.posted_date, date(2026, 9, 1))
+        self.assertEqual(card.subcategory, self.subcategory)
+        self.assertEqual(card.raw_data["transaction_type"], "30000201000")
+        foreign = Transaction.objects.get(original_id="F1")
+        self.assertEqual(foreign.raw_data["instructed_currency"], "USD")

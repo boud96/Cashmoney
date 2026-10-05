@@ -27,7 +27,7 @@ from django.db.models import (
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
-from .constants import DEFAULT_CATEGORIZATION_FIELDS
+from .constants import DEFAULT_CATEGORIZATION_FIELDS, ImportFileFormat
 from .models import (
     BankAccount,
     CSVImport,
@@ -44,6 +44,7 @@ from .serializers import (
     serialize_transaction,
     transaction_converted_amount,
 )
+from .statement_parsers import parse_camt053
 
 ENCODING_CANDIDATES = ["utf-8-sig", "utf-8", "cp1250", "windows-1250", "latin-1"]
 DELIMITER_CANDIDATES = [",", ";", "\t", "|"]
@@ -686,6 +687,42 @@ def read_csv_rows_with_headers(csv_mapping, file_obj):
     else:
         text = raw.decode(csv_mapping.encoding)
     return read_csv_rows_from_text(csv_mapping, text)
+
+
+def read_import_rows(csv_mapping, file_obj):
+    """Return rows, headers and the parsed statement (None for CSV) for a mapping."""
+    if csv_mapping.file_format == ImportFileFormat.CAMT053:
+        raw = file_obj.read()
+        if isinstance(raw, str):
+            raw = raw.encode("utf-8")
+        statement = parse_camt053(raw)
+        return statement.rows, statement.headers, statement
+    rows, headers = read_csv_rows_with_headers(csv_mapping, file_obj)
+    return rows, headers, None
+
+
+def statement_import_report(statement, bank_account):
+    if statement is None:
+        return None
+    warnings = statement.warnings()
+    expected_numbers = clean_account_number_variants(
+        getattr(bank_account, "account_number", "")
+    )
+    for summary in statement.statements:
+        statement_numbers = clean_account_number_variants(summary.account_number)
+        if (
+            expected_numbers
+            and statement_numbers
+            and not expected_numbers.intersection(statement_numbers)
+        ):
+            warnings.append(
+                f"Statement account {summary.account_number} does not match "
+                f"bank account {bank_account.account_number}."
+            )
+    return {
+        "statements": [summary.as_dict() for summary in statement.statements],
+        "warnings": warnings,
+    }
 
 
 def read_csv_rows_from_text(csv_mapping, text):
@@ -1361,6 +1398,7 @@ class CSVImportService:
         self.bank_account = bank_account
         self.extractor = CSVRowExtractor(csv_mapping)
         self.categorizer = CategorizationService()
+        self.statement_report = None
 
     def import_file(self, file_obj, source_filename="", dry_run=False):
         if dry_run:
@@ -1399,6 +1437,8 @@ class CSVImportService:
             return csv_import, report
 
         report["loaded"] = len(rows)
+        if self.statement_report:
+            report["statement"] = self.statement_report
 
         for line_number, row in rows:
             try:
@@ -1460,6 +1500,7 @@ class CSVImportService:
             "headers": headers,
             "loaded": len(rows),
             "sample_size": min(sample_size, len(rows)),
+            "statement": self.statement_report,
             "rows": [],
             "summary": {
                 "valid": 0,
@@ -1522,7 +1563,9 @@ class CSVImportService:
         return rows
 
     def _read_rows_with_headers(self, file_obj):
-        return read_csv_rows_with_headers(self.csv_mapping, file_obj)
+        rows, headers, statement = read_import_rows(self.csv_mapping, file_obj)
+        self.statement_report = statement_import_report(statement, self.bank_account)
+        return rows, headers
 
     def _find_duplicate(self, data):
         if data.get("original_id"):
