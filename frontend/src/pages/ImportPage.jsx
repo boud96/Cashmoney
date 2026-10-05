@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { apiGet } from "../api.js";
+import { apiFetch, apiGet } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
 import { formatAmountValue, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
@@ -65,7 +65,7 @@ export default function ImportPage({ hideAmounts = false, importReport, notify, 
     try {
       const formData = buildFormData();
       formData.append("sample_size", "100");
-      const response = await fetch("/api/imports/preview/", { method: "POST", body: formData });
+      const response = await apiFetch("/api/imports/preview/", { method: "POST", body: formData });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Preview failed");
@@ -87,7 +87,7 @@ export default function ImportPage({ hideAmounts = false, importReport, notify, 
     }
     setImporting(true);
     try {
-      const response = await fetch("/api/imports/", { method: "POST", body: buildFormData() });
+      const response = await apiFetch("/api/imports/", { method: "POST", body: buildFormData() });
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.error || "Import failed");

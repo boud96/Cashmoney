@@ -581,6 +581,130 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["error"], "Missing required field")
         self.assertEqual(payload["details"]["field"], "name")
 
+    def test_app_shell_sets_csrf_cookie(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        response = csrf_client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("csrftoken", csrf_client.cookies)
+
+    def test_json_mutation_requires_csrf_token(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        response = csrf_client.post(
+            "/api/bank-accounts/",
+            data=json.dumps({"name": "CSRF Test", "currency": "CZK", "owners": 1}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json_body(response)["error"], "CSRF verification failed")
+
+    def test_json_mutation_accepts_valid_csrf_token(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.get("/")
+        token = csrf_client.cookies["csrftoken"].value
+
+        response = csrf_client.post(
+            "/api/bank-accounts/",
+            data=json.dumps({"name": "CSRF Test", "currency": "CZK", "owners": 1}),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+            HTTP_ORIGIN="http://127.0.0.1:8000",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(json_body(response)["name"], "CSRF Test")
+
+    def test_unsafe_request_rejects_untrusted_origin(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.get("/")
+        token = csrf_client.cookies["csrftoken"].value
+
+        response = csrf_client.post(
+            "/api/bank-accounts/",
+            data=json.dumps({"name": "Origin Test", "currency": "CZK", "owners": 1}),
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+            HTTP_ORIGIN="https://example.com",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json_body(response)["error"], "Origin is not allowed")
+
+    def test_trusted_origin_receives_cors_headers(self):
+        response = self.client.get(
+            "/api/health/",
+            HTTP_ORIGIN="http://127.0.0.1:5173",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Access-Control-Allow-Origin"],
+            "http://127.0.0.1:5173",
+        )
+        self.assertEqual(response["Access-Control-Allow-Credentials"], "true")
+
+    def test_untrusted_read_origin_receives_no_cors_headers(self):
+        response = self.client.get(
+            "/api/health/",
+            HTTP_ORIGIN="https://example.com",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    def test_untrusted_unsafe_preflight_is_rejected(self):
+        response = self.client.options(
+            "/api/bank-accounts/",
+            HTTP_ORIGIN="https://example.com",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json_body(response)["error"], "Origin is not allowed")
+
+    def test_trusted_unsafe_preflight_is_allowed(self):
+        response = self.client.options(
+            "/api/bank-accounts/",
+            HTTP_ORIGIN="http://127.0.0.1:5173",
+            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Access-Control-Allow-Origin"],
+            "http://127.0.0.1:5173",
+        )
+
+    def test_multipart_mutation_requires_csrf_token(self):
+        csrf_client = Client(enforce_csrf_checks=True)
+
+        response = csrf_client.post(
+            "/api/imports/preview/",
+            data={
+                "bank_account_id": str(self.account.id),
+                "csv_file": self.csv_file(
+                    "ID,Date,Description,Amount,Currency\n"
+                    "1,2026-01-01,Lunch,-10.00,CZK"
+                ),
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(json_body(response)["error"], "CSRF verification failed")
+
+    def test_json_body_rejects_non_json_content_type(self):
+        response = self.client.post(
+            "/api/bank-accounts/",
+            data=json.dumps({"name": "Wrong Content Type"}),
+            content_type="text/plain",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(json_body(response)["error"], "Unsupported content type")
+
     def test_bank_account_api_allows_blank_account_number(self):
         first = self.post_json(
             "/api/bank-accounts/",
@@ -1918,6 +2042,107 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["tags"], 1)
         self.assertEqual(payload["keywords"], 0)
         self.assertEqual(payload["sample_transactions"], 0)
+        self.assertFalse(payload["has_admin_user"])
+        self.assertEqual(payload["admin_user_count"], 0)
+
+    def test_maintenance_summary_reports_existing_admin_users(self):
+        get_user_model().objects.create_superuser(
+            username="local-admin",
+            email="",
+            password="River-Account-7429!",
+        )
+
+        response = self.client.get("/api/maintenance/summary/")
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(payload["has_admin_user"])
+        self.assertEqual(payload["admin_user_count"], 1)
+
+    def test_maintenance_admin_user_rejects_wrong_confirmation(self):
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "wrong",
+                "mode": "create",
+                "password": "River-Account-7429!",
+                "password_confirmation": "River-Account-7429!",
+                "username": "local-admin",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = json_body(response)
+        self.assertEqual(payload["error"], "Confirmation text does not match")
+        self.assertEqual(payload["details"]["expected"], "CREATE ADMIN USER")
+
+    def test_maintenance_admin_user_creates_superuser(self):
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "CREATE ADMIN USER",
+                "mode": "create",
+                "password": "River-Account-7429!",
+                "password_confirmation": "River-Account-7429!",
+                "username": "local-admin",
+            },
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 201)
+        user = get_user_model().objects.get(username="local-admin")
+        self.assertTrue(user.is_active)
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertEqual(user.email, "")
+        self.assertTrue(user.check_password("River-Account-7429!"))
+        self.assertTrue(payload["summary"]["has_admin_user"])
+        self.assertEqual(payload["summary"]["admin_user_count"], 1)
+
+    def test_maintenance_admin_user_resets_and_promotes_existing_user(self):
+        user = get_user_model().objects.create_user(
+            username="local-admin",
+            email="old@example.local",
+            password="Old-Password-7429!",
+        )
+
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "RESET ADMIN PASSWORD",
+                "mode": "reset",
+                "password": "New-River-Account-7429!",
+                "password_confirmation": "New-River-Account-7429!",
+                "username": "local-admin",
+            },
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(user.is_staff)
+        self.assertTrue(user.is_superuser)
+        self.assertEqual(user.email, "old@example.local")
+        self.assertTrue(user.check_password("New-River-Account-7429!"))
+        self.assertFalse(payload["admin"]["created"])
+        self.assertEqual(payload["summary"]["admin_user_count"], 1)
+
+    def test_maintenance_admin_user_rejects_password_mismatch(self):
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "CREATE ADMIN USER",
+                "mode": "create",
+                "password": "River-Account-7429!",
+                "password_confirmation": "Different-Account-7429!",
+                "username": "local-admin",
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = json_body(response)
+        self.assertEqual(payload["error"], "Password confirmation does not match")
 
     def test_maintenance_delete_rejects_wrong_confirmation(self):
         response = self.delete_json(

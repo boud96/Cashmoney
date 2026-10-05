@@ -147,6 +147,11 @@ urlpatterns = [
         name="maintenance-recreate-sample-data",
     ),
     path(
+        "maintenance/admin-user/",
+        views.MaintenanceAdminUserView.as_view(),
+        name="maintenance-admin-user",
+    ),
+    path(
         "maintenance/transactions/",
         views.MaintenanceTransactionsView.as_view(),
         name="maintenance-transactions",

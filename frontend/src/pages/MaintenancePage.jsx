@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { apiDelete, apiGet, apiPost } from "../api.js";
+import { apiDelete, apiFetch, apiGet, apiPost } from "../api.js";
 import { LoadingButton, Metric } from "../components.jsx";
 import { formatBytes, formatCount, formatDateTime } from "../shared.js";
 
@@ -11,7 +11,18 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
   const [backups, setBackups] = useState([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [backupAction, setBackupAction] = useState("");
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminDraft, setAdminDraft] = useState({
+    password: "",
+    passwordConfirmation: "",
+    username: "admin",
+  });
   const counts = summary || {};
+  const hasAdminUser = Boolean(counts.has_admin_user);
+  const adminUserCount = Number(counts.admin_user_count || 0);
+  const adminMode = hasAdminUser ? "reset" : "create";
+  const adminConfirmation = hasAdminUser ? "RESET ADMIN PASSWORD" : "CREATE ADMIN USER";
+  const adminActionLabel = hasAdminUser ? "Reset Admin Password" : "Create Admin User";
   const definitionObjectCount = [
     counts.bank_accounts,
     counts.csv_mappings,
@@ -230,7 +241,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
       const formData = new FormData();
       formData.append("backup_file", restoreFile);
       formData.append("confirmation", "RESTORE DATABASE");
-      const response = await fetch("/api/maintenance/database-restore/", {
+      const response = await apiFetch("/api/maintenance/database-restore/", {
         method: "POST",
         body: formData,
       });
@@ -246,6 +257,48 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
       notify(error.message);
     } finally {
       setSafeBusy("");
+    }
+  }
+
+  function updateAdminDraft(field, value) {
+    setAdminDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  async function saveAdminUser(event) {
+    event.preventDefault();
+    if (adminDraft.password !== adminDraft.passwordConfirmation) {
+      notify("Password confirmation does not match");
+      return;
+    }
+    const confirmed = await confirmAction({
+      confirmLabel: hasAdminUser ? "Reset" : "Create",
+      danger: true,
+      message: `${adminActionLabel}?\n\nThis creates or updates a local Django admin user for direct database maintenance.`,
+      title: adminActionLabel,
+    });
+    if (!confirmed) {
+      return;
+    }
+    setAdminBusy(true);
+    try {
+      const payload = await apiPost("/maintenance/admin-user/", {
+        confirmation: adminConfirmation,
+        mode: adminMode,
+        password: adminDraft.password,
+        password_confirmation: adminDraft.passwordConfirmation,
+        username: adminDraft.username,
+      });
+      notify(payload.admin?.created ? "Admin user created" : "Admin password reset");
+      setAdminDraft((current) => ({
+        ...current,
+        password: "",
+        passwordConfirmation: "",
+      }));
+      await reloadMaintenance();
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setAdminBusy(false);
     }
   }
 
@@ -422,14 +475,62 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
         title="Danger Zone"
       >
         <div className="maintenance-tool-grid">
-          <article className="maintenance-tool-card danger-tool-card">
-            <div>
-              <h3>Django admin</h3>
-              <p>Open the raw Django admin interface for direct database maintenance.</p>
+          <article className="maintenance-tool-card danger-tool-card admin-tool-card">
+            <div className="admin-tool-header">
+              <div>
+                <h3>Django admin</h3>
+              <p>
+                {hasAdminUser
+                  ? `Admin access is configured for ${formatCount(adminUserCount)} user${adminUserCount === 1 ? "" : "s"}.`
+                  : "Create a local admin user to open Django admin."}
+              </p>
+              </div>
+              {hasAdminUser && (
+                <a className="danger-button danger-link-button" href="/admin/" rel="noreferrer" target="_blank">
+                  Open Admin
+                </a>
+              )}
             </div>
-            <a className="danger-button danger-link-button" href="/admin/" rel="noreferrer" target="_blank">
-              Admin
-            </a>
+            <form className="admin-user-form" onSubmit={saveAdminUser}>
+              <label>
+                <span>Username</span>
+                <input
+                  autoComplete="username"
+                  onChange={(event) => updateAdminDraft("username", event.target.value)}
+                  required
+                  value={adminDraft.username}
+                />
+              </label>
+              <label>
+                <span>Password</span>
+                <input
+                  autoComplete="new-password"
+                  onChange={(event) => updateAdminDraft("password", event.target.value)}
+                  required
+                  type="password"
+                  value={adminDraft.password}
+                />
+              </label>
+              <label>
+                <span>Confirm password</span>
+                <input
+                  autoComplete="new-password"
+                  onChange={(event) => updateAdminDraft("passwordConfirmation", event.target.value)}
+                  required
+                  type="password"
+                  value={adminDraft.passwordConfirmation}
+                />
+              </label>
+              <LoadingButton
+                busy={adminBusy}
+                busyLabel="Saving"
+                className="danger-button admin-user-submit"
+                disabled={Boolean(deleting)}
+                type="submit"
+              >
+                {adminActionLabel}
+              </LoadingButton>
+            </form>
           </article>
           {dangerActions.map((action) => (
             <article className="maintenance-tool-card danger-tool-card" key={action.phrase}>
