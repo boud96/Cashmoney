@@ -1114,6 +1114,7 @@ class UncategorizedSuggestionView(JsonView):
             .select_related(
                 "bank_account",
                 "bank_account__default_csv_mapping",
+                "import_batch__csv_mapping",
                 "subcategory",
                 "subcategory__category",
             )

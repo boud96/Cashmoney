@@ -16,7 +16,7 @@ from django.db import IntegrityError, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
-from .constants import Direction, WantNeedInvestment
+from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .models import (
     BankAccount,
     CSVImport,
@@ -1688,6 +1688,99 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["updated"], 1)
         self.assertEqual(transaction_obj.description, "McDonalds Prague")
         self.assertEqual(transaction_obj.subcategory, self.subcategory)
+
+    def test_recategorize_reads_each_row_with_its_import_mapping(self):
+        self.keyword("McDonalds", ["mcdonald"])
+        xml_mapping = CSVMapping.objects.create(
+            name="Statement XML", file_format=ImportFileFormat.CAMT053
+        )
+        csv_row = Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=CSVImport.objects.create(
+                bank_account=self.account, csv_mapping=self.mapping
+            ),
+            transaction_date="2026-01-02",
+            description="McDonalds Prague",
+            counterparty_name="McDonalds",
+            amount=Decimal("-12.50"),
+            raw_data={"Description": "McDonalds Prague", "Counterparty": "McDonalds"},
+        )
+        xml_row = Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=CSVImport.objects.create(
+                bank_account=self.account, csv_mapping=xml_mapping
+            ),
+            transaction_date="2026-02-02",
+            description="McDonalds Brno",
+            counterparty_name="McDonalds",
+            amount=Decimal("-9.90"),
+            raw_data={
+                "description": "McDonalds Brno",
+                "counterparty_name": "McDonalds",
+            },
+        )
+
+        for default_mapping in [xml_mapping, self.mapping]:
+            self.account.default_csv_mapping = default_mapping
+            self.account.save()
+
+            response = self.post_json("/api/transactions/recategorize/", {})
+
+            self.assertEqual(response.status_code, 200)
+            for row, description in [
+                (csv_row, "McDonalds Prague"),
+                (xml_row, "McDonalds Brno"),
+            ]:
+                row.refresh_from_db()
+                self.assertEqual(row.description, description)
+                self.assertEqual(row.counterparty_name, "McDonalds")
+                self.assertEqual(row.subcategory, self.subcategory)
+
+    def test_recategorize_keeps_fields_whose_columns_are_missing_from_raw_data(self):
+        self.keyword("McDonalds", ["mcdonald"])
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="McDonalds Prague",
+            amount=Decimal("-12.50"),
+            raw_data={"Popis": "McDonalds Prague"},
+        )
+
+        response = self.post_json(
+            "/api/transactions/recategorize/",
+            {"transaction_ids": [str(transaction_obj.id)]},
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(transaction_obj.description, "McDonalds Prague")
+        self.assertEqual(transaction_obj.subcategory, self.subcategory)
+
+    def test_uncategorized_suggestions_read_rows_with_their_import_mapping(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=CSVImport.objects.create(
+                bank_account=self.account, csv_mapping=self.mapping
+            ),
+            transaction_date="2026-01-02",
+            description="Coffee Shop",
+            amount=Decimal("-10.00"),
+            raw_data={"Description": "Coffee Shop", "Counterparty": ""},
+        )
+        self.account.default_csv_mapping = CSVMapping.objects.create(
+            name="Statement XML", file_format=ImportFileFormat.CAMT053
+        )
+        self.account.save()
+
+        payload = json_body(
+            self.client.get("/api/transactions/uncategorized-suggestions/")
+        )
+
+        self.assertEqual(payload["transaction_count"], 1)
+        self.assertEqual(
+            payload["suggestions"][0]["suggested_keyword"]["include_terms"],
+            ["Coffee Shop"],
+        )
 
     def test_uncategorized_suggestions_group_and_rank_current_filter_scope(self):
         Transaction.objects.create(

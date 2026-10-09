@@ -667,6 +667,16 @@ def sync_missing_exchange_rates(provider=None, default_currency=None):
     }
 
 
+def transaction_csv_mapping(transaction_obj):
+    """Return the mapping that imported the row, falling back to the account default."""
+    import_batch = transaction_obj.import_batch
+    if import_batch and import_batch.csv_mapping:
+        return import_batch.csv_mapping
+    if transaction_obj.bank_account:
+        return transaction_obj.bank_account.default_csv_mapping
+    return None
+
+
 def mapped_transaction_values_from_raw_data(transaction_obj, csv_mapping):
     raw_data = transaction_obj.raw_data
     if not isinstance(raw_data, dict) or not raw_data:
@@ -675,7 +685,10 @@ def mapped_transaction_values_from_raw_data(transaction_obj, csv_mapping):
     extractor = CSVRowExtractor(csv_mapping)
     values = {}
     for field_name in RECATEGORIZABLE_TRANSACTION_FIELDS:
-        if coerce_list(csv_mapping.get_column(field_name)):
+        columns = coerce_list(csv_mapping.get_column(field_name))
+        # A row from another file format (or from before a column rename) has none
+        # of the mapped columns, so its stored value is kept instead of blanked.
+        if any(str(column) in raw_data for column in columns):
             values[field_name] = extractor.get_value(raw_data, field_name)
     return values
 
@@ -1640,11 +1653,7 @@ def strict_categorization_text(transaction_data, csv_mapping):
 
 
 def uncategorized_suggestion_text(transaction_obj):
-    csv_mapping = (
-        transaction_obj.bank_account.default_csv_mapping
-        if transaction_obj.bank_account
-        else None
-    )
+    csv_mapping = transaction_csv_mapping(transaction_obj)
     if not csv_mapping:
         return ""
 
@@ -2159,7 +2168,9 @@ def recategorize_transactions(queryset, include_locked=False):
     }
 
     for transaction_obj in queryset.select_related(
-        "bank_account", "bank_account__default_csv_mapping"
+        "bank_account",
+        "bank_account__default_csv_mapping",
+        "import_batch__csv_mapping",
     ).prefetch_related("tags"):
         stats["processed"] += 1
         if transaction_obj.is_categorization_locked and not include_locked:
@@ -2170,11 +2181,7 @@ def recategorize_transactions(queryset, include_locked=False):
             )
             continue
 
-        csv_mapping = (
-            transaction_obj.bank_account.default_csv_mapping
-            if transaction_obj.bank_account
-            else None
-        )
+        csv_mapping = transaction_csv_mapping(transaction_obj)
         if not csv_mapping:
             stats["skipped_no_mapping"] += 1
             stats["skipped_transaction_ids"].append(str(transaction_obj.id))
