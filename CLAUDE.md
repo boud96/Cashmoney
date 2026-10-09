@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Cashmoney is a local-first personal finance app for Windows: a Django + SQLite backend serves a JSON API and a React (Vite) SPA, and an Electron shell packages both into an installable desktop app. Users import bank CSVs, auto-categorize transactions with keyword rules, and review spending on a dashboard. Everything runs on `127.0.0.1`; there are no accounts or cloud services.
 
-Session handoffs are in `.claude/handoffs/` (newest first). Older Codex-era handoffs and a security/quality review (`bad_practices_review_2026-06-30.md`) are in `ai_context/`.
+Session handoffs are in `.claude/handoffs/` (newest first). `.claude/notes/` holds finer product decisions, UI preferences and manual test checklists, and `.claude/reviews/bad_practices_review.md` tracks the security/quality backlog. The whole `.claude/` directory is gitignored, so these files exist only locally.
 
 ## Commands
 
