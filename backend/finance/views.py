@@ -68,6 +68,7 @@ from .services import (
     build_dashboard_summary,
     build_internal_transfer_candidates,
     build_uncategorized_suggestions,
+    categorization_raw_data_keys,
     detect_csv_columns,
     exchange_rate_status,
     fallback_currency_options,
@@ -1280,6 +1281,7 @@ class TransactionDetailView(JsonView):
                     request.GET.get("split_by_owners"), default=False
                 ),
                 default_currency=settings_obj.default_currency,
+                include_raw_data=False,
             )
         )
 
@@ -1291,12 +1293,16 @@ class TransactionDetailView(JsonView):
 class TransactionRawDataView(JsonView):
     def get(self, request, pk):
         transaction = get_object_or_404(
-            Transaction.objects.only("id", "raw_data"), id=pk
+            Transaction.objects.select_related(
+                "bank_account__default_csv_mapping", "import_batch__csv_mapping"
+            ),
+            id=pk,
         )
         return json_response(
             {
                 "id": str(transaction.id),
                 "raw_data": transaction.raw_data,
+                "categorization_keys": categorization_raw_data_keys(transaction),
             }
         )
 

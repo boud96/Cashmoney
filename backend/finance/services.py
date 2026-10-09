@@ -677,6 +677,21 @@ def transaction_csv_mapping(transaction_obj):
     return None
 
 
+def categorization_raw_data_keys(transaction_obj):
+    """Return the raw-data columns that feed keyword matching for the row."""
+    csv_mapping = transaction_csv_mapping(transaction_obj)
+    raw_data = transaction_obj.raw_data
+    if not csv_mapping or not isinstance(raw_data, dict):
+        return []
+    keys = []
+    for field_name in csv_mapping.get_categorization_fields():
+        for column in coerce_list(csv_mapping.get_column(field_name)):
+            column = str(column)
+            if column in raw_data and column not in keys:
+                keys.append(column)
+    return keys
+
+
 def mapped_transaction_values_from_raw_data(transaction_obj, csv_mapping):
     raw_data = transaction_obj.raw_data
     if not isinstance(raw_data, dict) or not raw_data:

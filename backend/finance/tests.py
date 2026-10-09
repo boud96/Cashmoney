@@ -1782,6 +1782,42 @@ class APITests(FinanceTestCase):
             ["Coffee Shop"],
         )
 
+    def test_raw_data_endpoint_highlights_columns_of_the_import_mapping(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=CSVImport.objects.create(
+                bank_account=self.account, csv_mapping=self.mapping
+            ),
+            transaction_date="2026-01-02",
+            description="Coffee Shop",
+            amount=Decimal("-10.00"),
+            raw_data={
+                "Description": "Coffee Shop",
+                "Counterparty": "Cafe",
+                "Amount": "-10",
+            },
+        )
+        self.account.default_csv_mapping = CSVMapping.objects.create(
+            name="Statement XML", file_format=ImportFileFormat.CAMT053
+        )
+        self.account.save()
+
+        payload = json_body(
+            self.client.get(f"/api/transactions/{transaction_obj.id}/raw-data/")
+        )
+        patched = json_body(
+            self.patch_json(
+                f"/api/transactions/{transaction_obj.id}/", {"my_note": "checked"}
+            )
+        )
+
+        self.assertEqual(payload["raw_data"]["Description"], "Coffee Shop")
+        self.assertEqual(
+            payload["categorization_keys"], ["Description", "Counterparty"]
+        )
+        self.assertNotIn("raw_data", patched)
+        self.assertTrue(patched["has_raw_data"])
+
     def test_uncategorized_suggestions_group_and_rank_current_filter_scope(self):
         Transaction.objects.create(
             bank_account=self.account,

@@ -1487,11 +1487,6 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
   const accountLookup = useMemo(() => new Map(refs.accounts.map((item) => [item.id, item.name])), [refs.accounts]);
-  const accountMappingLookup = useMemo(
-    () => new Map(refs.accounts.map((item) => [item.id, item.default_csv_mapping?.id || ""])),
-    [refs.accounts],
-  );
-  const mappingLookup = useMemo(() => new Map(refs.mappings.map((item) => [item.id, item])), [refs.mappings]);
   const filterSignature = useMemo(() => JSON.stringify(filters), [filters]);
 
   const rowData = useMemo(() => rows.map((row) => ({
@@ -1576,7 +1571,7 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
   }, [rawDataPopover]);
 
   const toggleRawDataPopover = useCallback(async (row, button) => {
-    if (!row?.id || (!row.has_raw_data && !row.raw_data)) {
+    if (!row?.id || !row.has_raw_data) {
       setRawDataPopover(null);
       return;
     }
@@ -1584,16 +1579,13 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
       setRawDataPopover(null);
       return;
     }
-    const mappingId = accountMappingLookup.get(row?.account_id || row?.bank_account?.id || "");
-    const mapping = mappingLookup.get(mappingId);
     const position = rawDataPopoverPosition(button.getBoundingClientRect());
-    let rawData = row.raw_data || rawDataCacheRef.current.get(row.id);
-    if (!rawData) {
+    let rawDataPayload = rawDataCacheRef.current.get(row.id);
+    if (!rawDataPayload) {
       setRawDataLoadingId(row.id);
       try {
-        const payload = await apiGet(`/transactions/${row.id}/raw-data/`);
-        rawData = payload.raw_data;
-        rawDataCacheRef.current.set(row.id, rawData);
+        rawDataPayload = await apiGet(`/transactions/${row.id}/raw-data/`);
+        rawDataCacheRef.current.set(row.id, rawDataPayload);
       } catch (error) {
         notify(error.message);
         return;
@@ -1601,7 +1593,11 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
         setRawDataLoadingId((current) => (current === row.id ? "" : current));
       }
     }
-    const entries = rawDataEntries(rawData, hideAmounts, categorizationRawDataKeys(mapping));
+    const entries = rawDataEntries(
+      rawDataPayload.raw_data,
+      hideAmounts,
+      new Set(rawDataPayload.categorization_keys || []),
+    );
     if (!entries.length) {
       setRawDataPopover(null);
       return;
@@ -1611,14 +1607,14 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
       position,
       rowId: row.id,
     });
-  }, [accountMappingLookup, hideAmounts, mappingLookup, notify, rawDataPopover]);
+  }, [hideAmounts, notify, rawDataPopover]);
 
   const columnDefs = useMemo(() => [
     {
       cellClass: "raw-data-grid-cell",
       cellRenderer: (params) => (
         <RawDataButton
-          hasRawData={Boolean(params.data?.has_raw_data || params.data?.raw_data)}
+          hasRawData={Boolean(params.data?.has_raw_data)}
           loading={rawDataLoadingId === params.data?.id}
           onToggle={(button) => toggleRawDataPopover(params.data, button)}
         />
@@ -2500,28 +2496,6 @@ function rawDataEntries(rawData, hideAmounts, highlightedKeys = new Set()) {
     key: String(key),
     value: formatRawDataValue(key, value, hideAmounts),
   }));
-}
-
-function categorizationRawDataKeys(mapping) {
-  const highlightedKeys = new Set();
-  if (!mapping?.column_map || !Array.isArray(mapping.categorization_fields)) {
-    return highlightedKeys;
-  }
-  mapping.categorization_fields.forEach((field) => {
-    coerceRawDataColumns(mapping.column_map[field]).forEach((column) => {
-      if (column) {
-        highlightedKeys.add(column);
-      }
-    });
-  });
-  return highlightedKeys;
-}
-
-function coerceRawDataColumns(value) {
-  if (!value) {
-    return [];
-  }
-  return Array.isArray(value) ? value.map((item) => String(item)) : [String(value)];
 }
 
 function formatRawDataValue(key, value, hideAmounts) {
