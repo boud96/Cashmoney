@@ -24,6 +24,7 @@ import {
   formatNumber,
   getStoredFilterPresets,
   normalizeName,
+  normalizeTagSelection,
   storeFilterPresets,
   subLabel,
   subtractRelativeDate,
@@ -255,9 +256,11 @@ export default function DashboardPage({
   }
 
   function loadFilterPreset(preset) {
+    const presetFilters = cloneFilters(preset.filters);
     setFilters((current) => ({
       ...current,
-      ...cloneFilters(preset.filters),
+      ...presetFilters,
+      tag: normalizeTagSelection(presetFilters.tag, refs.tags),
     }));
   }
 
@@ -727,7 +730,8 @@ export default function DashboardPage({
                   label="Tag"
                   name="tag"
                   onChange={onFilterChange}
-                  options={[[UNASSIGNED, "No tags"], ...refs.tags.map((item) => [item.id, item.name])]}
+                  optional
+                  options={[[UNASSIGNED, "Untagged"], ...refs.tags.map((item) => [item.id, item.name])]}
                   value={filters.tag}
                 />
               </div>
@@ -1907,11 +1911,8 @@ function checklistSelectionMatches(selection, value) {
 }
 
 function tagSelectionMatches(selection, tags) {
-  if (!Array.isArray(selection)) {
+  if (!Array.isArray(selection) || !selection.length) {
     return true;
-  }
-  if (!selection.length) {
-    return false;
   }
   if (!tags.length) {
     return selection.includes(UNASSIGNED);
@@ -2329,7 +2330,7 @@ function DateInput({ label, name, onChange, value }) {
   );
 }
 
-function CheckboxFilterPanel({ className = "", label, name, onChange, options, searchable = true, value }) {
+function CheckboxFilterPanel({ className = "", label, name, onChange, optional = false, options, searchable = true, value }) {
   const [query, setQuery] = useState("");
   const selectedValues = value || [];
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
@@ -2353,7 +2354,7 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, options, s
     <div className={`checkbox-filter-panel prototype-filter ${className}`.trim()}>
       <div className="prototype-filter-header">
         <span className="filter-label">{label}</span>
-        <span className="filter-count">{selectedValues.length ? `${selectedValues.length} selected` : "None"}</span>
+        <span className="filter-count">{selectedValues.length ? `${selectedValues.length} selected` : optional ? "Any" : "None"}</span>
       </div>
       <div className={`prototype-filter-tools${searchable ? "" : " no-search"}`}>
         {searchable && (
@@ -2365,7 +2366,9 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, options, s
           />
         )}
         <div className="prototype-filter-buttons">
-          <button className="filter-clear" disabled={!canSelectAll} onClick={() => onChange(name, options.map(([optionValue]) => optionValue))} type="button">Select all</button>
+          {optional ? null : (
+            <button className="filter-clear" disabled={!canSelectAll} onClick={() => onChange(name, options.map(([optionValue]) => optionValue))} type="button">Select all</button>
+          )}
           <button className="filter-clear" disabled={selectedValues.length === 0} onClick={() => onChange(name, [])} type="button">Clear</button>
         </div>
       </div>

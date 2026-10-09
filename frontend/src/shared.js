@@ -8,6 +8,7 @@ export const CHECKLIST_FILTER_KEYS = [
   "want_need_investment",
   "tag",
 ];
+export const OPTIONAL_CHECKLIST_FILTER_KEYS = ["tag"];
 export const pages = {
   dashboard: ["Dashboard", "Monthly flow, category mix, and transaction review."],
   import: ["Import", "Load bank statement CSV files into the local transaction database."],
@@ -173,9 +174,15 @@ export function initialChecklistFilters(refs) {
     category: [UNASSIGNED, ...refs.categories.map((item) => item.id)],
     direction: ["income", "expense"],
     subcategory: [UNASSIGNED, ...refs.subcategories.map((item) => item.id)],
-    tag: [UNASSIGNED, ...refs.tags.map((item) => item.id)],
+    tag: [],
     want_need_investment: [...wniOptions.map(([value]) => value), UNASSIGNED],
   };
+}
+
+export function normalizeTagSelection(selection, tags) {
+  const values = selection || [];
+  const coversAllTags = values.includes(UNASSIGNED) && tags.every((tag) => values.includes(tag.id));
+  return coversAllTags ? [] : values;
 }
 
 export function cloneFilters(filters) {
@@ -228,7 +235,11 @@ export function buildFilterParams(filters) {
   Object.entries(filters).forEach(([key, value]) => {
     if (["include_ignored", "include_locked", "split_by_owners"].includes(key)) return;
     if (CHECKLIST_FILTER_KEYS.includes(key)) {
-      params[key] = Array.isArray(value) && value.length ? value.join(",") : NO_SELECTION;
+      if (Array.isArray(value) && value.length) {
+        params[key] = value.join(",");
+      } else if (!OPTIONAL_CHECKLIST_FILTER_KEYS.includes(key)) {
+        params[key] = NO_SELECTION;
+      }
       return;
     }
     if (Array.isArray(value) ? value.length : value) {
