@@ -179,6 +179,33 @@ export function initialChecklistFilters(refs) {
   };
 }
 
+const REFERENCE_CHECKLISTS = [
+  ["bank_account", "accounts"],
+  ["category", "categories"],
+  ["subcategory", "subcategories"],
+  ["tag", "tags"],
+];
+
+export function syncChecklistFilters(filters, previousRefs, nextRefs) {
+  let changed = false;
+  const next = { ...filters };
+  REFERENCE_CHECKLISTS.forEach(([filterKey, refKey]) => {
+    const previousIds = new Set(previousRefs[refKey].map((item) => item.id));
+    const nextIds = nextRefs[refKey].map((item) => item.id);
+    const nextIdSet = new Set(nextIds);
+    const selection = filters[filterKey] || [];
+    const kept = selection.filter((value) => value === UNASSIGNED || nextIdSet.has(value));
+    const added = OPTIONAL_CHECKLIST_FILTER_KEYS.includes(filterKey)
+      ? []
+      : nextIds.filter((id) => !previousIds.has(id));
+    if (kept.length !== selection.length || added.length) {
+      next[filterKey] = [...kept, ...added];
+      changed = true;
+    }
+  });
+  return changed ? next : filters;
+}
+
 export function normalizeTagSelection(selection, tags) {
   const values = selection || [];
   const coversAllTags = values.includes(UNASSIGNED) && tags.every((tag) => values.includes(tag.id));
