@@ -176,6 +176,5 @@ backend/dist/
 backend/finance/static/finance/react/
 desktop/dist/
 
-# Claude Code local files (handoffs, personal settings)
-.claude/handoffs/
-.claude/settings.local.json
+# Claude Code local files (handoffs, notes, reviews, settings)
+.claude/

@@ -735,7 +735,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
                 <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Account name" required /></FormField>
                 <FormField label="Account Number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Optional account number" /></FormField>
                 <FormField label="Bank"><input defaultValue={editingItem?.bank_name || ""} name="bank_name" placeholder="Bank name" /></FormField>
-                <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" placeholder="CZK" required /></FormField>
+                <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" pattern="[A-Za-z]{3}" placeholder="CZK" required title="Three-letter currency code, e.g. CZK or EUR" /></FormField>
                 <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" required type="number" /></FormField>
                 <FormField label="Default CSV Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
               </div>

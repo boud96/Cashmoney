@@ -68,6 +68,7 @@ from .services import (
     build_dashboard_summary,
     build_internal_transfer_candidates,
     build_uncategorized_suggestions,
+    categorization_raw_data_keys,
     detect_csv_columns,
     exchange_rate_status,
     fallback_currency_options,
@@ -182,7 +183,7 @@ def clean_currency_code(value, field_name, default="CZK"):
         return normalize_currency_code(value or default)
     except ValueError as exc:
         raise APIValidationError(
-            "Invalid currency",
+            str(exc),
             {"field": field_name, "expected": "Three-letter currency code"},
         ) from exc
 
@@ -350,8 +351,15 @@ class AppShellView(TemplateView):
 
 
 class JsonView(View):
+    # Writes run in one transaction, so a request that fails part-way saves nothing.
+    # Views that manage the connection themselves or call the network opt out.
+    atomic_writes = True
+
     def dispatch(self, request, *args, **kwargs):
         try:
+            if self.atomic_writes and request.method not in ("GET", "HEAD", "OPTIONS"):
+                with transaction.atomic():
+                    return super().dispatch(request, *args, **kwargs)
             return super().dispatch(request, *args, **kwargs)
         except json.JSONDecodeError:
             return json_response({"error": "Invalid JSON body"}, status=400)
@@ -429,6 +437,8 @@ class ExchangeRateCurrenciesView(JsonView):
 
 
 class ExchangeRateSyncView(JsonView):
+    atomic_writes = False  # calls the rate provider over the network
+
     def post(self, request):
         try:
             return json_response(sync_missing_exchange_rates())
@@ -491,7 +501,7 @@ class BankAccountCollectionView(JsonView):
             name=clean_text(require_field(data, "name"), "name", required=True),
             account_number=clean_text(data.get("account_number"), "account_number"),
             bank_name=clean_text(data.get("bank_name"), "bank_name"),
-            currency=clean_text(data.get("currency", "CZK"), "currency")[:3].upper(),
+            currency=clean_currency_code(data.get("currency"), "currency"),
             owners=clean_int(data.get("owners"), "owners", default=1, minimum=1),
             default_csv_mapping=optional_object(
                 CSVMapping, data.get("default_csv_mapping_id"), "default_csv_mapping_id"
@@ -516,9 +526,7 @@ class BankAccountDetailView(JsonView):
                     ),
                 )
         if "currency" in data:
-            account.currency = clean_text(data["currency"], "currency", required=True)[
-                :3
-            ].upper()
+            account.currency = clean_currency_code(data["currency"], "currency")
         if "owners" in data:
             account.owners = clean_int(data["owners"], "owners", minimum=1)
         if "default_csv_mapping_id" in data:
@@ -571,9 +579,9 @@ class CSVMappingCollectionView(JsonView):
                 "",
                 allow_blank=True,
             ),
-            default_currency=clean_text(
-                data.get("default_currency", "CZK"), "default_currency", required=True
-            )[:3].upper(),
+            default_currency=clean_currency_code(
+                data.get("default_currency"), "default_currency"
+            ),
             column_map=clean_dict(data.get("column_map"), "column_map"),
             categorization_fields=clean_list(
                 data.get("categorization_fields"), "categorization_fields"
@@ -617,11 +625,9 @@ class CSVMappingColumnDetectionView(JsonView):
                 "",
                 allow_blank=True,
             ),
-            default_currency=clean_text(
-                request.POST.get("default_currency", "CZK"),
-                "default_currency",
-                required=True,
-            )[:3].upper(),
+            default_currency=clean_currency_code(
+                request.POST.get("default_currency"), "default_currency"
+            ),
         )
         sample_size = min(
             clean_int(
@@ -689,6 +695,8 @@ class CSVMappingDetailView(JsonView):
                         field,
                         clean_csv_char(data[field], field, "", allow_blank=True),
                     )
+                elif field == "default_currency":
+                    setattr(mapping, field, clean_currency_code(data[field], field))
                 else:
                     setattr(
                         mapping, field, clean_text(data[field], field, field == "name")
@@ -1114,6 +1122,7 @@ class UncategorizedSuggestionView(JsonView):
             .select_related(
                 "bank_account",
                 "bank_account__default_csv_mapping",
+                "import_batch__csv_mapping",
                 "subcategory",
                 "subcategory__category",
             )
@@ -1279,6 +1288,7 @@ class TransactionDetailView(JsonView):
                     request.GET.get("split_by_owners"), default=False
                 ),
                 default_currency=settings_obj.default_currency,
+                include_raw_data=False,
             )
         )
 
@@ -1290,12 +1300,16 @@ class TransactionDetailView(JsonView):
 class TransactionRawDataView(JsonView):
     def get(self, request, pk):
         transaction = get_object_or_404(
-            Transaction.objects.only("id", "raw_data"), id=pk
+            Transaction.objects.select_related(
+                "bank_account__default_csv_mapping", "import_batch__csv_mapping"
+            ),
+            id=pk,
         )
         return json_response(
             {
                 "id": str(transaction.id),
                 "raw_data": transaction.raw_data,
+                "categorization_keys": categorization_raw_data_keys(transaction),
             }
         )
 
@@ -1520,6 +1534,8 @@ class ImportPreviewView(JsonView):
 
 
 class ImportTransactionsView(JsonView):
+    atomic_writes = False  # rows commit one by one; the rate sync calls the network
+
     def get(self, request):
         limit = min(
             clean_int(request.GET.get("limit"), "limit", default=8, minimum=1), 25
@@ -1547,7 +1563,8 @@ class ImportTransactionsView(JsonView):
             try:
                 exchange_rate_sync.update(sync_missing_exchange_rates())
                 exchange_rate_sync["synced"] = True
-            except ExchangeRateProviderError as exc:
+            # The rows are already saved, so a bad stored currency must not fail the import.
+            except (ExchangeRateProviderError, ValueError) as exc:
                 exchange_rate_sync.update(
                     {
                         "synced": False,
@@ -1961,6 +1978,8 @@ class MaintenanceSavedBackupExportView(JsonView):
 
 
 class MaintenanceSavedBackupRestoreView(JsonView):
+    atomic_writes = False  # replaces the database and closes the connection
+
     def post(self, request, filename):
         if connection.vendor != "sqlite":
             raise APIValidationError(
@@ -1995,6 +2014,8 @@ class MaintenanceSavedBackupView(JsonView):
 
 
 class MaintenanceDatabaseRestoreView(JsonView):
+    atomic_writes = False  # replaces the database and closes the connection
+
     def post(self, request):
         if connection.vendor != "sqlite":
             raise APIValidationError(

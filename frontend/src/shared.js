@@ -8,6 +8,7 @@ export const CHECKLIST_FILTER_KEYS = [
   "want_need_investment",
   "tag",
 ];
+export const OPTIONAL_CHECKLIST_FILTER_KEYS = ["tag"];
 export const pages = {
   dashboard: ["Dashboard", "Monthly flow, category mix, and transaction review."],
   import: ["Import", "Load bank statement CSV files into the local transaction database."],
@@ -173,9 +174,42 @@ export function initialChecklistFilters(refs) {
     category: [UNASSIGNED, ...refs.categories.map((item) => item.id)],
     direction: ["income", "expense"],
     subcategory: [UNASSIGNED, ...refs.subcategories.map((item) => item.id)],
-    tag: [UNASSIGNED, ...refs.tags.map((item) => item.id)],
+    tag: [],
     want_need_investment: [...wniOptions.map(([value]) => value), UNASSIGNED],
   };
+}
+
+const REFERENCE_CHECKLISTS = [
+  ["bank_account", "accounts"],
+  ["category", "categories"],
+  ["subcategory", "subcategories"],
+  ["tag", "tags"],
+];
+
+export function syncChecklistFilters(filters, previousRefs, nextRefs) {
+  let changed = false;
+  const next = { ...filters };
+  REFERENCE_CHECKLISTS.forEach(([filterKey, refKey]) => {
+    const previousIds = new Set(previousRefs[refKey].map((item) => item.id));
+    const nextIds = nextRefs[refKey].map((item) => item.id);
+    const nextIdSet = new Set(nextIds);
+    const selection = filters[filterKey] || [];
+    const kept = selection.filter((value) => value === UNASSIGNED || nextIdSet.has(value));
+    const added = OPTIONAL_CHECKLIST_FILTER_KEYS.includes(filterKey)
+      ? []
+      : nextIds.filter((id) => !previousIds.has(id));
+    if (kept.length !== selection.length || added.length) {
+      next[filterKey] = [...kept, ...added];
+      changed = true;
+    }
+  });
+  return changed ? next : filters;
+}
+
+export function normalizeTagSelection(selection, tags) {
+  const values = selection || [];
+  const coversAllTags = values.includes(UNASSIGNED) && tags.every((tag) => values.includes(tag.id));
+  return coversAllTags ? [] : values;
 }
 
 export function cloneFilters(filters) {
@@ -228,7 +262,11 @@ export function buildFilterParams(filters) {
   Object.entries(filters).forEach(([key, value]) => {
     if (["include_ignored", "include_locked", "split_by_owners"].includes(key)) return;
     if (CHECKLIST_FILTER_KEYS.includes(key)) {
-      params[key] = Array.isArray(value) && value.length ? value.join(",") : NO_SELECTION;
+      if (Array.isArray(value) && value.length) {
+        params[key] = value.join(",");
+      } else if (!OPTIONAL_CHECKLIST_FILTER_KEYS.includes(key)) {
+        params[key] = NO_SELECTION;
+      }
       return;
     }
     if (Array.isArray(value) ? value.length : value) {

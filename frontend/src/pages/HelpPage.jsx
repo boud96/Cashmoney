@@ -21,7 +21,7 @@ const conceptItems = [
 const troubleshootingItems = [
   ["Import button is disabled", "Choose a CSV file, select a bank account, make sure that account has a default CSV mapping, then run Preview Import first."],
   ["CSV preview has errors", "Check the CSV mapping delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
-  ["No transactions are shown", "A checklist filter with no selected items means show nothing. Use Select all or load a saved filter."],
+  ["No transactions are shown", "A checklist filter with no selected items means show nothing (except Tag, where it means any tag). Use Select all or load a saved filter."],
   ["A row did not recategorize", "It may be locked. Enable Include locked before recategorizing if you intentionally want to reset locked rows."],
   ["Internal transfers are not detected", "Use Find Transfers from Dashboard Actions, increase the date offset if bank posting dates differ, and check that both account statements have been imported."],
   ["Charts look wrong", "Review date range, ignored/locked inclusion, direction, account, category, subcategory, WNI, tag, and saved filter state."],
@@ -123,6 +123,7 @@ export default function HelpPage() {
             <li><strong>Date range:</strong> From and To use the same YYYY-MM-DD format as the table. The relative range controls can quickly set a recent period.</li>
             <li><strong>Saved filters:</strong> save the current filter state under a name and load it later.</li>
             <li><strong>Checklist filters:</strong> empty means show nothing. On startup, all checklist options are selected.</li>
+            <li><strong>Tag:</strong> starts empty, which means any tag. Select tags to show only transactions with at least one of them, or Untagged for transactions without tags.</li>
             <li><strong>Category/Subcategory/WNI:</strong> subcategory options narrow automatically when categories are selected.</li>
             <li><strong>Direction:</strong> Incomes are positive transactions and Expenses are negative transactions.</li>
             <li><strong>Ignored / Locked:</strong> control whether those rows appear in the filtered data.</li>

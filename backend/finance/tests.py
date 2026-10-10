@@ -16,7 +16,7 @@ from django.db import IntegrityError, connection, transaction
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
-from .constants import Direction, WantNeedInvestment
+from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .models import (
     BankAccount,
     CSVImport,
@@ -451,6 +451,126 @@ class CSVImportServiceTests(FinanceTestCase):
         self.assertEqual(csv_import.error_count, 1)
         self.assertEqual(report["skipped"]["errors"][0]["line"], 2)
 
+    def test_row_currencies_are_validated(self):
+        csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(
+                "ID,Date,Description,Amount,Currency\n"
+                "tx-1,2026-01-02,Bakery,-40,Kč\n"
+                "tx-2,2026-01-02,Hotel,-90,eur\n"
+                "tx-3,2026-01-02,Unknown,-10,Koruna\n"
+            )
+        )
+
+        self.assertEqual(csv_import.created_count, 2)
+        self.assertEqual(
+            dict(Transaction.objects.values_list("original_id", "currency")),
+            {"tx-1": "CZK", "tx-2": "EUR"},
+        )
+        self.assertEqual(report["skipped"]["errors"][0]["line"], 4)
+        self.assertIn("Koruna", report["skipped"]["errors"][0]["error"])
+
+    def test_identical_rows_without_ids_all_import_once(self):
+        body = (
+            "Date,Description,Amount\n"
+            "2026-10-01,Bus ticket,-30\n"
+            "2026-10-01,Bus ticket,-30\n"
+        )
+
+        _csv_import, first = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(body)
+        )
+        _csv_import, second = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(body)
+        )
+
+        self.assertEqual(first["created"]["count"], 2)
+        self.assertEqual(first["skipped"]["duplicates"], [])
+        self.assertEqual(second["created"]["count"], 0)
+        self.assertEqual(len(second["skipped"]["duplicates"]), 2)
+        self.assertEqual(
+            {
+                duplicate["duplicate_transaction"]["id"]
+                for duplicate in second["skipped"]["duplicates"]
+            },
+            {str(pk) for pk in Transaction.objects.values_list("id", flat=True)},
+        )
+
+    def test_overlapping_file_without_ids_adds_only_the_extra_identical_rows(self):
+        header = "Date,Description,Amount\n"
+        row = "2026-10-01,Bus ticket,-30\n"
+        CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(header + row)
+        )
+
+        _csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(header + row * 3)
+        )
+
+        self.assertEqual(report["created"]["count"], 2)
+        self.assertEqual(len(report["skipped"]["duplicates"]), 1)
+        self.assertEqual(Transaction.objects.count(), 3)
+
+    def test_same_original_id_twice_in_one_file_imports_once(self):
+        _csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(
+                "ID,Date,Description,Amount\n"
+                "tx-1,2026-10-01,Bus ticket,-30\n"
+                "tx-1,2026-10-01,Bus ticket,-30\n"
+            )
+        )
+
+        self.assertEqual(report["created"]["count"], 1)
+        self.assertEqual(len(report["skipped"]["duplicates"]), 1)
+
+    def test_preview_flags_identical_rows_like_the_import(self):
+        header = "Date,Description,Amount\n"
+        row = "2026-10-01,Bus ticket,-30\n"
+        empty_db_preview = CSVImportService(self.mapping, self.account).preview_file(
+            self.csv_file(header + row * 2)
+        )
+        CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(header + row)
+        )
+
+        preview = CSVImportService(self.mapping, self.account).preview_file(
+            self.csv_file(header + row * 2)
+        )
+        _csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(header + row * 2)
+        )
+
+        self.assertEqual(empty_db_preview["summary"]["duplicates"], 0)
+        flagged = [entry["line"] for entry in preview["rows"] if entry["duplicate"]]
+        skipped = [entry["line"] for entry in report["skipped"]["duplicates"]]
+        self.assertEqual(len(flagged), 1)
+        self.assertEqual(flagged, skipped)
+        self.assertEqual(preview["summary"]["duplicates"], 1)
+        self.assertEqual(report["created"]["count"], 1)
+
+    def test_preview_summary_covers_rows_beyond_the_sample(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-10-01",
+            description="Bus ticket",
+            amount=Decimal("-30.00"),
+        )
+
+        preview = CSVImportService(self.mapping, self.account).preview_file(
+            self.csv_file(
+                "Date,Description,Amount\n"
+                "2026-09-30,Lunch,-120\n"
+                "2026-10-01,Bus ticket,-30\n"
+                "not-a-date,Broken,-1\n"
+            ),
+            sample_size=1,
+        )
+
+        self.assertEqual(preview["loaded"], 3)
+        self.assertEqual(len(preview["rows"]), 1)
+        self.assertEqual(preview["summary"]["valid"], 2)
+        self.assertEqual(preview["summary"]["duplicates"], 1)
+        self.assertEqual(preview["summary"]["errors"], 1)
+
 
 class CategorizationTests(FinanceTestCase):
     def test_higher_priority_keyword_wins(self):
@@ -581,6 +701,54 @@ class APITests(FinanceTestCase):
         payload = json_body(response)
         self.assertEqual(payload["error"], "Missing required field")
         self.assertEqual(payload["details"]["field"], "name")
+
+    def test_account_and_mapping_currencies_are_validated(self):
+        created = self.post_json(
+            "/api/bank-accounts/", {"name": "Wallet", "currency": "Kč"}
+        )
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(json_body(created)["currency"], "CZK")
+
+        for path, payload in [
+            ("/api/bank-accounts/", {"name": "Bad", "currency": "Czech"}),
+            ("/api/csv-mappings/", {"name": "Bad", "default_currency": "€uro"}),
+        ]:
+            response = self.post_json(path, payload)
+            self.assertEqual(response.status_code, 400, path)
+            self.assertIn("three-letter code", json_body(response)["error"])
+
+        account_patch = self.patch_json(
+            f"/api/bank-accounts/{self.account.id}/", {"currency": "K"}
+        )
+        mapping_patch = self.patch_json(
+            f"/api/csv-mappings/{self.mapping.id}/", {"default_currency": "Kčs"}
+        )
+        self.assertEqual(account_patch.status_code, 400)
+        self.assertEqual(mapping_patch.status_code, 400)
+        self.account.refresh_from_db()
+        self.mapping.refresh_from_db()
+        self.assertEqual(self.account.currency, "CZK")
+        self.assertEqual(self.mapping.default_currency, "CZK")
+
+    def test_import_succeeds_when_rate_sync_rejects_a_currency(self):
+        with patch("finance.views.sync_missing_exchange_rates") as sync_rates:
+            sync_rates.side_effect = ValueError("Currency 'KČ' must be a code.")
+            response = self.client.post(
+                "/api/imports/",
+                {
+                    "bank_account_id": str(self.account.id),
+                    "csv_mapping_id": str(self.mapping.id),
+                    "csv_file": self.csv_file(
+                        "ID,Date,Description,Amount,Currency\n"
+                        "api-1,2026-01-02,Lunch,-12.50,CZK\n"
+                    ),
+                },
+            )
+
+        payload = json_body(response)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(payload["report"]["created"]["count"], 1)
+        self.assertFalse(payload["exchange_rate_sync"]["synced"])
 
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)
@@ -1661,6 +1829,69 @@ class APITests(FinanceTestCase):
         self.assertEqual(override_outgoing.subcategory, override_subcategory)
         self.assertEqual(override_incoming.subcategory, override_subcategory)
 
+    def test_recategorize_with_locked_rows_keeps_matched_transfers_ignored(self):
+        self.keyword("Transfers", ["transfer"])
+        transfer_subcategory = Subcategory.objects.create(
+            name="Internal Transfer", category=self.category
+        )
+        savings_account = BankAccount.objects.create(
+            name="Savings", default_csv_mapping=self.mapping
+        )
+        legs = [
+            Transaction.objects.create(
+                bank_account=account,
+                transaction_date="2026-01-02",
+                description="Transfer",
+                amount=Decimal(amount),
+                is_ignored=True,
+                is_categorization_locked=True,
+                subcategory=transfer_subcategory,
+            )
+            for account, amount in [(self.account, "-100"), (savings_account, "100")]
+        ]
+        InternalTransferMatch.objects.create(
+            outgoing_transaction=legs[0], incoming_transaction=legs[1]
+        )
+
+        response = self.post_json(
+            "/api/transactions/recategorize/"
+            "?date_from=2026-01-01&include_ignored=true&include_locked=true",
+            {"include_locked": True},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json_body(response)["skipped_locked"], 2)
+        for leg in legs:
+            leg.refresh_from_db()
+            self.assertTrue(leg.is_ignored)
+            self.assertTrue(leg.is_categorization_locked)
+            self.assertEqual(leg.subcategory, transfer_subcategory)
+
+    def test_rejected_writes_save_nothing(self):
+        missing_tag = "00000000-0000-0000-0000-000000000000"
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            amount=Decimal("-120.00"),
+        )
+
+        patch_response = self.patch_json(
+            f"/api/transactions/{transaction_obj.id}/",
+            {"subcategory_id": str(self.subcategory.id), "tag_ids": [missing_tag]},
+        )
+        keyword_response = self.post_json(
+            "/api/keywords/",
+            {"name": "Lunch", "include_terms": ["lunch"], "tag_ids": [missing_tag]},
+        )
+
+        self.assertEqual(patch_response.status_code, 400)
+        self.assertEqual(keyword_response.status_code, 400)
+        transaction_obj.refresh_from_db()
+        self.assertIsNone(transaction_obj.subcategory)
+        self.assertFalse(transaction_obj.is_categorization_locked)
+        self.assertFalse(Keyword.objects.exists())
+
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(
@@ -1688,6 +1919,135 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["updated"], 1)
         self.assertEqual(transaction_obj.description, "McDonalds Prague")
         self.assertEqual(transaction_obj.subcategory, self.subcategory)
+
+    def test_recategorize_reads_each_row_with_its_import_mapping(self):
+        self.keyword("McDonalds", ["mcdonald"])
+        xml_mapping = CSVMapping.objects.create(
+            name="Statement XML", file_format=ImportFileFormat.CAMT053
+        )
+        csv_row = Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=CSVImport.objects.create(
+                bank_account=self.account, csv_mapping=self.mapping
+            ),
+            transaction_date="2026-01-02",
+            description="McDonalds Prague",
+            counterparty_name="McDonalds",
+            amount=Decimal("-12.50"),
+            raw_data={"Description": "McDonalds Prague", "Counterparty": "McDonalds"},
+        )
+        xml_row = Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=CSVImport.objects.create(
+                bank_account=self.account, csv_mapping=xml_mapping
+            ),
+            transaction_date="2026-02-02",
+            description="McDonalds Brno",
+            counterparty_name="McDonalds",
+            amount=Decimal("-9.90"),
+            raw_data={
+                "description": "McDonalds Brno",
+                "counterparty_name": "McDonalds",
+            },
+        )
+
+        for default_mapping in [xml_mapping, self.mapping]:
+            self.account.default_csv_mapping = default_mapping
+            self.account.save()
+
+            response = self.post_json("/api/transactions/recategorize/", {})
+
+            self.assertEqual(response.status_code, 200)
+            for row, description in [
+                (csv_row, "McDonalds Prague"),
+                (xml_row, "McDonalds Brno"),
+            ]:
+                row.refresh_from_db()
+                self.assertEqual(row.description, description)
+                self.assertEqual(row.counterparty_name, "McDonalds")
+                self.assertEqual(row.subcategory, self.subcategory)
+
+    def test_recategorize_keeps_fields_whose_columns_are_missing_from_raw_data(self):
+        self.keyword("McDonalds", ["mcdonald"])
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="McDonalds Prague",
+            amount=Decimal("-12.50"),
+            raw_data={"Popis": "McDonalds Prague"},
+        )
+
+        response = self.post_json(
+            "/api/transactions/recategorize/",
+            {"transaction_ids": [str(transaction_obj.id)]},
+        )
+        transaction_obj.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(transaction_obj.description, "McDonalds Prague")
+        self.assertEqual(transaction_obj.subcategory, self.subcategory)
+
+    def test_uncategorized_suggestions_read_rows_with_their_import_mapping(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=CSVImport.objects.create(
+                bank_account=self.account, csv_mapping=self.mapping
+            ),
+            transaction_date="2026-01-02",
+            description="Coffee Shop",
+            amount=Decimal("-10.00"),
+            raw_data={"Description": "Coffee Shop", "Counterparty": ""},
+        )
+        self.account.default_csv_mapping = CSVMapping.objects.create(
+            name="Statement XML", file_format=ImportFileFormat.CAMT053
+        )
+        self.account.save()
+
+        payload = json_body(
+            self.client.get("/api/transactions/uncategorized-suggestions/")
+        )
+
+        self.assertEqual(payload["transaction_count"], 1)
+        self.assertEqual(
+            payload["suggestions"][0]["suggested_keyword"]["include_terms"],
+            ["Coffee Shop"],
+        )
+
+    def test_raw_data_endpoint_highlights_columns_of_the_import_mapping(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            import_batch=CSVImport.objects.create(
+                bank_account=self.account, csv_mapping=self.mapping
+            ),
+            transaction_date="2026-01-02",
+            description="Coffee Shop",
+            amount=Decimal("-10.00"),
+            raw_data={
+                "Description": "Coffee Shop",
+                "Counterparty": "Cafe",
+                "Amount": "-10",
+            },
+        )
+        self.account.default_csv_mapping = CSVMapping.objects.create(
+            name="Statement XML", file_format=ImportFileFormat.CAMT053
+        )
+        self.account.save()
+
+        payload = json_body(
+            self.client.get(f"/api/transactions/{transaction_obj.id}/raw-data/")
+        )
+        patched = json_body(
+            self.patch_json(
+                f"/api/transactions/{transaction_obj.id}/", {"my_note": "checked"}
+            )
+        )
+
+        self.assertEqual(payload["raw_data"]["Description"], "Coffee Shop")
+        self.assertEqual(
+            payload["categorization_keys"], ["Description", "Counterparty"]
+        )
+        self.assertNotIn("raw_data", patched)
+        self.assertTrue(patched["has_raw_data"])
 
     def test_uncategorized_suggestions_group_and_rank_current_filter_scope(self):
         Transaction.objects.create(

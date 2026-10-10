@@ -19,6 +19,7 @@ import {
   initialChecklistFilters,
   normalizeHexColor,
   pages,
+  syncChecklistFilters,
   todayInputValue,
 } from "./shared.js";
 
@@ -61,7 +62,7 @@ export default function App() {
     available_headers: [],
     detected: null,
   });
-  const filterSelectionsInitialized = useRef(false);
+  const loadedFilterRefs = useRef(null);
   const confirmationResolver = useRef(null);
   const dashboardLoadSequence = useRef(0);
   const dashboardSummarySequence = useRef(0);
@@ -111,14 +112,14 @@ export default function App() {
       apiGet("/settings/"),
     ]);
     const nextRefs = { accounts, mappings, categories, subcategories, tags, keywords, settings };
+    const previousRefs = loadedFilterRefs.current;
+    loadedFilterRefs.current = nextRefs;
     setRefs(nextRefs);
-    if (!filterSelectionsInitialized.current) {
-      filterSelectionsInitialized.current = true;
-      setFilters((current) => ({
-        ...current,
-        ...initialChecklistFilters(nextRefs),
-      }));
-    }
+    setFilters((current) => (
+      previousRefs
+        ? syncChecklistFilters(current, previousRefs, nextRefs)
+        : { ...current, ...initialChecklistFilters(nextRefs) }
+    ));
   }, []);
 
   const loadFilterDefaults = useCallback(async () => {

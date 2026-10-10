@@ -127,10 +127,14 @@ def coerce_list(value):
     return [value]
 
 
+CURRENCY_ALIASES = {"KČ": "CZK", "KC": "CZK", "€": "EUR"}
+
+
 def normalize_currency_code(value, default="CZK"):
-    currency = re.sub(r"[^A-Za-z]", "", str(value or default)).upper()[:3]
-    if len(currency) != 3:
-        raise ValueError("Currency must be a three-letter code.")
+    raw = str(value or default).strip()
+    currency = CURRENCY_ALIASES.get(raw.upper(), raw.upper())
+    if not re.fullmatch(r"[A-Z]{3}", currency):
+        raise ValueError(f"Currency '{raw}' must be a three-letter code.")
     return currency
 
 
@@ -667,6 +671,31 @@ def sync_missing_exchange_rates(provider=None, default_currency=None):
     }
 
 
+def transaction_csv_mapping(transaction_obj):
+    """Return the mapping that imported the row, falling back to the account default."""
+    import_batch = transaction_obj.import_batch
+    if import_batch and import_batch.csv_mapping:
+        return import_batch.csv_mapping
+    if transaction_obj.bank_account:
+        return transaction_obj.bank_account.default_csv_mapping
+    return None
+
+
+def categorization_raw_data_keys(transaction_obj):
+    """Return the raw-data columns that feed keyword matching for the row."""
+    csv_mapping = transaction_csv_mapping(transaction_obj)
+    raw_data = transaction_obj.raw_data
+    if not csv_mapping or not isinstance(raw_data, dict):
+        return []
+    keys = []
+    for field_name in csv_mapping.get_categorization_fields():
+        for column in coerce_list(csv_mapping.get_column(field_name)):
+            column = str(column)
+            if column in raw_data and column not in keys:
+                keys.append(column)
+    return keys
+
+
 def mapped_transaction_values_from_raw_data(transaction_obj, csv_mapping):
     raw_data = transaction_obj.raw_data
     if not isinstance(raw_data, dict) or not raw_data:
@@ -675,7 +704,10 @@ def mapped_transaction_values_from_raw_data(transaction_obj, csv_mapping):
     extractor = CSVRowExtractor(csv_mapping)
     values = {}
     for field_name in RECATEGORIZABLE_TRANSACTION_FIELDS:
-        if coerce_list(csv_mapping.get_column(field_name)):
+        columns = coerce_list(csv_mapping.get_column(field_name))
+        # A row from another file format (or from before a column rename) has none
+        # of the mapped columns, so its stored value is kept instead of blanked.
+        if any(str(column) in raw_data for column in columns):
             values[field_name] = extractor.get_value(raw_data, field_name)
     return values
 
@@ -1377,7 +1409,9 @@ class CSVRowExtractor:
             "posted_date": posted_date,
             "description": self.get_value(row, "description"),
             "amount": amount,
-            "currency": (currency or self.csv_mapping.default_currency).upper()[:3],
+            "currency": normalize_currency_code(
+                currency, self.csv_mapping.default_currency
+            ),
             "counterparty_account_number": self.get_value(
                 row, "counterparty_account_number"
             ),
@@ -1440,9 +1474,10 @@ class CSVImportService:
         if self.statement_report:
             report["statement"] = self.statement_report
 
+        seen_keys = Counter()
         for line_number, row in rows:
             try:
-                created_transaction = self._import_row(row, csv_import)
+                created_transaction = self._import_row(row, csv_import, seen_keys)
             except IntegrityError:
                 report["skipped"]["duplicates"].append(
                     {"line": line_number, "reason": "Duplicate original id", "row": row}
@@ -1512,9 +1547,12 @@ class CSVImportService:
             },
         }
 
-        for line_number, row in rows[:sample_size]:
-            row_preview = self.preview_row(line_number, row)
-            preview["rows"].append(row_preview)
+        # The summary covers every row; only the first sample_size rows are listed.
+        seen_keys = Counter()
+        for index, (line_number, row) in enumerate(rows):
+            row_preview = self.preview_row(line_number, row, seen_keys)
+            if index < sample_size:
+                preview["rows"].append(row_preview)
             if row_preview["status"] == "error":
                 preview["summary"]["errors"] += 1
                 continue
@@ -1532,14 +1570,14 @@ class CSVImportService:
 
         return preview
 
-    def preview_row(self, line_number, row):
+    def preview_row(self, line_number, row, seen_keys):
         try:
             data = self.extractor.extract(row)
+            duplicate = self._find_duplicate(data, seen_keys)
             categorization_text = self.categorizer.build_categorization_text(
                 data, self.csv_mapping
             )
             categorization = self.categorizer.apply(categorization_text, data)
-            duplicate = self._find_duplicate(data)
             return {
                 "line": line_number,
                 "status": "valid",
@@ -1567,23 +1605,34 @@ class CSVImportService:
         self.statement_report = statement_import_report(statement, self.bank_account)
         return rows, headers
 
-    def _find_duplicate(self, data):
+    def _find_duplicate(self, data, seen_keys, csv_import=None):
         if data.get("original_id"):
             return Transaction.objects.filter(
                 bank_account=self.bank_account,
                 original_id=data["original_id"],
             ).first()
 
-        return Transaction.objects.filter(
+        # Without a bank ID, identical rows match by count: the n-th one in a file
+        # duplicates the n-th such transaction that existed before this import.
+        key = (
+            data["transaction_date"],
+            data["amount"],
+            data["description"],
+            data["counterparty_account_number"],
+        )
+        seen_keys[key] += 1
+        existing = Transaction.objects.filter(
             bank_account=self.bank_account,
             transaction_date=data["transaction_date"],
             amount=data["amount"],
             description=data["description"],
             counterparty_account_number=data["counterparty_account_number"],
-        ).first()
-
-    def _is_duplicate(self, data):
-        return self._find_duplicate(data) is not None
+        )
+        if csv_import is not None:
+            existing = existing.exclude(import_batch=csv_import)
+        position = seen_keys[key] - 1
+        matches = existing.order_by("created_at", "id")[position : position + 1]
+        return matches[0] if matches else None
 
     def _duplicate_ref(self, transaction_obj):
         if not transaction_obj:
@@ -1607,9 +1656,9 @@ class CSVImportService:
         return serialized
 
     @transaction.atomic
-    def _import_row(self, row, csv_import):
+    def _import_row(self, row, csv_import, seen_keys):
         data = self.extractor.extract(row)
-        duplicate = self._find_duplicate(data)
+        duplicate = self._find_duplicate(data, seen_keys, csv_import)
         if duplicate:
             return None, duplicate
 
@@ -1640,11 +1689,7 @@ def strict_categorization_text(transaction_data, csv_mapping):
 
 
 def uncategorized_suggestion_text(transaction_obj):
-    csv_mapping = (
-        transaction_obj.bank_account.default_csv_mapping
-        if transaction_obj.bank_account
-        else None
-    )
+    csv_mapping = transaction_csv_mapping(transaction_obj)
     if not csv_mapping:
         return ""
 
@@ -2086,13 +2131,14 @@ def apply_internal_transfer_candidates(
             continue
 
         try:
-            match = InternalTransferMatch.objects.create(
-                outgoing_transaction=outgoing_transaction,
-                incoming_transaction=incoming_transaction,
-                confidence_score=record["confidence_score"],
-                match_reasons=record["match_reasons"],
-                date_delta_days=record["date_delta_days"],
-            )
+            with transaction.atomic():
+                match = InternalTransferMatch.objects.create(
+                    outgoing_transaction=outgoing_transaction,
+                    incoming_transaction=incoming_transaction,
+                    confidence_score=record["confidence_score"],
+                    match_reasons=record["match_reasons"],
+                    date_delta_days=record["date_delta_days"],
+                )
         except IntegrityError:
             skipped += 1
             continue
@@ -2158,11 +2204,23 @@ def recategorize_transactions(queryset, include_locked=False):
         "conflict_details": [],
     }
 
+    # Matched transfers stay ignored and locked even with include_locked;
+    # recategorizing them would count both legs as spending and income again.
+    matched_transfer_ids = set()
+    for outgoing_id, incoming_id in InternalTransferMatch.objects.values_list(
+        "outgoing_transaction_id", "incoming_transaction_id"
+    ):
+        matched_transfer_ids.update((outgoing_id, incoming_id))
+
     for transaction_obj in queryset.select_related(
-        "bank_account", "bank_account__default_csv_mapping"
+        "bank_account",
+        "bank_account__default_csv_mapping",
+        "import_batch__csv_mapping",
     ).prefetch_related("tags"):
         stats["processed"] += 1
-        if transaction_obj.is_categorization_locked and not include_locked:
+        if transaction_obj.id in matched_transfer_ids or (
+            transaction_obj.is_categorization_locked and not include_locked
+        ):
             stats["skipped_locked"] += 1
             stats["skipped_locked_transaction_ids"].append(str(transaction_obj.id))
             stats["skipped_locked_transactions"].append(
@@ -2170,11 +2228,7 @@ def recategorize_transactions(queryset, include_locked=False):
             )
             continue
 
-        csv_mapping = (
-            transaction_obj.bank_account.default_csv_mapping
-            if transaction_obj.bank_account
-            else None
-        )
+        csv_mapping = transaction_csv_mapping(transaction_obj)
         if not csv_mapping:
             stats["skipped_no_mapping"] += 1
             stats["skipped_transaction_ids"].append(str(transaction_obj.id))
