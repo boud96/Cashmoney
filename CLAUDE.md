@@ -58,7 +58,7 @@ There is no Vite dev-server proxy. `api.js` calls `/api` on the page's own origi
 
 **Versioning and releases**
 - The product version comes from `desktop/package.json` and `desktop/package-lock.json`. `frontend/vite.config.js` reads the lockfile to show the version in Help → About, so run `npm install` in `desktop/` after a bump. `frontend/package.json`'s version is not the product version.
-- `.github/workflows/build-windows.yml` builds on PRs and pushes to `main`. A pushed `vX.Y.Z` tag publishes `Cashmoney-Setup.exe`, `Cashmoney-Portable.exe` and `checksums.txt` to a GitHub Release; README download links depend on those names. To release, merge to `main`, then tag that exact `main` commit.
+- `.github/workflows/build-windows.yml` builds on PRs into `main` and on manual runs, not on pushes to `main`. A pushed `vX.Y.Z` tag publishes `Cashmoney-Setup.exe`, `Cashmoney-Portable.exe` and `checksums.txt` to a GitHub Release; README download links depend on those names. To release, merge to `main`, then tag that exact `main` commit.
 - Git flow: feature work on `develop` → PR to `main`.
 
 ## Project-specific rules
