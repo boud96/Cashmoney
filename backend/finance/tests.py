@@ -1829,6 +1829,44 @@ class APITests(FinanceTestCase):
         self.assertEqual(override_outgoing.subcategory, override_subcategory)
         self.assertEqual(override_incoming.subcategory, override_subcategory)
 
+    def test_recategorize_with_locked_rows_keeps_matched_transfers_ignored(self):
+        self.keyword("Transfers", ["transfer"])
+        transfer_subcategory = Subcategory.objects.create(
+            name="Internal Transfer", category=self.category
+        )
+        savings_account = BankAccount.objects.create(
+            name="Savings", default_csv_mapping=self.mapping
+        )
+        legs = [
+            Transaction.objects.create(
+                bank_account=account,
+                transaction_date="2026-01-02",
+                description="Transfer",
+                amount=Decimal(amount),
+                is_ignored=True,
+                is_categorization_locked=True,
+                subcategory=transfer_subcategory,
+            )
+            for account, amount in [(self.account, "-100"), (savings_account, "100")]
+        ]
+        InternalTransferMatch.objects.create(
+            outgoing_transaction=legs[0], incoming_transaction=legs[1]
+        )
+
+        response = self.post_json(
+            "/api/transactions/recategorize/"
+            "?date_from=2026-01-01&include_ignored=true&include_locked=true",
+            {"include_locked": True},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json_body(response)["skipped_locked"], 2)
+        for leg in legs:
+            leg.refresh_from_db()
+            self.assertTrue(leg.is_ignored)
+            self.assertTrue(leg.is_categorization_locked)
+            self.assertEqual(leg.subcategory, transfer_subcategory)
+
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(

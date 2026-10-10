@@ -2203,13 +2203,23 @@ def recategorize_transactions(queryset, include_locked=False):
         "conflict_details": [],
     }
 
+    # Matched transfers stay ignored and locked even with include_locked;
+    # recategorizing them would count both legs as spending and income again.
+    matched_transfer_ids = set()
+    for outgoing_id, incoming_id in InternalTransferMatch.objects.values_list(
+        "outgoing_transaction_id", "incoming_transaction_id"
+    ):
+        matched_transfer_ids.update((outgoing_id, incoming_id))
+
     for transaction_obj in queryset.select_related(
         "bank_account",
         "bank_account__default_csv_mapping",
         "import_batch__csv_mapping",
     ).prefetch_related("tags"):
         stats["processed"] += 1
-        if transaction_obj.is_categorization_locked and not include_locked:
+        if transaction_obj.id in matched_transfer_ids or (
+            transaction_obj.is_categorization_locked and not include_locked
+        ):
             stats["skipped_locked"] += 1
             stats["skipped_locked_transaction_ids"].append(str(transaction_obj.id))
             stats["skipped_locked_transactions"].append(
