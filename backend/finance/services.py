@@ -1468,9 +1468,10 @@ class CSVImportService:
         if self.statement_report:
             report["statement"] = self.statement_report
 
+        seen_keys = Counter()
         for line_number, row in rows:
             try:
-                created_transaction = self._import_row(row, csv_import)
+                created_transaction = self._import_row(row, csv_import, seen_keys)
             except IntegrityError:
                 report["skipped"]["duplicates"].append(
                     {"line": line_number, "reason": "Duplicate original id", "row": row}
@@ -1540,9 +1541,12 @@ class CSVImportService:
             },
         }
 
-        for line_number, row in rows[:sample_size]:
-            row_preview = self.preview_row(line_number, row)
-            preview["rows"].append(row_preview)
+        # The summary covers every row; only the first sample_size rows are listed.
+        seen_keys = Counter()
+        for index, (line_number, row) in enumerate(rows):
+            row_preview = self.preview_row(line_number, row, seen_keys)
+            if index < sample_size:
+                preview["rows"].append(row_preview)
             if row_preview["status"] == "error":
                 preview["summary"]["errors"] += 1
                 continue
@@ -1560,14 +1564,14 @@ class CSVImportService:
 
         return preview
 
-    def preview_row(self, line_number, row):
+    def preview_row(self, line_number, row, seen_keys):
         try:
             data = self.extractor.extract(row)
+            duplicate = self._find_duplicate(data, seen_keys)
             categorization_text = self.categorizer.build_categorization_text(
                 data, self.csv_mapping
             )
             categorization = self.categorizer.apply(categorization_text, data)
-            duplicate = self._find_duplicate(data)
             return {
                 "line": line_number,
                 "status": "valid",
@@ -1595,23 +1599,34 @@ class CSVImportService:
         self.statement_report = statement_import_report(statement, self.bank_account)
         return rows, headers
 
-    def _find_duplicate(self, data):
+    def _find_duplicate(self, data, seen_keys, csv_import=None):
         if data.get("original_id"):
             return Transaction.objects.filter(
                 bank_account=self.bank_account,
                 original_id=data["original_id"],
             ).first()
 
-        return Transaction.objects.filter(
+        # Without a bank ID, identical rows match by count: the n-th one in a file
+        # duplicates the n-th such transaction that existed before this import.
+        key = (
+            data["transaction_date"],
+            data["amount"],
+            data["description"],
+            data["counterparty_account_number"],
+        )
+        seen_keys[key] += 1
+        existing = Transaction.objects.filter(
             bank_account=self.bank_account,
             transaction_date=data["transaction_date"],
             amount=data["amount"],
             description=data["description"],
             counterparty_account_number=data["counterparty_account_number"],
-        ).first()
-
-    def _is_duplicate(self, data):
-        return self._find_duplicate(data) is not None
+        )
+        if csv_import is not None:
+            existing = existing.exclude(import_batch=csv_import)
+        position = seen_keys[key] - 1
+        matches = existing.order_by("created_at", "id")[position : position + 1]
+        return matches[0] if matches else None
 
     def _duplicate_ref(self, transaction_obj):
         if not transaction_obj:
@@ -1635,9 +1650,9 @@ class CSVImportService:
         return serialized
 
     @transaction.atomic
-    def _import_row(self, row, csv_import):
+    def _import_row(self, row, csv_import, seen_keys):
         data = self.extractor.extract(row)
-        duplicate = self._find_duplicate(data)
+        duplicate = self._find_duplicate(data, seen_keys, csv_import)
         if duplicate:
             return None, duplicate
 

@@ -220,7 +220,7 @@ function ImportPreview({ hideAmounts, preview }) {
     <div className="import-preview-content">
       <div className="import-preview-summary">
         <Metric label="Rows loaded" value={formatCount(preview.loaded)} />
-        <Metric label="Valid sample" value={formatCount(summary.valid)} />
+        <Metric label="Valid" value={formatCount(summary.valid)} />
         <Metric label="Duplicates" value={formatCount(summary.duplicates)} />
         <Metric label="Errors" tone={summary.errors ? "negative" : ""} value={formatCount(summary.errors)} />
       </div>

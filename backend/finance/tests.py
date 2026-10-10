@@ -451,6 +451,108 @@ class CSVImportServiceTests(FinanceTestCase):
         self.assertEqual(csv_import.error_count, 1)
         self.assertEqual(report["skipped"]["errors"][0]["line"], 2)
 
+    def test_identical_rows_without_ids_all_import_once(self):
+        body = (
+            "Date,Description,Amount\n"
+            "2026-10-01,Bus ticket,-30\n"
+            "2026-10-01,Bus ticket,-30\n"
+        )
+
+        _csv_import, first = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(body)
+        )
+        _csv_import, second = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(body)
+        )
+
+        self.assertEqual(first["created"]["count"], 2)
+        self.assertEqual(first["skipped"]["duplicates"], [])
+        self.assertEqual(second["created"]["count"], 0)
+        self.assertEqual(len(second["skipped"]["duplicates"]), 2)
+        self.assertEqual(
+            {
+                duplicate["duplicate_transaction"]["id"]
+                for duplicate in second["skipped"]["duplicates"]
+            },
+            {str(pk) for pk in Transaction.objects.values_list("id", flat=True)},
+        )
+
+    def test_overlapping_file_without_ids_adds_only_the_extra_identical_rows(self):
+        header = "Date,Description,Amount\n"
+        row = "2026-10-01,Bus ticket,-30\n"
+        CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(header + row)
+        )
+
+        _csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(header + row * 3)
+        )
+
+        self.assertEqual(report["created"]["count"], 2)
+        self.assertEqual(len(report["skipped"]["duplicates"]), 1)
+        self.assertEqual(Transaction.objects.count(), 3)
+
+    def test_same_original_id_twice_in_one_file_imports_once(self):
+        _csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(
+                "ID,Date,Description,Amount\n"
+                "tx-1,2026-10-01,Bus ticket,-30\n"
+                "tx-1,2026-10-01,Bus ticket,-30\n"
+            )
+        )
+
+        self.assertEqual(report["created"]["count"], 1)
+        self.assertEqual(len(report["skipped"]["duplicates"]), 1)
+
+    def test_preview_flags_identical_rows_like_the_import(self):
+        header = "Date,Description,Amount\n"
+        row = "2026-10-01,Bus ticket,-30\n"
+        empty_db_preview = CSVImportService(self.mapping, self.account).preview_file(
+            self.csv_file(header + row * 2)
+        )
+        CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(header + row)
+        )
+
+        preview = CSVImportService(self.mapping, self.account).preview_file(
+            self.csv_file(header + row * 2)
+        )
+        _csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(header + row * 2)
+        )
+
+        self.assertEqual(empty_db_preview["summary"]["duplicates"], 0)
+        flagged = [entry["line"] for entry in preview["rows"] if entry["duplicate"]]
+        skipped = [entry["line"] for entry in report["skipped"]["duplicates"]]
+        self.assertEqual(len(flagged), 1)
+        self.assertEqual(flagged, skipped)
+        self.assertEqual(preview["summary"]["duplicates"], 1)
+        self.assertEqual(report["created"]["count"], 1)
+
+    def test_preview_summary_covers_rows_beyond_the_sample(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-10-01",
+            description="Bus ticket",
+            amount=Decimal("-30.00"),
+        )
+
+        preview = CSVImportService(self.mapping, self.account).preview_file(
+            self.csv_file(
+                "Date,Description,Amount\n"
+                "2026-09-30,Lunch,-120\n"
+                "2026-10-01,Bus ticket,-30\n"
+                "not-a-date,Broken,-1\n"
+            ),
+            sample_size=1,
+        )
+
+        self.assertEqual(preview["loaded"], 3)
+        self.assertEqual(len(preview["rows"]), 1)
+        self.assertEqual(preview["summary"]["valid"], 2)
+        self.assertEqual(preview["summary"]["duplicates"], 1)
+        self.assertEqual(preview["summary"]["errors"], 1)
+
 
 class CategorizationTests(FinanceTestCase):
     def test_higher_priority_keyword_wins(self):
