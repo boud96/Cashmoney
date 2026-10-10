@@ -50,6 +50,15 @@ def json_body(response):
 
 class FinanceTestCase(TestCase):
     def setUp(self):
+        # Maintenance deletes write safety backups under DATA_DIR; keep them out of
+        # the developer's real backups folder.
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.data_dir = Path(temp_dir.name)
+        data_dir_override = self.settings(DATA_DIR=self.data_dir)
+        data_dir_override.enable()
+        self.addCleanup(data_dir_override.disable)
+
         self.mapping = CSVMapping.objects.create(
             name="Test Bank",
             date_format="%Y-%m-%d",
@@ -75,6 +84,9 @@ class FinanceTestCase(TestCase):
             name="Restaurant", category=self.category
         )
         self.tag = Tag.objects.create(name="Fast food")
+
+    def backup_dir(self):
+        return self.data_dir / "backups"
 
     def csv_file(self, body):
         return SimpleUploadedFile(
@@ -1892,6 +1904,85 @@ class APITests(FinanceTestCase):
         self.assertFalse(transaction_obj.is_categorization_locked)
         self.assertFalse(Keyword.objects.exists())
 
+    def test_delete_impact_describes_what_a_category_delete_changes(self):
+        self.keyword("Lunch", ["lunch"])
+        settings_obj = FinanceSettings.load()
+        settings_obj.internal_transfer_subcategory = self.subcategory
+        settings_obj.save()
+        for locked in (False, True):
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                description="Lunch",
+                amount=Decimal("-120.00"),
+                subcategory=self.subcategory,
+                is_categorization_locked=locked,
+            )
+
+        response = self.client.get(f"/api/categories/{self.category.id}/delete-impact/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            json_body(response),
+            {
+                "blocked": "",
+                "effects": [
+                    "1 subcategory will be deleted too.",
+                    "2 transactions will become uncategorized, including 1 locked one.",
+                    "1 keyword will lose its subcategory.",
+                    "Internal transfers will no longer get a subcategory.",
+                ],
+            },
+        )
+
+    def test_account_with_transactions_cannot_be_deleted(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            amount=Decimal("-120.00"),
+        )
+        empty_account = BankAccount.objects.create(name="Empty")
+
+        impact = json_body(
+            self.client.get(f"/api/bank-accounts/{self.account.id}/delete-impact/")
+        )
+        blocked = self.delete_json(f"/api/bank-accounts/{self.account.id}/")
+        allowed = self.delete_json(f"/api/bank-accounts/{empty_account.id}/")
+
+        self.assertIn("still has 1 transaction", impact["blocked"])
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn("still has 1 transaction", json_body(blocked)["error"])
+        self.assertTrue(BankAccount.objects.filter(id=self.account.id).exists())
+        self.assertEqual(allowed.status_code, 200)
+        self.assertFalse(BankAccount.objects.filter(id=empty_account.id).exists())
+
+    def test_delete_impact_for_mappings_and_tags(self):
+        self.keyword("Lunch", ["lunch"])
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            amount=Decimal("-120.00"),
+        )
+        transaction_obj.tags.add(self.tag)
+
+        mapping_impact = json_body(
+            self.client.get(f"/api/csv-mappings/{self.mapping.id}/delete-impact/")
+        )
+        tag_impact = json_body(
+            self.client.get(f"/api/tags/{self.tag.id}/delete-impact/")
+        )
+
+        self.assertIn("Main will have no default mapping", mapping_impact["effects"][0])
+        self.assertEqual(
+            tag_impact["effects"],
+            [
+                "The tag will be removed from 1 transaction.",
+                "1 keyword will stop adding it.",
+            ],
+        )
+
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(
@@ -2600,6 +2691,40 @@ class APITests(FinanceTestCase):
         self.assertTrue(Category.objects.filter(id=self.category.id).exists())
         self.assertTrue(Subcategory.objects.filter(id=self.subcategory.id).exists())
         self.assertTrue(Tag.objects.filter(id=self.tag.id).exists())
+
+    def test_maintenance_deletes_save_a_safety_backup_first(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Keep me in the backup",
+            amount=Decimal("-12.50"),
+        )
+
+        backup_names = []
+        for endpoint, phrase in [
+            ("/api/maintenance/transactions/", "DELETE ALL TRANSACTIONS"),
+            ("/api/maintenance/finance-data/", "DELETE ALL FINANCE DATA"),
+        ]:
+            response = self.delete_json(endpoint, {"confirmation": phrase})
+            payload = json_body(response)
+
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(payload["safety_backup"].startswith("pre-delete-"))
+            listed = {backup["filename"]: backup for backup in payload["backups"]}
+            self.assertEqual(listed[payload["safety_backup"]]["label"], "Pre-delete")
+            backup_names.append(payload["safety_backup"])
+
+        # Both deletes ran within a second; the second backup must not overwrite the first.
+        self.assertEqual(len(set(backup_names)), 2)
+        backup = sqlite3.connect(self.backup_dir() / backup_names[0])
+        try:
+            descriptions = [
+                row[0]
+                for row in backup.execute("SELECT description FROM finance_transaction")
+            ]
+        finally:
+            backup.close()
+        self.assertEqual(descriptions, ["Keep me in the backup"])
 
     def test_maintenance_delete_finance_data_preserves_auth_users(self):
         user = get_user_model().objects.create_user(

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import models, views
 
 
 urlpatterns = [
@@ -191,4 +191,21 @@ urlpatterns = [
         views.MaintenanceDatabaseRestoreView.as_view(),
         name="maintenance-database-restore",
     ),
+]
+
+# What deleting a definition would change, shown in the delete dialog.
+urlpatterns += [
+    path(
+        f"{prefix}/<uuid:pk>/delete-impact/",
+        views.DeleteImpactView.as_view(model=model),
+        name=f"{prefix}-delete-impact",
+    )
+    for prefix, model in [
+        ("bank-accounts", models.BankAccount),
+        ("csv-mappings", models.CSVMapping),
+        ("categories", models.Category),
+        ("subcategories", models.Subcategory),
+        ("tags", models.Tag),
+        ("keywords", models.Keyword),
+    ]
 ]

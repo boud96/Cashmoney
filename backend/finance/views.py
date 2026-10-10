@@ -284,6 +284,91 @@ def set_tags(instance, tag_ids):
     instance.tags.set(tags)
 
 
+def counted(count, noun, plural=None):
+    return f"{count:,} {noun if count == 1 else plural or noun + 's'}"
+
+
+def its(count):
+    return "its" if count == 1 else "their"
+
+
+def account_delete_blocker(account):
+    count = account.transactions.count()
+    if not count:
+        return ""
+    return (
+        f"{account.name} still has {counted(count, 'transaction')}. "
+        "Delete or move them before deleting the account."
+    )
+
+
+def delete_impact(instance):
+    """What deleting a definition changes, as sentences, and why it is blocked."""
+    effects = []
+    blocked = ""
+    transfer_subcategory_id = FinanceSettings.load().internal_transfer_subcategory_id
+    if isinstance(instance, BankAccount):
+        blocked = account_delete_blocker(instance)
+        imports = CSVImport.objects.filter(bank_account=instance).count()
+        if imports:
+            effects.append(
+                f"{counted(imports, 'import')} will lose {its(imports)} account."
+            )
+    elif isinstance(instance, CSVMapping):
+        accounts = list(instance.bank_accounts.values_list("name", flat=True))
+        if accounts:
+            effects.append(
+                f"{', '.join(accounts)} will have no default mapping, so importing "
+                "and recategorizing stop working until you pick another."
+            )
+        imported = Transaction.objects.filter(
+            import_batch__csv_mapping=instance
+        ).count()
+        if imported:
+            effects.append(
+                f"{counted(imported, 'transaction')} imported with it will be "
+                "recategorized with their account's default mapping, or skipped "
+                "if the account has none."
+            )
+    elif isinstance(instance, (Category, Subcategory)):
+        if isinstance(instance, Category):
+            subcategories = Subcategory.objects.filter(category=instance)
+            if subcategories:
+                effects.append(
+                    f"{counted(len(subcategories), 'subcategory', 'subcategories')} "
+                    "will be deleted too."
+                )
+        else:
+            subcategories = Subcategory.objects.filter(id=instance.id)
+        transactions = Transaction.objects.filter(subcategory__in=subcategories)
+        count = transactions.count()
+        if count:
+            locked = transactions.filter(is_categorization_locked=True).count()
+            locked_note = (
+                f", including {counted(locked, 'locked one')}" if locked else ""
+            )
+            effects.append(
+                f"{counted(count, 'transaction')} will become uncategorized{locked_note}."
+            )
+        keywords = Keyword.objects.filter(subcategory__in=subcategories).count()
+        if keywords:
+            effects.append(
+                f"{counted(keywords, 'keyword')} will lose {its(keywords)} subcategory."
+            )
+        if subcategories.filter(id=transfer_subcategory_id).exists():
+            effects.append("Internal transfers will no longer get a subcategory.")
+    elif isinstance(instance, Tag):
+        tagged = Transaction.objects.filter(tags=instance).count()
+        if tagged:
+            effects.append(
+                f"The tag will be removed from {counted(tagged, 'transaction')}."
+            )
+        keywords = instance.keywords.count()
+        if keywords:
+            effects.append(f"{counted(keywords, 'keyword')} will stop adding it.")
+    return {"blocked": blocked, "effects": effects}
+
+
 def id_list(value):
     if not value:
         return []
@@ -386,6 +471,13 @@ class JsonView(View):
 
     def options(self, request, *args, **kwargs):
         return json_response({})
+
+
+class DeleteImpactView(JsonView):
+    model = None
+
+    def get(self, request, pk):
+        return json_response(delete_impact(get_object_or_404(self.model, id=pk)))
 
 
 class HealthView(JsonView):
@@ -537,7 +629,11 @@ class BankAccountDetailView(JsonView):
         return json_response(serialize_bank_account(account))
 
     def delete(self, request, pk):
-        get_object_or_404(BankAccount, id=pk).delete()
+        account = get_object_or_404(BankAccount, id=pk)
+        blocked = account_delete_blocker(account)
+        if blocked:
+            raise APIValidationError(blocked, {"field": "transactions"})
+        account.delete()
         return json_response({"deleted": True})
 
 
@@ -1808,28 +1904,29 @@ class MaintenanceAdminUserView(JsonView):
         )
 
 
+def delete_with_safety_backup(delete_function):
+    backup_path = create_safety_backup("pre-delete")
+    return json_response(
+        {
+            "deleted": True,
+            "counts": delete_function(),
+            "summary": maintenance_counts(),
+            "safety_backup": backup_path.name,
+            "backups": saved_backup_payload(),
+        }
+    )
+
+
 class MaintenanceTransactionsView(JsonView):
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_ALL_TRANSACTIONS)
-        return json_response(
-            {
-                "deleted": True,
-                "counts": delete_all_transactions(),
-                "summary": maintenance_counts(),
-            }
-        )
+        return delete_with_safety_backup(delete_all_transactions)
 
 
 class MaintenanceFinanceDataView(JsonView):
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_ALL_FINANCE_DATA)
-        return json_response(
-            {
-                "deleted": True,
-                "counts": delete_all_finance_data(),
-                "summary": maintenance_counts(),
-            }
-        )
+        return delete_with_safety_backup(delete_all_finance_data)
 
 
 class MaintenanceDatabaseBackupView(JsonView):
@@ -1858,6 +1955,8 @@ def backup_directory():
 def backup_kind(filename):
     if filename.startswith("pre-restore-"):
         return "Pre-restore"
+    if filename.startswith("pre-delete-"):
+        return "Pre-delete"
     if filename.startswith("cashmoney-backup-"):
         return "Manual"
     return "Backup"
@@ -1935,12 +2034,16 @@ def validate_sqlite_backup(backup_path):
         )
 
 
-def create_pre_restore_backup():
+def create_safety_backup(prefix):
     connection.ensure_connection()
     timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
     backup_dir = backup_directory()
     backup_dir.mkdir(parents=True, exist_ok=True)
-    backup_path = backup_dir / f"pre-restore-{timestamp}.sqlite3"
+    backup_path = backup_dir / f"{prefix}-{timestamp}.sqlite3"
+    suffix = 2
+    while backup_path.exists():
+        backup_path = backup_dir / f"{prefix}-{timestamp}-{suffix}.sqlite3"
+        suffix += 1
     backup_path.write_bytes(connection.connection.serialize())
     return backup_path
 
@@ -1951,7 +2054,7 @@ def migrate_restored_database():
 
 def restore_sqlite_database_from_path(backup_path):
     validate_sqlite_backup(backup_path)
-    pre_restore_path = create_pre_restore_backup()
+    pre_restore_path = create_safety_backup("pre-restore")
 
     source = None
     try:
