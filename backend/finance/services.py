@@ -2131,13 +2131,14 @@ def apply_internal_transfer_candidates(
             continue
 
         try:
-            match = InternalTransferMatch.objects.create(
-                outgoing_transaction=outgoing_transaction,
-                incoming_transaction=incoming_transaction,
-                confidence_score=record["confidence_score"],
-                match_reasons=record["match_reasons"],
-                date_delta_days=record["date_delta_days"],
-            )
+            with transaction.atomic():
+                match = InternalTransferMatch.objects.create(
+                    outgoing_transaction=outgoing_transaction,
+                    incoming_transaction=incoming_transaction,
+                    confidence_score=record["confidence_score"],
+                    match_reasons=record["match_reasons"],
+                    date_delta_days=record["date_delta_days"],
+                )
         except IntegrityError:
             skipped += 1
             continue

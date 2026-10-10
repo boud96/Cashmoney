@@ -1867,6 +1867,31 @@ class APITests(FinanceTestCase):
             self.assertTrue(leg.is_categorization_locked)
             self.assertEqual(leg.subcategory, transfer_subcategory)
 
+    def test_rejected_writes_save_nothing(self):
+        missing_tag = "00000000-0000-0000-0000-000000000000"
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            amount=Decimal("-120.00"),
+        )
+
+        patch_response = self.patch_json(
+            f"/api/transactions/{transaction_obj.id}/",
+            {"subcategory_id": str(self.subcategory.id), "tag_ids": [missing_tag]},
+        )
+        keyword_response = self.post_json(
+            "/api/keywords/",
+            {"name": "Lunch", "include_terms": ["lunch"], "tag_ids": [missing_tag]},
+        )
+
+        self.assertEqual(patch_response.status_code, 400)
+        self.assertEqual(keyword_response.status_code, 400)
+        transaction_obj.refresh_from_db()
+        self.assertIsNone(transaction_obj.subcategory)
+        self.assertFalse(transaction_obj.is_categorization_locked)
+        self.assertFalse(Keyword.objects.exists())
+
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(

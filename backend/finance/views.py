@@ -351,8 +351,15 @@ class AppShellView(TemplateView):
 
 
 class JsonView(View):
+    # Writes run in one transaction, so a request that fails part-way saves nothing.
+    # Views that manage the connection themselves or call the network opt out.
+    atomic_writes = True
+
     def dispatch(self, request, *args, **kwargs):
         try:
+            if self.atomic_writes and request.method not in ("GET", "HEAD", "OPTIONS"):
+                with transaction.atomic():
+                    return super().dispatch(request, *args, **kwargs)
             return super().dispatch(request, *args, **kwargs)
         except json.JSONDecodeError:
             return json_response({"error": "Invalid JSON body"}, status=400)
@@ -430,6 +437,8 @@ class ExchangeRateCurrenciesView(JsonView):
 
 
 class ExchangeRateSyncView(JsonView):
+    atomic_writes = False  # calls the rate provider over the network
+
     def post(self, request):
         try:
             return json_response(sync_missing_exchange_rates())
@@ -1525,6 +1534,8 @@ class ImportPreviewView(JsonView):
 
 
 class ImportTransactionsView(JsonView):
+    atomic_writes = False  # rows commit one by one; the rate sync calls the network
+
     def get(self, request):
         limit = min(
             clean_int(request.GET.get("limit"), "limit", default=8, minimum=1), 25
@@ -1967,6 +1978,8 @@ class MaintenanceSavedBackupExportView(JsonView):
 
 
 class MaintenanceSavedBackupRestoreView(JsonView):
+    atomic_writes = False  # replaces the database and closes the connection
+
     def post(self, request, filename):
         if connection.vendor != "sqlite":
             raise APIValidationError(
@@ -2001,6 +2014,8 @@ class MaintenanceSavedBackupView(JsonView):
 
 
 class MaintenanceDatabaseRestoreView(JsonView):
+    atomic_writes = False  # replaces the database and closes the connection
+
     def post(self, request):
         if connection.vendor != "sqlite":
             raise APIValidationError(
