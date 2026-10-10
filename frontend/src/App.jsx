@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { apiGet, apiPatch } from "./api.js";
+import { apiDelete, apiGet, apiPatch } from "./api.js";
 import { ConfirmDialog, ModalShell, Spinner } from "./components.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import {
@@ -300,6 +300,17 @@ export default function App() {
     return updated;
   }, [filterParams, loadDashboardSummary]);
 
+  const deleteTransaction = useCallback(async (transaction) => {
+    await apiDelete(`/transactions/${transaction.id}/`);
+    setTransactionPage((current) => ({
+      ...current,
+      count: Math.max(0, (current.count || 0) - 1),
+      total_count: Math.max(0, (current.total_count || 0) - 1),
+      results: current.results.filter((item) => item.id !== transaction.id),
+    }));
+    loadDashboardSummary();
+  }, [loadDashboardSummary]);
+
   const [title, kicker] = pages[activePage];
 
   return (
@@ -375,6 +386,7 @@ export default function App() {
               setRecategorizeResult={setRecategorizeResult}
               summary={summary}
               transactionPage={transactionPage}
+              deleteTransaction={deleteTransaction}
               updateTransaction={updateTransaction}
               filterParams={filterParams}
               confirmAction={confirmAction}
@@ -384,7 +396,7 @@ export default function App() {
           )}
           <Suspense fallback={<PageFallback />}>
             {activePage === "import" && (
-              <ImportPage hideAmounts={hideAmounts} importReport={importReport} notify={notify} refs={refs} reloadAll={loadAll} reloadDashboard={loadDashboard} setImportReport={setImportReport} />
+              <ImportPage confirmAction={confirmAction} hideAmounts={hideAmounts} importReport={importReport} notify={notify} refs={refs} reloadAll={loadAll} reloadDashboard={loadDashboard} setImportReport={setImportReport} />
             )}
             {activePage === "settings" && (
               <DefinitionsPage

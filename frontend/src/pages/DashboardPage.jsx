@@ -102,6 +102,7 @@ const emptyBulkAssignDraft = {
 
 export default function DashboardPage({
   confirmAction,
+  deleteTransaction,
   filters,
   filterParams,
   hideAmounts,
@@ -139,6 +140,7 @@ export default function DashboardPage({
   const [bulkAssignEditorOpen, setBulkAssignEditorOpen] = useState(false);
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
   const [recategorizeModalOpen, setRecategorizeModalOpen] = useState(false);
   const [recategorizeIncludeLocked, setRecategorizeIncludeLocked] = useState(false);
@@ -527,6 +529,37 @@ export default function DashboardPage({
     return Object.keys(bulkAssignPayload()).length > 0;
   }
 
+  async function deleteFilteredTransactions() {
+    setBulkDeleting(true);
+    try {
+      const impact = await apiGet("/transactions/bulk-delete/", filterParams);
+      if (!impact.count) {
+        notify("No transactions match the current filters");
+        return;
+      }
+      const confirmed = await confirmAction({
+        confirmLabel: "Delete",
+        danger: true,
+        message: [
+          `Delete ${formatCount(impact.count)} ${impact.count === 1 ? "transaction" : "transactions"} matching the current filters?`,
+          ...(impact.effects || []),
+          "This can't be undone. Importing their files again would bring them back.",
+        ].join("\n\n"),
+        title: "Delete transactions",
+      });
+      if (!confirmed) {
+        return;
+      }
+      const result = await apiPost("/transactions/bulk-delete/", { expected_count: impact.count }, filterParams);
+      notify(`${formatCount(result.deleted)} ${result.deleted === 1 ? "transaction" : "transactions"} deleted`);
+      await reloadDashboard();
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  }
+
   async function submitBulkAssign() {
     const payload = bulkAssignPayload();
     if (!Object.keys(payload).length) {
@@ -780,6 +813,16 @@ export default function DashboardPage({
                 Bulk assign
               </button>
               <LoadingButton
+                busy={bulkDeleting}
+                busyLabel="Checking"
+                className="link-button"
+                disabled={!transactionPage.count || importBusy}
+                onClick={deleteFilteredTransactions}
+                type="button"
+              >
+                Delete
+              </LoadingButton>
+              <LoadingButton
                 busy={transferLoading && transferReviewOpen}
                 busyLabel="Scanning"
                 className="link-button"
@@ -913,7 +956,7 @@ export default function DashboardPage({
             Older matching transactions are omitted from the table. Stats and charts still use the full filtered set.
           </div>
         ) : null}
-        <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
@@ -1449,6 +1492,17 @@ function IconSvg({ children }) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <IconSvg>
+      <path d="M4 7h16" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+      <path d="M9 7V4h6v3" />
+    </IconSvg>
+  );
+}
+
 function LockIcon({ locked }) {
   return (
     <IconSvg>
@@ -1474,7 +1528,7 @@ function InfoIcon() {
 
 const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filters, so this row is kept visible temporarily.";
 
-function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
+function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
   const [rawDataLoadingId, setRawDataLoadingId] = useState("");
   const [filterRetainedCells, setFilterRetainedCells] = useState({});
@@ -1608,6 +1662,29 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
       rowId: row.id,
     });
   }, [hideAmounts, notify, rawDataPopover]);
+
+  const removeTransaction = useCallback(async (row) => {
+    try {
+      const impact = await apiGet(`/transactions/${row.id}/delete-impact/`);
+      const confirmed = await confirmAction({
+        confirmLabel: "Delete",
+        danger: true,
+        message: [
+          `Delete "${row.description || "this transaction"}" from ${row.transaction_date}?`,
+          ...(impact.effects || []),
+          "This can't be undone. Importing its file again would bring it back.",
+        ].join("\n\n"),
+        title: "Delete transaction",
+      });
+      if (!confirmed) {
+        return;
+      }
+      await deleteTransaction(row);
+      notify("Transaction deleted");
+    } catch (error) {
+      notify(error.message);
+    }
+  }, [confirmAction, deleteTransaction, notify]);
 
   const columnDefs = useMemo(() => [
     {
@@ -1766,7 +1843,29 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
       tooltipValueGetter: retainedCellTooltip,
       width: 96,
     },
-  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, rawDataLoadingId, refs.tags, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
+    {
+      cellClass: "lock-cell",
+      cellRenderer: (params) => (
+        <button
+          aria-label="Delete transaction"
+          className="lock-cell-button delete-cell-button"
+          onClick={(event) => {
+            event.stopPropagation();
+            removeTransaction(params.data);
+          }}
+          title="Delete transaction"
+          type="button"
+        >
+          <TrashIcon />
+        </button>
+      ),
+      colId: "delete",
+      headerName: "",
+      resizable: false,
+      sortable: false,
+      width: 56,
+    },
+  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, rawDataLoadingId, refs.tags, removeTransaction, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {

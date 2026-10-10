@@ -302,12 +302,65 @@ def account_delete_blocker(account):
     )
 
 
+def transaction_delete_effects(transactions):
+    """Side effects of deleting a set of transactions, as sentences."""
+    ids = transactions.order_by().values("id")
+    effects = []
+    locked = Transaction.objects.filter(id__in=ids, is_categorization_locked=True)
+    locked_count = locked.count()
+    if locked_count:
+        effects.append(
+            f"{counted(locked_count, 'of them is', 'of them are')} locked, "
+            "so manual edits are lost too."
+        )
+    orphaned = (
+        InternalTransferMatch.objects.filter(outgoing_transaction_id__in=ids)
+        .exclude(incoming_transaction_id__in=ids)
+        .count()
+        + InternalTransferMatch.objects.filter(incoming_transaction_id__in=ids)
+        .exclude(outgoing_transaction_id__in=ids)
+        .count()
+    )
+    if orphaned:
+        effects.append(
+            f"{counted(orphaned, 'matched transfer')} will lose one half; the other "
+            "half stays ignored and locked."
+        )
+    return effects
+
+
+def delete_transactions(transactions):
+    _total, deleted = Transaction.objects.filter(
+        id__in=transactions.order_by().values("id")
+    ).delete()
+    return deleted.get(Transaction._meta.label, 0)
+
+
 def delete_impact(instance):
     """What deleting a definition changes, as sentences, and why it is blocked."""
     effects = []
     blocked = ""
     transfer_subcategory_id = FinanceSettings.load().internal_transfer_subcategory_id
-    if isinstance(instance, BankAccount):
+    if isinstance(instance, Transaction):
+        if instance.is_categorization_locked:
+            effects.append("It is locked, so your manual edits are lost too.")
+        if InternalTransferMatch.objects.filter(
+            Q(outgoing_transaction=instance) | Q(incoming_transaction=instance)
+        ).exists():
+            effects.append(
+                "It is half of a matched transfer; the other half stays ignored and "
+                "locked."
+            )
+    elif isinstance(instance, CSVImport):
+        transactions = Transaction.objects.filter(import_batch=instance)
+        count = transactions.count()
+        effects.append(
+            f"{counted(count, 'transaction')} created by this import will be deleted."
+            if count
+            else "None of its transactions are left; only the import record is removed."
+        )
+        effects.extend(transaction_delete_effects(transactions))
+    elif isinstance(instance, BankAccount):
         blocked = account_delete_blocker(instance)
         imports = CSVImport.objects.filter(bank_account=instance).count()
         if imports:
@@ -1423,6 +1476,34 @@ class RecategorizeTransactionsView(JsonView):
         )
 
 
+class BulkDeleteTransactionsView(JsonView):
+    def get(self, request):
+        queryset = filtered_transactions(request)
+        return json_response(
+            {
+                "count": queryset.count(),
+                "effects": transaction_delete_effects(queryset),
+            }
+        )
+
+    def post(self, request):
+        data = parse_json_body(request)
+        expected_count = clean_int(
+            require_field(data, "expected_count"), "expected_count", minimum=0
+        )
+        queryset = filtered_transactions(request)
+        count = queryset.count()
+        # The dialog showed expected_count rows; refuse if the filters now match
+        # something else, so a delete never removes more than the user saw.
+        if count != expected_count:
+            raise APIValidationError(
+                f"The current filters match {counted(count, 'transaction')}, not "
+                f"{expected_count:,}. Nothing was deleted; check the filters and try again.",
+                {"field": "expected_count", "count": count},
+            )
+        return json_response({"deleted": delete_transactions(queryset)})
+
+
 def legacy_bulk_assign_payload(data):
     assignment_type = clean_text(
         require_field(data, "assignment_type"), "assignment_type", required=True
@@ -1675,6 +1756,16 @@ class ImportTransactionsView(JsonView):
             },
             status=201 if csv_import.status != csv_import.STATUS_FAILED else 400,
         )
+
+
+class ImportDetailView(JsonView):
+    def delete(self, request, pk):
+        csv_import = get_object_or_404(CSVImport, id=pk)
+        deleted = delete_transactions(
+            Transaction.objects.filter(import_batch=csv_import)
+        )
+        csv_import.delete()
+        return json_response({"deleted": True, "transactions": deleted})
 
 
 class KeywordPreviewView(JsonView):

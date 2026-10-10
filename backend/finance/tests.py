@@ -1983,6 +1983,106 @@ class APITests(FinanceTestCase):
             ],
         )
 
+    def make_transactions(self, account, *amounts, **fields):
+        return [
+            Transaction.objects.create(
+                bank_account=account,
+                transaction_date="2026-01-02",
+                description="Payment",
+                amount=Decimal(amount),
+                **fields,
+            )
+            for amount in amounts
+        ]
+
+    def test_bulk_delete_removes_the_filtered_rows_only_when_the_count_matches(self):
+        other_account = BankAccount.objects.create(name="Other")
+        self.make_transactions(self.account, "-10", "-20", "-30")
+        (kept,) = self.make_transactions(other_account, "-40")
+        url = f"/api/transactions/bulk-delete/?bank_account={self.account.id}"
+
+        preview = json_body(self.client.get(url))
+        stale = self.post_json(url, {"expected_count": 2})
+        deleted = self.post_json(url, {"expected_count": 3})
+
+        self.assertEqual(preview, {"count": 3, "effects": []})
+        self.assertEqual(stale.status_code, 400)
+        self.assertIn("match 3 transactions, not 2", json_body(stale)["error"])
+        self.assertEqual(deleted.status_code, 200)
+        self.assertEqual(json_body(deleted), {"deleted": 3})
+        self.assertEqual(list(Transaction.objects.all()), [kept])
+
+    def test_delete_impact_warns_about_locked_rows_and_split_transfers(self):
+        savings = BankAccount.objects.create(name="Savings")
+        (outgoing,) = self.make_transactions(
+            self.account, "-100", is_ignored=True, is_categorization_locked=True
+        )
+        (incoming,) = self.make_transactions(
+            savings, "100", is_ignored=True, is_categorization_locked=True
+        )
+        InternalTransferMatch.objects.create(
+            outgoing_transaction=outgoing, incoming_transaction=incoming
+        )
+
+        bulk = json_body(
+            self.client.get(
+                "/api/transactions/bulk-delete/?include_ignored=true"
+                f"&include_locked=true&bank_account={self.account.id}"
+            )
+        )
+        single = json_body(
+            self.client.get(f"/api/transactions/{outgoing.id}/delete-impact/")
+        )
+        response = self.delete_json(f"/api/transactions/{outgoing.id}/")
+
+        self.assertEqual(
+            bulk["effects"],
+            [
+                "1 of them is locked, so manual edits are lost too.",
+                "1 matched transfer will lose one half; the other half stays ignored "
+                "and locked.",
+            ],
+        )
+        self.assertEqual(
+            single["effects"],
+            [
+                "It is locked, so your manual edits are lost too.",
+                "It is half of a matched transfer; the other half stays ignored and "
+                "locked.",
+            ],
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(InternalTransferMatch.objects.exists())
+        incoming.refresh_from_db()
+        self.assertTrue(incoming.is_ignored)
+
+    def test_deleting_an_import_removes_the_transactions_it_created(self):
+        body = "ID,Date,Description,Amount\nimp-1,2026-01-02,Lunch,-120\n"
+        old_import, _report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(body)
+        )
+        new_import, _report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(
+                "ID,Date,Description,Amount\n"
+                "imp-1,2026-01-02,Lunch,-120\n"
+                "imp-2,2026-01-03,Dinner,-300\n"
+            )
+        )
+
+        impact = json_body(
+            self.client.get(f"/api/imports/{new_import.id}/delete-impact/")
+        )
+        response = self.delete_json(f"/api/imports/{new_import.id}/")
+
+        self.assertEqual(
+            impact["effects"], ["1 transaction created by this import will be deleted."]
+        )
+        self.assertEqual(json_body(response), {"deleted": True, "transactions": 1})
+        self.assertEqual(
+            list(Transaction.objects.values_list("original_id", flat=True)), ["imp-1"]
+        )
+        self.assertEqual(list(CSVImport.objects.all()), [old_import])
+
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(

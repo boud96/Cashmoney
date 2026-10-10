@@ -122,7 +122,13 @@ urlpatterns = [
         views.RecategorizeTransactionsView.as_view(),
         name="recategorize-transactions",
     ),
+    path(
+        "transactions/bulk-delete/",
+        views.BulkDeleteTransactionsView.as_view(),
+        name="bulk-delete-transactions",
+    ),
     path("imports/preview/", views.ImportPreviewView.as_view(), name="import-preview"),
+    path("imports/<uuid:pk>/", views.ImportDetailView.as_view(), name="import-detail"),
     path(
         "imports/", views.ImportTransactionsView.as_view(), name="import-transactions"
     ),
@@ -193,7 +199,7 @@ urlpatterns = [
     ),
 ]
 
-# What deleting a definition would change, shown in the delete dialog.
+# What a delete would change, shown in the delete dialogs.
 urlpatterns += [
     path(
         f"{prefix}/<uuid:pk>/delete-impact/",
@@ -207,5 +213,7 @@ urlpatterns += [
         ("subcategories", models.Subcategory),
         ("tags", models.Tag),
         ("keywords", models.Keyword),
+        ("transactions", models.Transaction),
+        ("imports", models.CSVImport),
     ]
 ]

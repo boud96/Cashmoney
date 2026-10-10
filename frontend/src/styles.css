@@ -2760,6 +2760,13 @@ select option {
   outline: none;
 }
 
+.delete-cell-button:hover,
+.delete-cell-button:focus {
+  background: var(--danger-soft);
+  border-color: rgba(179, 69, 69, 0.35);
+  color: var(--red);
+}
+
 .transaction-grid .ag-cell.amount-income {
   color: var(--green);
   font-weight: 700;
@@ -3379,6 +3386,10 @@ select option {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.recent-import-delete {
+  flex-shrink: 0;
 }
 
 .recent-import-counts {
@@ -4360,6 +4371,10 @@ td {
 
   .recent-import-counts {
     justify-content: flex-start;
+  }
+
+  .recent-import-delete {
+    align-self: flex-start;
   }
 
   .wide-field,
