@@ -451,6 +451,24 @@ class CSVImportServiceTests(FinanceTestCase):
         self.assertEqual(csv_import.error_count, 1)
         self.assertEqual(report["skipped"]["errors"][0]["line"], 2)
 
+    def test_row_currencies_are_validated(self):
+        csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(
+                "ID,Date,Description,Amount,Currency\n"
+                "tx-1,2026-01-02,Bakery,-40,Kč\n"
+                "tx-2,2026-01-02,Hotel,-90,eur\n"
+                "tx-3,2026-01-02,Unknown,-10,Koruna\n"
+            )
+        )
+
+        self.assertEqual(csv_import.created_count, 2)
+        self.assertEqual(
+            dict(Transaction.objects.values_list("original_id", "currency")),
+            {"tx-1": "CZK", "tx-2": "EUR"},
+        )
+        self.assertEqual(report["skipped"]["errors"][0]["line"], 4)
+        self.assertIn("Koruna", report["skipped"]["errors"][0]["error"])
+
     def test_identical_rows_without_ids_all_import_once(self):
         body = (
             "Date,Description,Amount\n"
@@ -683,6 +701,54 @@ class APITests(FinanceTestCase):
         payload = json_body(response)
         self.assertEqual(payload["error"], "Missing required field")
         self.assertEqual(payload["details"]["field"], "name")
+
+    def test_account_and_mapping_currencies_are_validated(self):
+        created = self.post_json(
+            "/api/bank-accounts/", {"name": "Wallet", "currency": "Kč"}
+        )
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(json_body(created)["currency"], "CZK")
+
+        for path, payload in [
+            ("/api/bank-accounts/", {"name": "Bad", "currency": "Czech"}),
+            ("/api/csv-mappings/", {"name": "Bad", "default_currency": "€uro"}),
+        ]:
+            response = self.post_json(path, payload)
+            self.assertEqual(response.status_code, 400, path)
+            self.assertIn("three-letter code", json_body(response)["error"])
+
+        account_patch = self.patch_json(
+            f"/api/bank-accounts/{self.account.id}/", {"currency": "K"}
+        )
+        mapping_patch = self.patch_json(
+            f"/api/csv-mappings/{self.mapping.id}/", {"default_currency": "Kčs"}
+        )
+        self.assertEqual(account_patch.status_code, 400)
+        self.assertEqual(mapping_patch.status_code, 400)
+        self.account.refresh_from_db()
+        self.mapping.refresh_from_db()
+        self.assertEqual(self.account.currency, "CZK")
+        self.assertEqual(self.mapping.default_currency, "CZK")
+
+    def test_import_succeeds_when_rate_sync_rejects_a_currency(self):
+        with patch("finance.views.sync_missing_exchange_rates") as sync_rates:
+            sync_rates.side_effect = ValueError("Currency 'KČ' must be a code.")
+            response = self.client.post(
+                "/api/imports/",
+                {
+                    "bank_account_id": str(self.account.id),
+                    "csv_mapping_id": str(self.mapping.id),
+                    "csv_file": self.csv_file(
+                        "ID,Date,Description,Amount,Currency\n"
+                        "api-1,2026-01-02,Lunch,-12.50,CZK\n"
+                    ),
+                },
+            )
+
+        payload = json_body(response)
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(payload["report"]["created"]["count"], 1)
+        self.assertFalse(payload["exchange_rate_sync"]["synced"])
 
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)

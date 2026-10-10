@@ -127,10 +127,14 @@ def coerce_list(value):
     return [value]
 
 
+CURRENCY_ALIASES = {"KČ": "CZK", "KC": "CZK", "€": "EUR"}
+
+
 def normalize_currency_code(value, default="CZK"):
-    currency = re.sub(r"[^A-Za-z]", "", str(value or default)).upper()[:3]
-    if len(currency) != 3:
-        raise ValueError("Currency must be a three-letter code.")
+    raw = str(value or default).strip()
+    currency = CURRENCY_ALIASES.get(raw.upper(), raw.upper())
+    if not re.fullmatch(r"[A-Z]{3}", currency):
+        raise ValueError(f"Currency '{raw}' must be a three-letter code.")
     return currency
 
 
@@ -1405,7 +1409,9 @@ class CSVRowExtractor:
             "posted_date": posted_date,
             "description": self.get_value(row, "description"),
             "amount": amount,
-            "currency": (currency or self.csv_mapping.default_currency).upper()[:3],
+            "currency": normalize_currency_code(
+                currency, self.csv_mapping.default_currency
+            ),
             "counterparty_account_number": self.get_value(
                 row, "counterparty_account_number"
             ),
