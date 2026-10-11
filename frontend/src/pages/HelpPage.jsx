@@ -125,7 +125,7 @@ export default function HelpPage() {
             apply only to the current filtered transaction set.
           </p>
           <ul>
-            <li><strong>Date range:</strong> From and To use the same YYYY-MM-DD format as the table. The relative range controls can quickly set a recent period.</li>
+            <li><strong>Date range:</strong> From and To use the same YYYY-MM-DD format as the table. Type a date, or pick one with the calendar button in each field; the calendar shades the current range and works with the arrow keys. A typed date applies once it's complete. The relative range controls can quickly set a recent period.</li>
             <li><strong>Saved filters:</strong> save the current filter state under a name and load it later.</li>
             <li><strong>Checklist filters:</strong> empty means show nothing. On startup, all checklist options are selected.</li>
             <li><strong>Tag:</strong> starts empty, which means any tag. Select tags to show only transactions with at least one of them. Tagged shows every transaction that has a tag, and Untagged every one without.</li>

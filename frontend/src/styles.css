@@ -1034,6 +1034,181 @@ h2 {
   gap: 10px;
 }
 
+.date-field {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.date-field-control {
+  position: relative;
+}
+
+.date-field-control input {
+  padding-right: 40px;
+}
+
+.date-field-control input[aria-invalid="true"] {
+  border-color: var(--red);
+}
+
+.date-field-button {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  transform: translateY(-50%);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.date-field-button:hover,
+.date-field-button[aria-expanded="true"] {
+  background: var(--soft-hover);
+  color: var(--action);
+}
+
+.date-field-button:focus-visible {
+  border-color: var(--action);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.date-field-hint {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.date-calendar {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: 8px;
+  width: 292px;
+  max-width: calc(100vw - 24px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+  padding: 10px;
+}
+
+.date-calendar-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.35fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.date-calendar-header select {
+  padding: 6px 7px;
+}
+
+.date-calendar-nav {
+  width: 30px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.date-calendar-nav:hover,
+.date-calendar-nav:focus-visible {
+  border-color: var(--action);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.date-calendar-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.date-calendar-grid th,
+.date-calendar-grid td {
+  border: 0;
+}
+
+.date-calendar-grid th {
+  padding: 2px 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  text-align: center;
+}
+
+.date-calendar-grid td {
+  padding: 1px 0;
+}
+
+.date-calendar-day {
+  width: 100%;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-calendar-day:hover {
+  background: var(--soft-hover);
+}
+
+.date-calendar-day:focus-visible {
+  border-color: var(--action);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.date-calendar-day.is-outside {
+  color: var(--muted);
+}
+
+.date-calendar-day.is-today {
+  border-color: var(--muted);
+  font-weight: 760;
+}
+
+.date-calendar-day.is-in-range {
+  border-radius: 0;
+  background: color-mix(in srgb, var(--action) 14%, transparent);
+}
+
+.date-calendar-day.is-range-end {
+  background: color-mix(in srgb, var(--action) 32%, transparent);
+  font-weight: 760;
+}
+
+.date-calendar-day.is-selected {
+  background: var(--action);
+  color: var(--on-accent);
+  font-weight: 760;
+}
+
+.date-calendar-footer {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.date-calendar-footer .link-button {
+  padding: 6px 12px;
+}
+
 .filter-basics-card {
   display: grid;
   grid-template-columns: minmax(240px, 1fr);

@@ -13,7 +13,7 @@ import {
 } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
-import { HelpTooltip, LoadingButton, ModalShell, Spinner } from "../components.jsx";
+import { DateField, HelpTooltip, LoadingButton, ModalShell, Spinner } from "../components.jsx";
 import {
   ANY_TAG,
   UNASSIGNED,
@@ -748,8 +748,18 @@ export default function DashboardPage({
                   <span className="filter-label">Date range</span>
                 </div>
                 <div className="date-filter-stack">
-                  <DateInput label="From" name="date_from" onChange={onFilterChange} value={filters.date_from} />
-                  <DateInput label="To" name="date_to" onChange={onFilterChange} value={filters.date_to} />
+                  {[["From", "date_from"], ["To", "date_to"]].map(([label, name]) => (
+                    <DateField
+                      firstYear={Number(filterDefaults.from.slice(0, 4)) || undefined}
+                      key={name}
+                      label={label}
+                      name={name}
+                      onChange={onFilterChange}
+                      rangeFrom={filters.date_from}
+                      rangeTo={filters.date_to}
+                      value={filters[name]}
+                    />
+                  ))}
                 </div>
                 <RelativeRangeForm setFilters={setFilters} />
               </div>
@@ -2496,22 +2506,6 @@ function SavedFiltersPanel({ busy, dateDefaults, name, onDelete, onLoad, onNameC
         )) : <div className="saved-filter-empty">No saved filters yet</div>}
       </div>
     </div>
-  );
-}
-
-function DateInput({ label, name, onChange, value }) {
-  return (
-    <label>
-      <span>{label}</span>
-      <input
-        inputMode="numeric"
-        onChange={(event) => onChange(name, event.target.value)}
-        pattern="\d{4}-\d{2}-\d{2}"
-        placeholder="YYYY-MM-DD"
-        type="text"
-        value={value}
-      />
-    </label>
   );
 }
 
