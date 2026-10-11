@@ -4196,8 +4196,49 @@ td {
 }
 
 .toast.is-visible {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   opacity: 1;
   transform: translateY(0);
+  pointer-events: auto;
+}
+
+.toast-message {
+  min-width: 0;
+  overflow-y: auto;
+  max-height: calc(min(40vh, 240px) - 22px);
+}
+
+.toast-close {
+  flex: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.toast-close:hover,
+.toast-close:focus-visible {
+  color: var(--text);
+}
+
+.backend-offline-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin-bottom: 14px;
+  border: 1px solid color-mix(in srgb, var(--red) 45%, var(--border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--red) 10%, var(--field-bg));
+  color: var(--red);
+  font-weight: 650;
+  padding: 10px 14px;
 }
 
 @media (max-width: 1440px) {

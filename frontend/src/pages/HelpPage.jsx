@@ -25,6 +25,7 @@ const troubleshootingItems = [
   ["A row did not recategorize", "It may be locked. Enable Include locked before recategorizing if you intentionally want to reset locked rows."],
   ["Internal transfers are not detected", "Use Find Transfers from Dashboard Actions, increase the date offset if bank posting dates differ, and check that both account statements have been imported."],
   ["Charts look wrong", "Review date range, ignored/locked inclusion, direction, account, category, subcategory, WNI, tag, and saved filter state."],
+  ["\"Can't reach the Cashmoney backend\"", "The local backend stopped answering. In the desktop app, restart Cashmoney; when running from the scripts, restart run_app.bat. Then use Retry on the banner."],
 ];
 
 const appVersion = __CASHMONEY_APP_VERSION__ === "unknown" ? "Unknown" : `v${__CASHMONEY_APP_VERSION__}`;

@@ -21,6 +21,7 @@ import {
   sunburstData,
   syncChecklistFilters,
   tagTitle,
+  toastDuration,
   topExpenseSubcategories,
 } from "./shared.js";
 
@@ -118,6 +119,12 @@ describe("filters", () => {
     const after = { ...before, tags: [{ id: "t2" }] };
     const synced = syncChecklistFilters({ bank_account: [], category: [], subcategory: [], tag: [ANY_TAG, "t1"] }, before, after);
     expect(synced.tag).toEqual([ANY_TAG]);
+  });
+
+  it("keeps longer toasts up longer, within limits", () => {
+    expect(toastDuration("Saved")).toBe(2600);
+    expect(toastDuration("x".repeat(100))).toBe(7200);
+    expect(toastDuration("x".repeat(1000))).toBe(12000);
   });
 
   describe("active filter count", () => {

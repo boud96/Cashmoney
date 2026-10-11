@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { apiDelete, apiGet, apiPatch } from "./api.js";
+import { apiDelete, apiGet, apiPatch, BACKEND_REACHABILITY_EVENT } from "./api.js";
 import { ConfirmDialog, ModalShell, Spinner } from "./components.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import {
@@ -20,6 +20,7 @@ import {
   normalizeHexColor,
   pages,
   syncChecklistFilters,
+  toastDuration,
   todayInputValue,
 } from "./shared.js";
 
@@ -71,10 +72,28 @@ export default function App() {
   const loadedDashboardKey = useRef("");
   const dashboardStale = useRef(false);
 
+  const toastTimer = useRef(null);
+  const hideToastIn = useCallback((milliseconds) => {
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(""), milliseconds);
+  }, []);
   const notify = useCallback((message) => {
     setToast(message);
-    window.clearTimeout(notify.timeout);
-    notify.timeout = window.setTimeout(() => setToast(""), 2600);
+    hideToastIn(toastDuration(message));
+  }, [hideToastIn]);
+  // Reading a toast (pointer over it, or keyboard focus on its close button) keeps it.
+  const holdToast = useCallback(() => window.clearTimeout(toastTimer.current), []);
+  const releaseToast = useCallback(() => hideToastIn(1500), [hideToastIn]);
+  const dismissToast = useCallback(() => {
+    window.clearTimeout(toastTimer.current);
+    setToast("");
+  }, []);
+
+  // api.js reports when the backend stops (or starts) answering at all.
+  useEffect(() => {
+    const onReachability = (event) => setStatus(event.detail.reachable ? "Backend online" : "Backend offline");
+    window.addEventListener(BACKEND_REACHABILITY_EVENT, onReachability);
+    return () => window.removeEventListener(BACKEND_REACHABILITY_EVENT, onReachability);
   }, []);
 
   const confirmAction = useCallback((options) => {
@@ -390,6 +409,12 @@ export default function App() {
             <p>{kicker}</p>
           </div>
         </header>
+        {status === "Backend offline" ? (
+          <div className="backend-offline-banner" role="alert">
+            <span>Can't reach the Cashmoney backend, so nothing loads or saves right now.</span>
+            <button className="link-button" onClick={loadAll} type="button">Retry</button>
+          </div>
+        ) : null}
 
         <PageErrorBoundary key={activePage}>
           {activePage === "dashboard" && (
@@ -464,7 +489,23 @@ export default function App() {
           title={confirmation.title}
         />
       )}
-      <div className={`toast ${toast ? "is-visible" : ""}`}>{toast}</div>
+      <div
+        aria-atomic="true"
+        aria-live="polite"
+        className={`toast ${toast ? "is-visible" : ""}`}
+        onBlur={releaseToast}
+        onFocus={holdToast}
+        onMouseEnter={holdToast}
+        onMouseLeave={releaseToast}
+        role="status"
+      >
+        {toast ? (
+          <>
+            <span className="toast-message">{toast}</span>
+            <button aria-label="Dismiss message" className="toast-close" onClick={dismissToast} type="button">×</button>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

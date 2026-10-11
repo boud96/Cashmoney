@@ -213,6 +213,13 @@ export function normalizeTagSelection(selection, tags) {
   return values.includes(UNASSIGNED) && coversAllTags ? [] : values;
 }
 
+// How long a toast stays: 2.6 s for a short note, longer for longer messages (errors
+// usually are), at most 12 s.
+export function toastDuration(message) {
+  const length = String(message || "").length;
+  return Math.min(12000, Math.max(2600, 1200 + length * 60));
+}
+
 // The subcategories the filter offers: selecting categories narrows them.
 export function offeredSubcategories(selectedCategories, subcategories) {
   const selected = selectedCategories || [];
