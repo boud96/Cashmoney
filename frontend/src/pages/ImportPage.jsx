@@ -251,6 +251,9 @@ function ImportPreview({ hideAmounts, preview }) {
         {headers.slice(0, 18).map((header) => <span className="pill" key={header}>{header}</span>)}
         {headers.length > 18 ? <span className="pill tag-more-pill">+{formatCount(headers.length - 18)}</span> : null}
       </div>
+      {preview.loaded > rows.length ? (
+        <div className="muted">Showing the first {formatCount(rows.length)} of {formatCount(preview.loaded)} rows. The counts above cover the whole file.</div>
+      ) : null}
       <div className="import-sample-list">
         {rows.map((row, index) => {
           const label = previewRowLabel(row);
