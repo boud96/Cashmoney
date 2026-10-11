@@ -99,7 +99,7 @@ export default function DefinitionsPage({ confirmAction, mappingDraft, notify, r
       <CollapsiblePanel storageId="app-settings" subtitle="Currency, exchange rates, and transfer automation" title="App Settings" wide>
         <SettingsForm notify={notify} refs={refs} reloadAll={reloadAll} reloadDashboard={reloadDashboard} settings={refs.settings} />
       </CollapsiblePanel>
-      <DefinitionPanel confirmAction={confirmAction} endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["CSV Mappings"]} items={refs.mappings} listRenderer={CsvMappingDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} subtitle="CSV import parsers" title="CSV Mappings" wide>
+      <DefinitionPanel confirmAction={confirmAction} endpoint="/csv-mappings/" formatter={(item) => [item.name, `${item.delimiter} - ${item.date_format}`]} helpText={definitionHelp["Import Mappings"]} items={refs.mappings} listRenderer={CsvMappingDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/csv-mappings/")} onEdit={(item) => editItem("/csv-mappings/", item)} reloadAll={reloadAll} subtitle="How bank files are read (CSV or camt.053)" title="Import Mappings" wide>
         <MappingForm clearEditing={() => clearEditing("/csv-mappings/")} draft={mappingDraft} editingItem={editingItems["/csv-mappings/"]} notify={notify} refs={refs} reloadAll={reloadAll} setDraft={setMappingDraft} />
       </DefinitionPanel>
       <DefinitionPanel confirmAction={confirmAction} endpoint="/bank-accounts/" formatter={(item) => [item.name, bankAccountSubtitle(item)]} helpText={definitionHelp["Bank Accounts"]} items={refs.accounts} listRenderer={BankAccountDefinitionGrid} notify={notify} onDeleted={() => clearEditing("/bank-accounts/")} onEdit={(item) => editItem("/bank-accounts/", item)} reloadAll={reloadAll} subtitle="Accounts available for imports" title="Bank Accounts">
@@ -753,7 +753,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
                 <FormField label="Bank"><input defaultValue={editingItem?.bank_name || ""} name="bank_name" placeholder="Bank name" /></FormField>
                 <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" pattern="[A-Za-z]{3}" placeholder="CZK" required title="Three-letter currency code, e.g. CZK or EUR" /></FormField>
                 <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" required type="number" /></FormField>
-                <FormField label="Default CSV Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
+                <FormField label="Default Import Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
               </div>
             </div>
             <div className="definition-modal-actions">
@@ -915,7 +915,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     }
     if (findDuplicate(refs.mappings, "name", name, editingItem?.id)) {
       setStep(0);
-      notify("CSV mapping name already exists");
+      notify("A mapping with this name already exists");
       formRef.current?.elements.name?.focus();
       return false;
     }
@@ -1011,7 +1011,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       setIsAdding(false);
       clearEditing?.();
       resetWizardState();
-      notify(isEditing ? "CSV mapping saved" : "CSV mapping added");
+      notify(isEditing ? "Import mapping saved" : "Import mapping added");
       await reloadAll();
     } catch (error) {
       notify(error.message);
@@ -1172,12 +1172,12 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
           <form aria-labelledby="mapping-wizard-title" aria-modal="true" className="mapping-wizard-modal" key={editingItem?.id || "new-mapping"} onSubmit={submit} ref={formRef} role="dialog">
             <div className="mapping-wizard-header">
               <div>
-                <h3 id="mapping-wizard-title">{isEditing ? "Edit CSV Mapping" : "Add CSV Mapping"}</h3>
+                <h3 id="mapping-wizard-title">{isEditing ? "Edit Import Mapping" : "Add Import Mapping"}</h3>
                 <span>{mappingDetails.name || "New mapping"}</span>
               </div>
               <CloseButton disabled={saving || detecting} onClick={closeWizard} />
             </div>
-            <div aria-label="CSV mapping steps" className="mapping-wizard-steps">
+            <div aria-label="Import mapping steps" className="mapping-wizard-steps">
               {mappingWizardSteps.map((label, index) => (
                 <div className={`mapping-wizard-step ${index === currentStep ? "is-active" : ""} ${index < currentStep ? "is-complete" : ""}`.trim()} key={label}>
                   <span>{index + 1}</span>

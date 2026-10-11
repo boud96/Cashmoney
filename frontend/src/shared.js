@@ -37,8 +37,8 @@ export const wniOptions = [
   ["investment", "Investment"],
 ];
 export const definitionHelp = {
-  "Bank Accounts": "Bank accounts group imported transactions by account, bank, currency, owner count, and optional default CSV mapping.",
-  "CSV Mappings": "CSV mappings describe how a bank statement file should be parsed, including separators, date formats, columns, and categorization text fields.",
+  "Bank Accounts": "Bank accounts group imported transactions by account, bank, currency, owner count, and optional default import mapping.",
+  "Import Mappings": "Import mappings describe how a bank file is read: a CSV layout (separators, date formats, columns) or a camt.053 XML statement, plus the fields used for categorization.",
   Categories: "Categories are the top-level buckets used for dashboard breakdowns and reporting.",
   Subcategories: "Subcategories sit under categories and are the actual category-like value assigned to transactions.",
   Tags: "Tags are optional labels that can be attached to multiple transactions for flexible filtering.",

@@ -1,14 +1,14 @@
 const workflowSteps = [
-  "Define categories, subcategories, tags, and CSV mappings.",
-  "Assign a default CSV mapping to each bank account.",
+  "Define categories, subcategories, tags, and import mappings.",
+  "Assign a default import mapping to each bank account.",
   "Preview and import CSV statements.",
   "Review filters, stats, charts, and transactions on the Dashboard.",
   "Improve keyword rules, then recategorize the filtered transactions.",
 ];
 
 const conceptItems = [
-  ["Bank Account", "Groups imported transactions and decides which CSV mapping is used during import."],
-  ["CSV Mapping", "Describes how a bank export is parsed: dates, separators, columns, currency, and categorization fields."],
+  ["Bank Account", "Groups imported transactions and decides which import mapping is used during import."],
+  ["Import Mapping", "Describes how a bank file (CSV or camt.053 XML) is read: dates, separators, columns, currency, and categorization fields."],
   ["Default Currency", "The reporting currency used by dashboard totals, charts, and converted transaction amounts."],
   ["Category", "The top-level reporting bucket. It is derived from the assigned subcategory."],
   ["Subcategory", "The main assignable classification value for a transaction."],
@@ -19,8 +19,8 @@ const conceptItems = [
 ];
 
 const troubleshootingItems = [
-  ["Import button is disabled", "Choose a CSV file, select a bank account, make sure that account has a default CSV mapping, then run Preview Import first."],
-  ["CSV preview has errors", "Check the CSV mapping delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
+  ["Import button is disabled", "Choose a CSV file, select a bank account, make sure that account has a default import mapping, then run Preview Import first."],
+  ["CSV preview has errors", "Check the import mapping's delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
   ["No transactions are shown", "A checklist filter with no selected items means show nothing (except Tag, where it means any tag). Use Select all or load a saved filter."],
   ["A row did not recategorize", "It may be locked. Enable Include locked before recategorizing if you intentionally want to reset locked rows."],
   ["Internal transfers are not detected", "Use Find Transfers from Dashboard Actions, increase the date offset if bank posting dates differ, and check that both account statements have been imported."],
@@ -70,17 +70,17 @@ export default function HelpPage() {
           </p>
           <ul>
             <li><strong>App Settings:</strong> set the dashboard default currency, review FX cache status, and configure automatic internal-transfer handling.</li>
-            <li><strong>CSV Mappings:</strong> map CSV columns to transaction fields and choose categorization fields used by Keywords.</li>
-            <li><strong>Bank Accounts:</strong> store account details and set the default CSV mapping used by Import.</li>
+            <li><strong>Import Mappings:</strong> map file columns to transaction fields and choose categorization fields used by Keywords.</li>
+            <li><strong>Bank Accounts:</strong> store account details and set the default import mapping used by Import.</li>
             <li><strong>Categories and Subcategories:</strong> define the reporting hierarchy shown in filters, charts, and the table.</li>
             <li><strong>Tags:</strong> add cross-cutting labels such as projects, people, trips, or special cases.</li>
             <li><strong>Keywords:</strong> match transaction text and assign subcategory, WNI, tags, or ignored status.</li>
           </ul>
         </HelpCard>
 
-        <HelpCard title="CSV Mappings">
+        <HelpCard title="Import Mappings">
           <p>
-            A CSV Mapping should represent one bank-export format. Use Detect Columns with a sample
+            An import mapping should represent one bank-export format. Use Detect Columns with a sample
             CSV whenever possible, then inspect the parsed sample rows before saving.
           </p>
           <ul>
@@ -95,12 +95,12 @@ export default function HelpPage() {
         <HelpCard title="Import">
           <p>
             The Import page is preview-first. The selected bank account automatically supplies the
-            CSV mapping; there is no separate mapping picker in the import flow.
+            import mapping; there is no separate mapping picker in the import flow.
           </p>
           <ol>
             <li>Drop or browse for a CSV file or camt.053 XML statement.</li>
             <li>Select the bank account.</li>
-            <li>Confirm the shown default CSV mapping. If there is a warning, set the default mapping in Definitions first.</li>
+            <li>Confirm the shown default import mapping. If there is a warning, set the default mapping in Definitions first.</li>
             <li>Run Preview Import. The preview shows parsed date, amount, description, status, headers, and summary counts.</li>
             <li>Import Valid Rows after the preview looks right.</li>
           </ol>

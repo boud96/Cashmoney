@@ -217,12 +217,12 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
 
 function MappingStatus({ account, mapping }) {
   if (!account) {
-    return <div className="mapping-status">Choose a bank account to see the default CSV mapping.</div>;
+    return <div className="mapping-status">Choose a bank account to see its default import mapping.</div>;
   }
   if (!mapping) {
     return (
       <div className="mapping-status mapping-status-warning">
-        This bank account has no default CSV mapping. Set one in Definitions before importing.
+        This bank account has no default import mapping. Set one in Definitions before importing.
       </div>
     );
   }
