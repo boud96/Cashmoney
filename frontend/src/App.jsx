@@ -66,6 +66,10 @@ export default function App() {
   const confirmationResolver = useRef(null);
   const dashboardLoadSequence = useRef(0);
   const dashboardSummarySequence = useRef(0);
+  // The filter params of the last dashboard load, and whether another page changed
+  // data since (CR-27: no background reloads while the dashboard is hidden).
+  const loadedDashboardKey = useRef("");
+  const dashboardStale = useRef(false);
 
   const notify = useCallback((message) => {
     setToast(message);
@@ -145,7 +149,12 @@ export default function App() {
     }
   }, [loadFilterDefaults, loadReferenceData, notify]);
 
-  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
+  const builtFilterParams = useMemo(() => buildFilterParams(filters), [filters]);
+  const filterParamsKey = JSON.stringify(builtFilterParams);
+  // The same object while the query stays the same: loadAll() re-syncs the filters
+  // after every definitions save, and a new object reloaded the whole dashboard.
+  const filterParams = useMemo(() => builtFilterParams, [filterParamsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const dashboardVisible = activePage === "dashboard";
   const dashboardBusy = loadingDashboardSummary || loadingDashboardTransactions;
 
   const runDashboardLoad = useCallback(async (params, loadSequence, summarySequence) => {
@@ -216,12 +225,17 @@ export default function App() {
   }, [filterParams, notify]);
 
   const loadDashboard = useCallback(async (params = filterParams) => {
+    if (!dashboardVisible) {
+      // Another page changed data; load when the dashboard is shown again.
+      dashboardStale.current = true;
+      return;
+    }
     const loadSequence = dashboardLoadSequence.current + 1;
     const summarySequence = dashboardSummarySequence.current + 1;
     dashboardLoadSequence.current = loadSequence;
     dashboardSummarySequence.current = summarySequence;
     await runDashboardLoad(params, loadSequence, summarySequence);
-  }, [filterParams, runDashboardLoad]);
+  }, [dashboardVisible, filterParams, runDashboardLoad]);
 
   const loadMaintenance = useCallback(async () => {
     try {
@@ -244,18 +258,25 @@ export default function App() {
   }, [accent]);
 
   useEffect(() => {
-    if (filterDefaults.to || filterDefaults.from) {
-      const loadSequence = dashboardLoadSequence.current + 1;
-      const summarySequence = dashboardSummarySequence.current + 1;
-      dashboardLoadSequence.current = loadSequence;
-      dashboardSummarySequence.current = summarySequence;
-      const timeoutId = window.setTimeout(() => {
-        runDashboardLoad(filterParams, loadSequence, summarySequence);
-      }, 250);
-      return () => window.clearTimeout(timeoutId);
+    if (!(filterDefaults.to || filterDefaults.from) || !dashboardVisible) {
+      return undefined;
     }
-    return undefined;
-  }, [filterDefaults.from, filterDefaults.to, filterParams, runDashboardLoad]);
+    // Load when the filters changed since the last load, or when another page asked
+    // for fresh data while the dashboard was hidden; not on every page switch.
+    if (!dashboardStale.current && loadedDashboardKey.current === filterParamsKey) {
+      return undefined;
+    }
+    const loadSequence = dashboardLoadSequence.current + 1;
+    const summarySequence = dashboardSummarySequence.current + 1;
+    dashboardLoadSequence.current = loadSequence;
+    dashboardSummarySequence.current = summarySequence;
+    const timeoutId = window.setTimeout(() => {
+      dashboardStale.current = false;
+      loadedDashboardKey.current = filterParamsKey;
+      runDashboardLoad(filterParams, loadSequence, summarySequence);
+    }, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runDashboardLoad]);
 
   useEffect(() => {
     if (activePage === "maintenance") {
