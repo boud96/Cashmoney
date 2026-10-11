@@ -1753,7 +1753,7 @@ class CSVImportService:
     def preview_row(self, line_number, row, seen_keys):
         try:
             data = self.extractor.extract(row)
-            duplicate = self._find_duplicate(data, seen_keys)
+            duplicate = self._find_duplicate(data, seen_keys, row=row)
             categorization_text = self.categorizer.build_categorization_text(
                 data, self.csv_mapping
             )
@@ -1785,12 +1785,12 @@ class CSVImportService:
         self.statement_report = statement_import_report(statement, self.bank_account)
         return rows, headers
 
-    def _find_duplicate(self, data, seen_keys, csv_import=None):
+    def _find_duplicate(self, data, seen_keys, csv_import=None, row=None):
         if data.get("original_id"):
             return Transaction.objects.filter(
                 bank_account=self.bank_account,
                 original_id=data["original_id"],
-            ).first()
+            ).first() or self._find_unsplit_batch(row, csv_import)
 
         # Without a bank ID, identical rows match by count: the n-th one in a file
         # duplicates the n-th such transaction that existed before this import.
@@ -1813,6 +1813,25 @@ class CSVImportService:
         position = seen_keys[key] - 1
         matches = existing.order_by("created_at", "id")[position : position + 1]
         return matches[0] if matches else None
+
+    def _find_unsplit_batch(self, row, csv_import):
+        """The one row an older version made from this payment's camt.053 batch entry.
+
+        Versions before 0.9 imported a batch entry as a single row with the total, so
+        its payments, which now have their own IDs, would otherwise import again.
+        """
+        if self.csv_mapping.file_format != ImportFileFormat.CAMT053 or not row:
+            return None
+        if not row.get("batch_original_id"):
+            return None
+        older = Transaction.objects.filter(
+            bank_account=self.bank_account,
+            original_id=row["batch_original_id"],
+            amount=Decimal(row["batch_amount"]),
+        )
+        if csv_import is not None:
+            older = older.exclude(import_batch=csv_import)
+        return older.first()
 
     def _row_description(self, row):
         # Shown in the import report so users can recognize skipped rows.
@@ -1845,7 +1864,7 @@ class CSVImportService:
     @transaction.atomic
     def _import_row(self, row, csv_import, seen_keys):
         data = self.extractor.extract(row)
-        duplicate = self._find_duplicate(data, seen_keys, csv_import)
+        duplicate = self._find_duplicate(data, seen_keys, csv_import, row)
         if duplicate:
             return None, duplicate
 

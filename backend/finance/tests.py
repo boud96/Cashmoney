@@ -4402,6 +4402,46 @@ CAMT053_ENTRIES = [
 ]
 
 
+CAMT053_DETAIL_AMOUNTS = {
+    "TxAmt": '<AmtDtls><TxAmt><Amt Ccy="CZK">{}</Amt></TxAmt></AmtDtls>',
+    "InstdAmt": '<AmtDtls><InstdAmt><Amt Ccy="CZK">{}</Amt></InstdAmt></AmtDtls>',
+    "Amt": '<Amt Ccy="CZK">{}</Amt><CdtDbtInd>DBIT</CdtDbtInd>',  # camt.053.001.04+
+}
+
+
+def camt053_batch_entry(ref, amount, details, amount_tag="TxAmt"):
+    """One booking that bundles several payments: (reference, amount, payee, message)."""
+    detail_xml = ""
+    for detail_ref, detail_amount, payee, message in details:
+        refs = (
+            f"<Refs><AcctSvcrRef>{detail_ref}</AcctSvcrRef></Refs>"
+            if detail_ref
+            else ""
+        )
+        amount_xml = (
+            CAMT053_DETAIL_AMOUNTS[amount_tag].format(detail_amount)
+            if detail_amount
+            else ""
+        )
+        detail_xml += (
+            f"<TxDtls>{refs}{amount_xml}"
+            f"<RltdPties><Cdtr><Nm>{payee}</Nm></Cdtr></RltdPties>"
+            f"<RmtInf><Ustrd>{message}</Ustrd></RmtInf></TxDtls>"
+        )
+    entry_ref = f"<NtryRef>{ref}</NtryRef>" if ref else ""
+    return f"""
+            <Ntry>
+                {entry_ref}
+                <Amt Ccy="CZK">{amount}</Amt>
+                <CdtDbtInd>DBIT</CdtDbtInd>
+                <Sts>BOOK</Sts>
+                <BookgDt><Dt>2026-09-10</Dt></BookgDt>
+                <ValDt><Dt>2026-09-10</Dt></ValDt>
+                <BkTxCd><Prtry><Cd>10000108000</Cd><Issr>CBA</Issr></Prtry></BkTxCd>
+                <NtryDtls><Btch><NbOfTxs>{len(details)}</NbOfTxs></Btch>{detail_xml}</NtryDtls>
+            </Ntry>"""
+
+
 def camt053_document(
     entries=None,
     opening="10000.00",
@@ -4479,6 +4519,69 @@ class Camt053ParserTests(TestCase):
         self.assertEqual(foreign["instructed_currency"], "USD")
         self.assertEqual(foreign["exchange_rate"], "21.345")
         self.assertNotIn("instructed_currency", card)
+
+    def test_a_batch_entry_becomes_one_row_per_payment(self):
+        split = camt053_batch_entry(
+            "B1",
+            "300.00",
+            [
+                ("B1-1", "100.00", "Water company", "Water"),
+                ("B1-2", "200.00", "Power", "Power"),
+            ],
+        )
+        no_refs = camt053_batch_entry(
+            "B4",
+            "30.00",
+            [("", "10.00", "Shop A", "A"), ("", "20.00", "Shop B", "B")],
+            amount_tag="InstdAmt",
+        )
+        result = parse_camt053(
+            camt053_document([split, no_refs], opening="1000.00", closing="670.00")
+        )
+        rows = self.rows_by_id(result)
+
+        self.assertEqual(result.warnings(), [])
+        self.assertEqual(sorted(rows), ["B1-1", "B1-2", "B4/1", "B4/2"])
+        self.assertEqual(rows["B1-1"]["amount"], "-100.00")
+        self.assertEqual(rows["B1-1"]["counterparty_name"], "Water company")
+        self.assertEqual(rows["B1-1"]["description"], "Water Water company")
+        self.assertEqual(rows["B1-2"]["amount"], "-200.00")
+        self.assertEqual(rows["B4/2"]["counterparty_name"], "Shop B")
+        # What older versions imported the entry as, for the import's duplicate check.
+        self.assertEqual(rows["B1-2"]["batch_original_id"], "B1-1")
+        self.assertEqual(rows["B4/2"]["batch_original_id"], "B4")
+        self.assertEqual(rows["B4/2"]["batch_amount"], "-30.00")
+        self.assertEqual(result.statements[0].entry_count, 2)
+
+    def test_a_batch_without_amounts_per_payment_stays_one_row(self):
+        no_amounts = camt053_batch_entry(
+            "B2", "50.00", [("B2-1", "", "Shop A", "A"), ("B2-2", "", "Shop B", "B")]
+        )
+        not_adding_up = camt053_batch_entry(
+            "B3",
+            "25.00",
+            [("B3-1", "10.00", "Shop C", "C"), ("B3-2", "10.00", "Shop D", "D")],
+        )
+        without_id = camt053_batch_entry(
+            "", "5.00", [("", "2.00", "Shop E", "E"), ("", "3.00", "Shop F", "F")]
+        )
+        result = parse_camt053(
+            camt053_document(
+                [no_amounts, not_adding_up, without_id],
+                opening="100.00",
+                closing="20.00",
+            )
+        )
+        rows = self.rows_by_id(result)
+
+        self.assertEqual(sorted(rows), ["", "B2-1", "B3-1"])
+        self.assertEqual(rows["B2-1"]["amount"], "-50.00")
+        self.assertEqual(rows["B2-1"]["counterparty_name"], "Shop A")
+        self.assertEqual(rows["B3-1"]["amount"], "-25.00")
+        self.assertEqual(rows[""]["amount"], "-5.00")
+        self.assertNotIn("batch_original_id", rows["B2-1"])
+        self.assertEqual(result.statements[0].unsplit_batches, 3)
+        self.assertIn("bundle several payments", result.warnings()[0])
 
     def test_skips_pending_entries_and_reports_them(self):
         pending = camt053_entry(
@@ -4603,6 +4706,59 @@ class Camt053ImportAPITests(FinanceTestCase):
         self.assertEqual(card.raw_data["transaction_type"], "30000201000")
         foreign = Transaction.objects.get(original_id="F1")
         self.assertEqual(foreign.raw_data["instructed_currency"], "USD")
+
+    def batch_statement(self):
+        batch = camt053_batch_entry(
+            "B1",
+            "300.00",
+            [
+                ("", "100.00", "Water company", "Water"),
+                ("", "200.00", "Power", "Power"),
+            ],
+            amount_tag="Amt",
+        )
+        return camt053_document([batch], opening="1000.00", closing="700.00")
+
+    def import_statement(self, document):
+        with patch("finance.views.sync_missing_exchange_rates") as sync_rates:
+            sync_rates.return_value = {}
+            return self.client.post(
+                "/api/imports/", self.import_data(csv_file=self.xml_file(document))
+            )
+
+    def test_each_payment_of_a_batch_entry_is_imported(self):
+        response = self.import_statement(self.batch_statement())
+        again = self.import_statement(self.batch_statement())
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(json_body(response)["report"]["created"]["count"], 2)
+        self.assertEqual(
+            sorted(Transaction.objects.values_list("original_id", "amount")),
+            [("B1/1", Decimal("-100.00")), ("B1/2", Decimal("-200.00"))],
+        )
+        self.assertEqual(len(json_body(again)["report"]["skipped"]["duplicates"]), 2)
+
+    def test_a_batch_an_older_version_imported_whole_is_not_imported_again(self):
+        # Versions before 0.9 imported the entry as one row with the total.
+        Transaction.objects.create(
+            bank_account=self.account,
+            original_id="B1",
+            transaction_date="2026-09-10",
+            description="Water Water company",
+            amount=Decimal("-300.00"),
+        )
+        preview = json_body(
+            self.client.post(
+                "/api/imports/preview/",
+                self.import_data(csv_file=self.xml_file(self.batch_statement())),
+            )
+        )
+        response = self.import_statement(self.batch_statement())
+
+        self.assertEqual(preview["summary"]["duplicates"], 2)
+        self.assertEqual(json_body(response)["report"]["created"]["count"], 0)
+        self.assertEqual(len(json_body(response)["report"]["skipped"]["duplicates"]), 2)
+        self.assertEqual(Transaction.objects.count(), 1)
 
     def test_an_unreadable_statement_fails_with_a_readable_message(self):
         response = self.client.post(
