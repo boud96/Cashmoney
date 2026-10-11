@@ -304,7 +304,7 @@ class MaintenanceAPITests(FinanceTestCase):
         self.assertEqual(payload["details"]["expected"], "DELETE ALL TRANSACTIONS")
 
     def test_maintenance_delete_sample_data_preserves_user_data(self):
-        call_command("seed_sample_data", "--skip-admin", stdout=StringIO(), verbosity=0)
+        call_command("seed_sample_data", stdout=StringIO(), verbosity=0)
         user_category = Category.objects.create(name="User Category")
         user_transaction = Transaction.objects.create(
             transaction_date="2026-05-01",

@@ -1978,7 +1978,7 @@ class MaintenanceSampleDataView(JsonView):
 
 class MaintenanceRecreateSampleDataView(JsonView):
     def post(self, request):
-        result = seed_sample_data(reset_sample=True, skip_admin=True)
+        result = seed_sample_data(reset_sample=True)
         return json_response(
             {
                 "created": True,

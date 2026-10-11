@@ -71,7 +71,7 @@ def main():
 
     django.setup()
     call_command("migrate", interactive=False, verbosity=0)
-    call_command("seed_sample_data", "--if-empty", "--skip-admin", verbosity=0)
+    call_command("seed_sample_data", "--if-empty", verbosity=0)
 
     # A production WSGI server instead of Django's development server (runserver).
     from waitress import serve
