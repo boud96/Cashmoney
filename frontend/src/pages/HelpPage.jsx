@@ -19,12 +19,13 @@ const conceptItems = [
 ];
 
 const troubleshootingItems = [
-  ["Import button is disabled", "Choose a CSV file, select a bank account, make sure that account has a default import mapping, then run Preview Import first."],
-  ["CSV preview has errors", "Check the import mapping's delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
+  ["Import button is disabled", "Choose a CSV or XML statement, select a bank account, make sure that account has a default import mapping, then run Preview Import first."],
+  ["The preview has errors", "Check the import mapping's delimiter, header row, encoding, date format, decimal separator, and required mapped columns. An amount that doesn't fit the decimal separator (12.50 when the mapping expects 12,50) is an error rather than a wrong amount."],
   ["No transactions are shown", "A checklist filter with no selected items means show nothing (except Tag, where it means any tag). Use Select all or load a saved filter."],
   ["A row did not recategorize", "It may be locked. Enable Include locked before recategorizing if you intentionally want to reset locked rows."],
   ["Internal transfers are not detected", "Use Find Transfers from Dashboard Actions, increase the date offset if bank posting dates differ, and check that both account statements have been imported."],
   ["Charts look wrong", "Review date range, ignored/locked inclusion, direction, account, category, subcategory, WNI, tag, and saved filter state."],
+  ["\"Can't reach the Cashmoney backend\"", "The local backend stopped answering. In the desktop app, restart Cashmoney; when running from the scripts, restart run_app.bat. Then use Retry on the banner."],
 ];
 
 const appVersion = __CASHMONEY_APP_VERSION__ === "unknown" ? "Unknown" : `v${__CASHMONEY_APP_VERSION__}`;
@@ -74,7 +75,7 @@ export default function HelpPage() {
             <li><strong>Bank Accounts:</strong> store account details and set the default import mapping used by Import.</li>
             <li><strong>Categories and Subcategories:</strong> define the reporting hierarchy shown in filters, charts, and the table.</li>
             <li><strong>Tags:</strong> add cross-cutting labels such as projects, people, trips, or special cases.</li>
-            <li><strong>Keywords:</strong> match transaction text and assign subcategory, WNI, tags, or ignored status.</li>
+            <li><strong>Keywords:</strong> match transaction text and assign subcategory, WNI, tags, or ignored status. Matching ignores case, spaces, and accents, so the term "lekarna" also matches "LÉKÁRNA".</li>
           </ul>
         </HelpCard>
 
@@ -107,8 +108,10 @@ export default function HelpPage() {
           <p>
             Recent Imports shows the latest import batches. Import Report shows loaded, created,
             duplicate, and error counts for the last import in the session, and lists the rows that
-            failed. Delete on a recent import removes it together with the transactions it created,
-            for example to import the file again with a corrected mapping.
+            failed; Report on a recent import opens that import's report. An import where no row
+            can be imported is refused and not kept, and its report says why. Delete on a recent
+            import removes it together with the transactions it created, for example to import the
+            file again with a corrected mapping.
           </p>
           <p>
             Exchange rates sync automatically after imported transactions are saved. If the provider
@@ -125,7 +128,7 @@ export default function HelpPage() {
             <li><strong>Date range:</strong> From and To use the same YYYY-MM-DD format as the table. The relative range controls can quickly set a recent period.</li>
             <li><strong>Saved filters:</strong> save the current filter state under a name and load it later.</li>
             <li><strong>Checklist filters:</strong> empty means show nothing. On startup, all checklist options are selected.</li>
-            <li><strong>Tag:</strong> starts empty, which means any tag. Select tags to show only transactions with at least one of them, or Untagged for transactions without tags.</li>
+            <li><strong>Tag:</strong> starts empty, which means any tag. Select tags to show only transactions with at least one of them. Tagged shows every transaction that has a tag, and Untagged every one without.</li>
             <li><strong>Category/Subcategory/WNI:</strong> subcategory options narrow automatically when categories are selected.</li>
             <li><strong>Direction:</strong> Incomes are positive transactions and Expenses are negative transactions.</li>
             <li><strong>Ignored / Locked:</strong> control whether those rows appear in the filtered data.</li>
@@ -141,7 +144,7 @@ export default function HelpPage() {
           <ul>
             <li><strong>Stats:</strong> Incomes, Expenses, Net, Transactions, and Uncategorized reflect the current filters in the app default currency.</li>
             <li><strong>Charts:</strong> Monthly Flow, Income Categories, Expense Categories, Want / Need / Investment, and Top Expense Subcategories.</li>
-            <li><strong>Exchange rates:</strong> original imported amounts stay unchanged; converted totals use cached rates that sync after imports and default currency changes.</li>
+            <li><strong>Exchange rates:</strong> original imported amounts stay unchanged; converted totals use cached rates that sync after imports and default currency changes. In the table, a payment in another currency shows its original amount under the converted one, with the rate on hover.</li>
             <li><strong>Hide amounts:</strong> the eye button hides amount values in the dashboard and import preview.</li>
             <li><strong>Accent and theme:</strong> use the sidebar footer controls for accent color and light/dark mode.</li>
           </ul>
@@ -207,6 +210,7 @@ export default function HelpPage() {
             <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
             <li><strong>Admin:</strong> create or reset a local Django admin user, then open Django admin for power users.</li>
             <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Before deleting all transactions or all finance data, a safety backup is saved automatically and listed under saved backups.</li>
+            <li><strong>Saved backups:</strong> the app keeps the newest 10 pre-restore and 10 pre-delete backups, plus every one from the last 90 days, and deletes older ones when it saves a new one. Files you put in the backups folder yourself and exports you download are never deleted.</li>
           </ul>
         </HelpCard>
 

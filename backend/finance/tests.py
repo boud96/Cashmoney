@@ -1,11 +1,14 @@
 import json
+import os
 import sqlite3
 import tempfile
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import URLError
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -41,16 +44,21 @@ from .sample_data import (
     delete_sample_data,
     sample_name,
 )
+from . import services as finance_services
 from .services import (
+    CURRENCY_LIST_CACHE_SECONDS,
     CSVImportService,
     CategorizationService,
     ExchangeRateProviderError,
     FrankfurterExchangeRateProvider,
+    available_currency_options,
+    clear_currency_list_cache,
     recalculate_transaction_conversions,
     sync_missing_exchange_rates,
     transaction_mentions_account,
 )
 from .statement_parsers import parse_camt053
+from .views import create_safety_backup
 
 
 def json_body(response):
@@ -67,6 +75,11 @@ class FinanceTestCase(TestCase):
         data_dir_override = self.settings(DATA_DIR=self.data_dir)
         data_dir_override.enable()
         self.addCleanup(data_dir_override.disable)
+        # The rate provider remembers failures and caches currencies per process.
+        FrankfurterExchangeRateProvider.forget_failure()
+        clear_currency_list_cache()
+        self.addCleanup(FrankfurterExchangeRateProvider.forget_failure)
+        self.addCleanup(clear_currency_list_cache)
 
         self.mapping = CSVMapping.objects.create(
             name="Test Bank",
@@ -96,6 +109,15 @@ class FinanceTestCase(TestCase):
 
     def backup_dir(self):
         return self.data_dir / "backups"
+
+    def saved_backup(self, name, age_days):
+        """A placeholder file in the backups folder, last modified age_days ago."""
+        self.backup_dir().mkdir(parents=True, exist_ok=True)
+        path = self.backup_dir() / name
+        path.write_bytes(b"backup")
+        modified = time.time() - age_days * 24 * 60 * 60
+        os.utime(path, (modified, modified))
+        return path
 
     def csv_file(self, body):
         return SimpleUploadedFile(
@@ -138,6 +160,17 @@ class SecretKeyTests(TestCase):
         self.assertEqual(first, again)
         self.assertGreaterEqual(len(first), 50)
         self.assertNotEqual(first, other)
+
+
+class DatabaseSettingsTests(TestCase):
+    def test_writes_wait_for_the_write_lock(self):
+        # With deferred transactions, a write that had already read failed at once
+        # while another request held the write lock (CR-39). The scripted check is
+        # .claude/tools/analysis/lock_check.py.
+        options = connection.settings_dict["OPTIONS"]
+
+        self.assertEqual(options["transaction_mode"], "IMMEDIATE")
+        self.assertGreaterEqual(options["timeout"], 20)
 
 
 class ModelTests(FinanceTestCase):
@@ -201,7 +234,7 @@ class ModelTests(FinanceTestCase):
             )
 
         request, timeout = captured_requests[0]
-        self.assertEqual(timeout, 30)
+        self.assertEqual(timeout, 5)
         self.assertEqual(request.get_header("Accept"), "application/json")
         self.assertEqual(request.get_header("User-agent"), provider.user_agent)
         self.assertEqual(rows[0]["date"], date(2024, 1, 2))
@@ -597,6 +630,55 @@ class CSVImportServiceTests(FinanceTestCase):
         self.assertEqual(errors[5], "Amount is missing")
         self.assertIn("n/a", errors[6])
 
+    def test_amounts_must_match_the_mappings_decimal_separator(self):
+        comma_mapping = CSVMapping.objects.create(
+            name="Comma decimals",
+            delimiter=";",
+            date_format="%Y-%m-%d",
+            decimal_separator=",",
+            column_map=self.mapping.column_map,
+        )
+
+        _csv_import, comma_report = CSVImportService(
+            comma_mapping, self.account
+        ).import_file(
+            self.csv_file(
+                "ID;Date;Description;Amount\n"
+                "c-1;2026-01-02;Grouped;-1.234,50\n"
+                "c-2;2026-01-02;Plain;12,50\n"
+                "c-3;2026-01-02;Dot decimal;12.50\n"
+                "c-4;2026-01-02;Bad grouping;1.23,00\n"
+            )
+        )
+        _csv_import, dot_report = CSVImportService(
+            self.mapping, self.account
+        ).import_file(
+            self.csv_file(
+                "ID,Date,Description,Amount\n"
+                'd-1,2026-01-03,Grouped,"1,234.50"\n'
+                'd-2,2026-01-03,Comma decimal,"12,50"\n'
+                "d-3,2026-01-03,Plain,-7.5\n"
+            )
+        )
+
+        self.assertEqual(
+            dict(Transaction.objects.values_list("original_id", "amount")),
+            {
+                "c-1": Decimal("-1234.50"),
+                "c-2": Decimal("12.50"),
+                "d-1": Decimal("1234.50"),
+                "d-3": Decimal("-7.50"),
+            },
+        )
+        comma_errors = [entry["error"] for entry in comma_report["skipped"]["errors"]]
+        dot_errors = [entry["error"] for entry in dot_report["skipped"]["errors"]]
+        self.assertEqual(len(comma_errors), 2)
+        self.assertIn("'12.50' doesn't match", comma_errors[0])
+        self.assertIn("decimal separator (',')", comma_errors[0])
+        self.assertIn("'1.23,00'", comma_errors[1])
+        self.assertEqual(len(dot_errors), 1)
+        self.assertIn("'12,50' doesn't match", dot_errors[0])
+
     def test_dash_placeholder_in_debit_column_does_not_hide_the_credit(self):
         mapping = CSVMapping.objects.create(
             name="Split amounts",
@@ -802,6 +884,25 @@ class CategorizationTests(FinanceTestCase):
         self.assertIsNone(wni_only.subcategory)
         self.assertEqual(wni_only.want_need_investment, WantNeedInvestment.INVESTMENT)
         self.assertTrue(own_transfer.is_ignored)
+
+    def test_keyword_matching_ignores_accents(self):
+        self.keyword("Ceska lekarna", ["ceska lekarna"])
+        self.keyword("Nájem", ["Nájem"])
+        self.keyword("Kavárna", ["kavarna"], exclude_terms=["záloha"])
+
+        categorizer = CategorizationService()
+
+        def matched(text):
+            return [
+                keyword.name for keyword in categorizer.apply(text).matched_keywords
+            ]
+
+        self.assertEqual(
+            matched("ČESKÁ LÉKÁRNA HOLDING, a.s. DR. MAX"), ["Ceska lekarna"]
+        )
+        self.assertEqual(matched("NAJEM BYT 2/2026"), ["Nájem"])
+        self.assertEqual(matched("Kavárna Praha"), ["Kavárna"])
+        self.assertEqual(matched("KAVARNA ZALOHA"), [])
 
     def test_internal_account_reference_ignore_setting(self):
         BankAccount.objects.create(name="Savings", account_number="456-789/0100")
@@ -1082,10 +1183,16 @@ class APITests(FinanceTestCase):
         )
 
         imports = json_body(self.client.get("/api/imports/"))
+        detail = self.client.get(f"/api/imports/{imports[0]['id']}/")
+        missing = self.client.get("/api/imports/00000000-0000-0000-0000-000000000000/")
 
         self.assertEqual(len(imports), 1)
         self.assertNotIn("report", imports[0])
         self.assertEqual(imports[0]["created_count"], 1)
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(json_body(detail)["import"]["id"], imports[0]["id"])
+        self.assertEqual(json_body(detail)["report"]["created"]["count"], 1)
+        self.assertEqual(missing.status_code, 404)
 
     def test_row_edit_reports_whether_the_row_still_matches_the_filters(self):
         other = Subcategory.objects.create(name="Groceries", category=self.category)
@@ -1341,6 +1448,65 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(payload["fallback"])
         self.assertEqual(payload["currencies"][0]["code"], "CZK")
+
+    def test_a_network_failure_is_remembered_until_an_explicit_sync(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Hotel",
+            amount=Decimal("-80.00"),
+            currency="USD",
+        )
+        calls = []
+
+        def offline_urlopen(request, timeout):
+            calls.append(request.full_url)
+            raise URLError("network is unreachable")
+
+        provider = FrankfurterExchangeRateProvider()
+        with patch("finance.services.urlopen", offline_urlopen):
+            with self.assertRaises(ExchangeRateProviderError):
+                provider.fetch_currencies()
+            with self.assertRaisesMessage(ExchangeRateProviderError, "a few minutes"):
+                provider.fetch_rates("EUR", ["USD"], date(2026, 1, 2), date(2026, 1, 2))
+            calls_while_remembered = len(calls)
+            retry = self.client.post("/api/exchange-rates/sync/")
+
+        self.assertEqual(calls_while_remembered, 1)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(retry.status_code, 502)
+        self.assertIn("network is unreachable", json_body(retry)["error"])
+
+    def test_the_currency_list_is_fetched_once_a_day(self):
+        calls = []
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    [{"iso_code": "CZK", "name": "Czech Koruna"}]
+                ).encode()
+
+        def fake_urlopen(request, timeout):
+            calls.append(request.full_url)
+            return FakeResponse()
+
+        with patch("finance.services.urlopen", fake_urlopen):
+            first = available_currency_options()
+            second = available_currency_options()
+            finance_services._currency_list_cache["fetched_at"] -= (
+                CURRENCY_LIST_CACHE_SECONDS + 1
+            )
+            available_currency_options()
+
+        self.assertEqual(first, second)
+        self.assertEqual(first["currencies"][0]["code"], "CZK")
+        self.assertEqual(len(calls), 2)
 
     def test_saved_filter_api_persists_updates_and_deletes_presets(self):
         created = self.post_json(
@@ -1677,6 +1843,12 @@ class APITests(FinanceTestCase):
             "/api/transactions/",
             {"tag": f"{self.tag.id},__unassigned__", "limit": "10"},
         )
+        tagged_response = self.client.get(
+            "/api/transactions/", {"tag": "__any__", "limit": "10"}
+        )
+        tagged_or_untagged_response = self.client.get(
+            "/api/transactions/", {"tag": "__any__,__unassigned__", "limit": "10"}
+        )
         income_response = self.client.get(
             "/api/transactions/",
             {"direction": "income", "limit": "10"},
@@ -1691,6 +1863,8 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(json_body(account_response)["count"], 5)
         self.assertEqual(json_body(category_response)["count"], 4)
+        self.assertEqual(json_body(tagged_response)["count"], 2)
+        self.assertEqual(json_body(tagged_or_untagged_response)["count"], 5)
         self.assertEqual(json_body(subcategory_response)["count"], 3)
         self.assertEqual(json_body(wni_response)["count"], 3)
         self.assertEqual(json_body(tag_response)["count"], 4)
@@ -1788,6 +1962,54 @@ class APITests(FinanceTestCase):
         self.assertTrue(payload["exchange_rate_sync"]["attempted"])
         self.assertFalse(payload["exchange_rate_sync"]["synced"])
         self.assertIn("provider unavailable", payload["exchange_rate_sync"]["error"])
+
+    def test_an_import_where_every_row_fails_is_a_failure_and_is_not_kept(self):
+        def post(body):
+            return self.client.post(
+                "/api/imports/",
+                {
+                    "bank_account_id": str(self.account.id),
+                    "csv_mapping_id": str(self.mapping.id),
+                    "csv_file": self.csv_file(body),
+                },
+            )
+
+        all_failed = post(
+            "ID,Date,Description,Amount\n"
+            "f-1,02.30.2026,Bad date,-1.00\n"
+            "f-2,2026-01-02,Bad amount,n/a\n"
+        )
+        empty = post("ID,Date,Description,Amount\n")
+        payload = json_body(all_failed)
+
+        self.assertEqual(all_failed.status_code, 400)
+        self.assertEqual(
+            payload["error"],
+            "None of the 2 rows could be imported. Check that the bank account's "
+            "import mapping fits this file.",
+        )
+        self.assertEqual(payload["report"]["skipped"]["error_count"], 2)
+        self.assertEqual(len(payload["report"]["skipped"]["errors"]), 2)
+        self.assertEqual(empty.status_code, 400)
+        self.assertEqual(json_body(empty)["error"], "The file has no rows to import.")
+        self.assertFalse(CSVImport.objects.exists())
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_import_reports_list_at_most_100_failed_rows(self):
+        lines = ["ID,Date,Description,Amount", "ok-1,2026-01-02,Lunch,-12.50"]
+        lines += [f"bad-{index},2026-01-02,Broken,n/a" for index in range(150)]
+
+        csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file("\n".join(lines) + "\n")
+        )
+        csv_import.refresh_from_db()
+
+        self.assertEqual(csv_import.status, CSVImport.STATUS_COMPLETED)
+        self.assertEqual(csv_import.created_count, 1)
+        self.assertEqual(csv_import.error_count, 150)
+        self.assertEqual(csv_import.report["skipped"]["error_count"], 150)
+        self.assertEqual(len(csv_import.report["skipped"]["errors"]), 100)
+        self.assertEqual(report["skipped"]["errors"][0]["line"], 3)
 
     def test_imports_api_lists_recent_imports(self):
         older = CSVImport.objects.create(
@@ -2930,16 +3152,18 @@ class APITests(FinanceTestCase):
         )
         transaction_obj.tags.add(self.tag, second_tag)
 
-        response = self.client.get(
-            "/api/dashboard/summary/",
-            {"tag": f"{self.tag.id},{second_tag.id}"},
-        )
-        payload = json_body(response)
+        for tag_filter in [f"{self.tag.id},{second_tag.id}", "__any__"]:
+            response = self.client.get("/api/dashboard/summary/", {"tag": tag_filter})
+            payload = json_body(response)
+            transactions = json_body(
+                self.client.get("/api/transactions/", {"tag": tag_filter})
+            )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(payload["monthly"][0]["expense"], "12.50")
-        self.assertEqual(payload["expense_categories"][0]["amount"], "12.50")
-        self.assertEqual(payload["want_need_investment"][0]["amount"], "12.50")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(payload["monthly"][0]["expense"], "12.50")
+            self.assertEqual(payload["expense_categories"][0]["amount"], "12.50")
+            self.assertEqual(payload["want_need_investment"][0]["amount"], "12.50")
+            self.assertEqual(transactions["count"], 1)
 
     def test_dashboard_checkbox_none_marker_returns_no_transactions(self):
         Transaction.objects.create(
@@ -3443,6 +3667,56 @@ class APITests(FinanceTestCase):
         finally:
             backup.close()
         self.assertEqual(descriptions, ["Keep me in the backup"])
+
+    def test_old_safety_backups_are_pruned_per_kind(self):
+        young = [
+            self.saved_backup("pre-delete-20260901-120000.sqlite3", 10),
+            self.saved_backup("pre-delete-20260902-120000.sqlite3", 20),
+        ]
+        # 101 to 110 days old, newest first.
+        old = [
+            self.saved_backup(
+                f"pre-delete-2025{month:02d}01-120000.sqlite3", 100 + month
+            )
+            for month in range(1, 11)
+        ]
+        other_kind = [
+            self.saved_backup(f"pre-restore-2024{month:02d}01-120000.sqlite3", 200)
+            for month in range(1, 13)
+        ]
+        not_made_by_the_app = [
+            self.saved_backup("cashmoney-backup-20240101-120000.sqlite3", 300),
+            self.saved_backup("my copy.sqlite3", 300),
+            self.saved_backup("pre-delete-before-cleanup.sqlite3", 300),
+        ]
+
+        response = self.delete_json(
+            "/api/maintenance/transactions/",
+            {"confirmation": "DELETE ALL TRANSACTIONS"},
+        )
+        payload = json_body(response)
+
+        # The new backup, the two young ones and the 7 newest old ones are the 10
+        # kept; the 3 oldest are past both limits. Other files stay.
+        self.assertEqual(response.status_code, 200)
+        kept = young + old[:7] + other_kind + not_made_by_the_app
+        self.assertEqual([path for path in old[7:] if path.exists()], [])
+        self.assertEqual([path for path in kept if not path.exists()], [])
+        self.assertEqual(
+            {backup["filename"] for backup in payload["backups"]},
+            {path.name for path in kept} | {payload["safety_backup"]},
+        )
+
+    def test_safety_backups_from_the_last_90_days_are_kept(self):
+        recent = [
+            self.saved_backup(f"pre-restore-202610{day:02d}-120000.sqlite3", day)
+            for day in range(1, 13)
+        ]
+
+        new_backup = create_safety_backup("pre-restore")
+
+        self.assertTrue(new_backup.exists())
+        self.assertEqual([path for path in recent if not path.exists()], [])
 
     def test_maintenance_delete_finance_data_preserves_auth_users(self):
         user = get_user_model().objects.create_user(
@@ -4103,6 +4377,22 @@ class Camt053ImportAPITests(FinanceTestCase):
         self.assertEqual(card.raw_data["transaction_type"], "30000201000")
         foreign = Transaction.objects.get(original_id="F1")
         self.assertEqual(foreign.raw_data["instructed_currency"], "USD")
+
+    def test_an_unreadable_statement_fails_with_a_readable_message(self):
+        response = self.client.post(
+            "/api/imports/",
+            self.import_data(
+                csv_file=self.xml_file(
+                    b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "b">]><Document/>'
+                )
+            ),
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(payload["error"].startswith("Could not read the file: "))
+        self.assertIn("DOCTYPE", payload["error"])
+        self.assertFalse(CSVImport.objects.exists())
 
 
 class SampleFlagMigrationTests(TransactionTestCase):

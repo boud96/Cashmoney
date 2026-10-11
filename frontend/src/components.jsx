@@ -12,9 +12,22 @@ export function Select({ blank, defaultValue = "", name, onChange, options, requ
   );
 }
 
-export function LoadingButton({ busy = false, busyLabel = "Working", children, className = "", disabled = false, ...props }) {
+export function LoadingButton({ busy = false, busyLabel = "Working", children, className = "", disabled = false, onClick, type, ...props }) {
+  // A busy button stays focusable (aria-disabled, clicks ignored) instead of disabled:
+  // a disabled button drops focus to the page, so focus couldn't return to it when a
+  // dialog it opened closes. A busy submit button stays disabled, because Enter in its
+  // form would submit again.
+  const keepsFocus = busy && type !== "submit";
   return (
-    <button {...props} className={`${className} ${busy ? "is-loading" : ""}`.trim()} disabled={disabled || busy}>
+    <button
+      {...props}
+      aria-busy={busy || undefined}
+      aria-disabled={keepsFocus || undefined}
+      className={`${className} ${busy ? "is-loading" : ""}`.trim()}
+      disabled={keepsFocus ? false : disabled || busy}
+      onClick={keepsFocus ? undefined : onClick}
+      type={type}
+    >
       {busy && <Spinner />}
       <span>{busy ? busyLabel : children}</span>
     </button>

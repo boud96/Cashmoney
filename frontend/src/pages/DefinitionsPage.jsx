@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
@@ -421,13 +421,31 @@ function definitionGridHeight(rowCount) {
   return Math.min(560, Math.max(198, 48 + (Math.max(rowCount, 1) * 52)));
 }
 
-function definitionActionColumn({ confirmAction, endpoint, nameGetter = (item) => item.name, notify, onDeleted, onEdit, reloadAll }) {
+// The grids' action cells call the latest callbacks through this ref. The page passes
+// new callback functions on every render; had the column definitions depended on them,
+// every App render (a dialog, a toast) rebuilt the cells and dropped keyboard focus.
+function useDefinitionActions(callbacks) {
+  const actions = useRef(callbacks);
+  useLayoutEffect(() => {
+    actions.current = callbacks;
+  });
+  return actions;
+}
+
+function definitionActionColumn({ actions, endpoint, nameGetter = (item) => item.name }) {
   return {
     cellClass: "definition-grid-actions-cell",
     cellRenderer: (params) => (
       <div className="definition-grid-actions">
-        <button className="edit-button" onClick={() => onEdit(params.data)} type="button">Edit</button>
-        <DeleteButton confirmAction={confirmAction} endpoint={`${endpoint}${params.data.id}/`} name={nameGetter(params.data)} notify={notify} onDeleted={onDeleted} reloadAll={reloadAll} />
+        <button className="edit-button" onClick={() => actions.current.onEdit(params.data)} type="button">Edit</button>
+        <DeleteButton
+          confirmAction={(options) => actions.current.confirmAction(options)}
+          endpoint={`${endpoint}${params.data.id}/`}
+          name={nameGetter(params.data)}
+          notify={(message) => actions.current.notify?.(message)}
+          onDeleted={() => actions.current.onDeleted?.()}
+          reloadAll={() => actions.current.reloadAll?.()}
+        />
       </div>
     ),
     headerName: "",
@@ -472,6 +490,7 @@ function DefinitionGridColorCell({ value }) {
 }
 
 function CsvMappingDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const actions = useDefinitionActions({ confirmAction, notify, onDeleted, onEdit, reloadAll });
   const rowData = useMemo(() => items.map((item) => ({
     ...item,
     categorization_fields_text: (item.categorization_fields || []).map((field) => fieldLabel(field)).join(", "),
@@ -487,13 +506,14 @@ function CsvMappingDefinitionGrid({ confirmAction, endpoint, items, notify, onDe
     { field: "encoding", headerName: "Encoding", minWidth: 130, width: 140 },
     { field: "header_row", headerName: "Header Row", minWidth: 120, width: 125 },
     { field: "categorization_fields_text", flex: 1.4, headerName: "Categorization Fields", minWidth: 240, tooltipField: "categorization_fields_text" },
-    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
-  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+    definitionActionColumn({ actions, endpoint }),
+  ], [actions, endpoint]);
 
   return <DefinitionAgGridList className="csv-mapping-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
 }
 
 function BankAccountDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const actions = useDefinitionActions({ confirmAction, notify, onDeleted, onEdit, reloadAll });
   const rowData = useMemo(() => items.map((item) => ({
     ...item,
     default_mapping_text: item.default_csv_mapping?.name || "No default mapping",
@@ -505,24 +525,26 @@ function BankAccountDefinitionGrid({ confirmAction, endpoint, items, notify, onD
     { field: "owners", headerName: "Owners", minWidth: 105, width: 110 },
     { field: "account_number", flex: 1, headerName: "Account Number", minWidth: 180 },
     { field: "default_mapping_text", flex: 1.2, headerName: "Default Mapping", minWidth: 210, tooltipField: "default_mapping_text" },
-    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
-  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+    definitionActionColumn({ actions, endpoint }),
+  ], [actions, endpoint]);
 
   return <DefinitionAgGridList className="bank-account-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
 }
 
 function CategoryDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const actions = useDefinitionActions({ confirmAction, notify, onDeleted, onEdit, reloadAll });
   const columnDefs = useMemo(() => [
     { cellRenderer: DefinitionGridColorCell, field: "color", filter: false, headerName: "Color", minWidth: 120, width: 125 },
     { field: "name", flex: 1, headerName: "Name", minWidth: 200 },
     { field: "description", flex: 1.6, headerName: "Description", minWidth: 260, tooltipField: "description" },
-    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
-  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+    definitionActionColumn({ actions, endpoint }),
+  ], [actions, endpoint]);
 
   return <DefinitionAgGridList className="category-definition-grid" columnDefs={columnDefs} items={items} rowData={items} />;
 }
 
 function SubcategoryDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const actions = useDefinitionActions({ confirmAction, notify, onDeleted, onEdit, reloadAll });
   const rowData = useMemo(() => items.map((item) => ({
     ...item,
     category_text: item.category?.name || "No category",
@@ -532,24 +554,26 @@ function SubcategoryDefinitionGrid({ confirmAction, endpoint, items, notify, onD
     { field: "name", flex: 1, headerName: "Name", minWidth: 190 },
     { field: "category_text", flex: 1, headerName: "Category", minWidth: 190 },
     { field: "description", flex: 1.4, headerName: "Description", minWidth: 240, tooltipField: "description" },
-    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
-  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+    definitionActionColumn({ actions, endpoint }),
+  ], [actions, endpoint]);
 
   return <DefinitionAgGridList className="subcategory-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
 }
 
 function TagDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const actions = useDefinitionActions({ confirmAction, notify, onDeleted, onEdit, reloadAll });
   const columnDefs = useMemo(() => [
     { cellRenderer: DefinitionGridColorCell, field: "color", filter: false, headerName: "Color", minWidth: 120, width: 125 },
     { field: "name", flex: 1, headerName: "Name", minWidth: 200 },
     { field: "description", flex: 1.6, headerName: "Description", minWidth: 260, tooltipField: "description" },
-    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
-  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+    definitionActionColumn({ actions, endpoint }),
+  ], [actions, endpoint]);
 
   return <DefinitionAgGridList className="tag-definition-grid" columnDefs={columnDefs} items={items} rowData={items} />;
 }
 
 function KeywordDefinitionGrid({ confirmAction, endpoint, items, notify, onDeleted, onEdit, reloadAll }) {
+  const actions = useDefinitionActions({ confirmAction, notify, onDeleted, onEdit, reloadAll });
   const rowData = useMemo(() => items.map((item) => ({
     ...item,
     include_terms_text: (item.include_terms || []).join(", "),
@@ -611,8 +635,8 @@ function KeywordDefinitionGrid({ confirmAction, endpoint, items, notify, onDelet
       valueFormatter: (params) => (params.value ? "Yes" : "No"),
       width: 110,
     },
-    definitionActionColumn({ confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll }),
-  ], [confirmAction, endpoint, notify, onDeleted, onEdit, reloadAll]);
+    definitionActionColumn({ actions, endpoint }),
+  ], [actions, endpoint]);
 
   return <DefinitionAgGridList className="keyword-definition-grid" columnDefs={columnDefs} items={items} rowData={rowData} />;
 }

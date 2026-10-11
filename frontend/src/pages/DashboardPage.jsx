@@ -6,6 +6,7 @@ import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-communi
 import { apiDelete, apiGet, apiPost } from "../api.js";
 import { HelpTooltip, LoadingButton, ModalShell, Spinner } from "../components.jsx";
 import {
+  ANY_TAG,
   UNASSIGNED,
   baseLayout,
   buildMetrics,
@@ -24,6 +25,7 @@ import {
   getStoredFilterPresets,
   normalizeName,
   normalizeTagSelection,
+  offeredSubcategories,
   presetFilterCount,
   storeFilterPresets,
   subLabel,
@@ -104,6 +106,7 @@ const emptyBulkAssignDraft = {
 export default function DashboardPage({
   confirmAction,
   deleteTransaction,
+  filterDefaults,
   filters,
   filterParams,
   hideAmounts,
@@ -180,21 +183,15 @@ export default function DashboardPage({
   const [transferMatchesLoading, setTransferMatchesLoading] = useState(false);
   const [unmatchingTransferId, setUnmatchingTransferId] = useState("");
   const localFilterPresetsMigrated = useRef(false);
-  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
+  const activeFilterCount = useMemo(
+    () => countActiveFilters(filters, refs, filterDefaults),
+    [filterDefaults, filters, refs],
+  );
   const subcategoryFilterOptions = useMemo(() => {
-    const selectedCategories = filters.category || [];
-    if (!selectedCategories.length) {
-      return [[UNASSIGNED, "Unassigned subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])];
-    }
-    const selectedCategoryIds = new Set(selectedCategories.filter((item) => item !== UNASSIGNED));
-    const options = selectedCategories.includes(UNASSIGNED)
-      ? [[UNASSIGNED, "Unassigned subcategory"]]
-      : [];
+    const offered = offeredSubcategories(filters.category, refs.subcategories);
     return [
-      ...options,
-      ...refs.subcategories
-        .filter((item) => selectedCategoryIds.has(item.category?.id))
-        .map((item) => [item.id, subLabel(item)]),
+      ...(offered.unassigned ? [[UNASSIGNED, "Unassigned subcategory"]] : []),
+      ...offered.items.map((item) => [item.id, subLabel(item)]),
     ];
   }, [filters.category, refs.subcategories]);
   const availableSubcategoryValues = useMemo(
@@ -744,8 +741,9 @@ export default function DashboardPage({
                 onLoad={loadFilterPreset}
                 onNameChange={setSavedFilterName}
                 onSave={saveCurrentFilterPreset}
+                dateDefaults={filterDefaults}
                 presets={savedFilters}
-                tags={refs.tags}
+                refs={refs}
               />
             </div>
             <div className="filter-main-stack">
@@ -831,7 +829,7 @@ export default function DashboardPage({
                   name="tag"
                   onChange={onFilterChange}
                   optional
-                  options={[[UNASSIGNED, "Untagged"], ...refs.tags.map((item) => [item.id, item.name])]}
+                  options={[[UNASSIGNED, "Untagged"], [ANY_TAG, "Tagged"], ...refs.tags.map((item) => [item.id, item.name])]}
                   value={filters.tag}
                 />
               </div>
@@ -1846,6 +1844,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
     { field: "description", headerName: "Description", flex: 2, minWidth: 260, wrapText: true, autoHeight: true },
     {
       cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
+      cellRenderer: (params) => <AmountCell data={params.data} hideAmounts={hideAmounts} text={params.valueFormatted} />,
       comparator: compareAmounts,
       field: "converted_amount",
       headerName: "Amount",
@@ -2448,7 +2447,7 @@ function RelativeRangeForm({ setFilters }) {
   );
 }
 
-function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave, presets, tags }) {
+function SavedFiltersPanel({ busy, dateDefaults, name, onDelete, onLoad, onNameChange, onSave, presets, refs }) {
   return (
     <div className="filter-card saved-filters-card">
       <div className="filter-card-header">
@@ -2471,7 +2470,7 @@ function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave,
           <div className="saved-filter-row" key={preset.id}>
             <button className="saved-filter-load-button" disabled={busy} onClick={() => onLoad(preset)} type="button">
               <span>{preset.name}</span>
-              <small>{formatCount(presetFilterCount(preset.filters, tags))} filters</small>
+              <small>{formatCount(presetFilterCount(preset.filters, refs, dateDefaults))} filters</small>
             </button>
             <button aria-label={`Delete ${preset.name}`} className="icon-button" disabled={busy} onClick={() => onDelete(preset.id)} type="button">x</button>
           </div>
@@ -2555,6 +2554,25 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, optional =
   );
 }
 
+
+// The amount in the default currency; a row in another currency also shows its
+// original amount, with the rate in the tooltip.
+function AmountCell({ data, hideAmounts, text }) {
+  if (!data?.currency || !data.converted_currency || data.currency === data.converted_currency) {
+    return text;
+  }
+  const original = formatAmountWithCurrency(data.amount, data.currency, hideAmounts);
+  const rate = Number(data.conversion_rate);
+  const rateText = Number.isFinite(rate) && rate > 0
+    ? `1 ${data.currency} = ${Number(rate.toFixed(4))} ${data.converted_currency}${data.conversion_rate_date ? ` (rate of ${data.conversion_rate_date})` : ""}`
+    : "No exchange rate yet";
+  return (
+    <span className="amount-cell" title={hideAmounts ? undefined : `Original amount ${original}. ${rateText}.`}>
+      <span>{text}</span>
+      <span className="amount-original">{original}</span>
+    </span>
+  );
+}
 
 function ConflictCell() {
   return <span className="color-cell conflict-cell"><span className="color-cell-label">Conflict</span></span>;

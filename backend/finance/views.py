@@ -4,6 +4,7 @@ import logging
 import re
 import sqlite3
 import tempfile
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from decimal import InvalidOperation
@@ -64,6 +65,7 @@ from .services import (
     CSVImportService,
     CategorizationService,
     ExchangeRateProviderError,
+    FrankfurterExchangeRateProvider,
     available_currency_options,
     apply_internal_transfer_candidates,
     build_dashboard_summary,
@@ -84,6 +86,7 @@ from .services import (
 
 
 UNASSIGNED_FILTER_VALUE = "__unassigned__"
+ANY_TAG_FILTER_VALUE = "__any__"  # the tag filter's "Tagged": at least one tag
 NONE_FILTER_VALUE = "__none__"
 CONFIRM_DELETE_SAMPLE_DATA = "DELETE SAMPLE DATA"
 CONFIRM_DELETE_ALL_TRANSACTIONS = "DELETE ALL TRANSACTIONS"
@@ -674,6 +677,8 @@ class ExchangeRateSyncView(JsonView):
     atomic_writes = False  # calls the rate provider over the network
 
     def post(self, request):
+        # An explicit sync (the retry in App Settings) always tries the network.
+        FrankfurterExchangeRateProvider.forget_failure()
         try:
             return json_response(sync_missing_exchange_rates())
         except ExchangeRateProviderError as exc:
@@ -1232,7 +1237,9 @@ def filtered_transactions(request):
     tag_values, include_unassigned_tags = split_unassigned_filter(params, "tag")
     if tag_values or include_unassigned_tags:
         tag_query = Q()
-        if tag_values:
+        if ANY_TAG_FILTER_VALUE in tag_values:
+            tag_query |= Q(tags__isnull=False)  # covers any selected tags too
+        elif tag_values:
             tag_query |= Q(tags__id__in=tag_values)
         if include_unassigned_tags:
             tag_query |= Q(tags__isnull=True)
@@ -1763,8 +1770,13 @@ class ImportTransactionsView(JsonView):
         )
         if dry_run:
             return json_response({"dry_run": True, "preview": report})
+        if csv_import.status == csv_import.STATUS_FAILED:
+            # Nothing was imported or kept; the report lists the failed rows.
+            return json_response(
+                {"error": report["error"], "report": report}, status=400
+            )
         exchange_rate_sync = {"attempted": False}
-        if csv_import.status != csv_import.STATUS_FAILED and csv_import.created_count:
+        if csv_import.created_count:
             exchange_rate_sync["attempted"] = True
             try:
                 exchange_rate_sync.update(sync_missing_exchange_rates())
@@ -1783,11 +1795,18 @@ class ImportTransactionsView(JsonView):
                 "report": report,
                 "exchange_rate_sync": exchange_rate_sync,
             },
-            status=201 if csv_import.status != csv_import.STATUS_FAILED else 400,
+            status=201,
         )
 
 
 class ImportDetailView(JsonView):
+    def get(self, request, pk):
+        # The stored report (compact since CR-13), for "Report" in Recent Imports.
+        csv_import = get_object_or_404(CSVImport, id=pk)
+        return json_response(
+            {"import": serialize_csv_import(csv_import), "report": csv_import.report}
+        )
+
     def delete(self, request, pk):
         csv_import = get_object_or_404(CSVImport, id=pk)
         deleted = delete_transactions(
@@ -2185,7 +2204,33 @@ def create_safety_backup(prefix):
         backup_path = backup_dir / f"{prefix}-{timestamp}-{suffix}.sqlite3"
         suffix += 1
     backup_database_to(backup_path)
+    prune_safety_backups(prefix)
     return backup_path
+
+
+# Of each kind of safety backup, the newest SAFETY_BACKUP_KEEP always stay, and so
+# does every one younger than SAFETY_BACKUP_KEEP_DAYS.
+SAFETY_BACKUP_KEEP = 10
+SAFETY_BACKUP_KEEP_DAYS = 90
+
+
+def prune_safety_backups(prefix):
+    """Delete the safety backups of one kind that are past both limits.
+
+    Only files named the way create_safety_backup names them count, so anything
+    else in the folder (an exported backup copied there, a renamed file) stays.
+    """
+    name_pattern = re.compile(rf"{re.escape(prefix)}-\d{{8}}-\d{{6}}(-\d+)?\.sqlite3")
+    backups = [
+        path for path in saved_backup_files() if name_pattern.fullmatch(path.name)
+    ]
+    cutoff = time.time() - SAFETY_BACKUP_KEEP_DAYS * 24 * 60 * 60
+    for backup_path in backups[SAFETY_BACKUP_KEEP:]:  # newest first
+        try:
+            if backup_path.stat().st_mtime < cutoff:
+                backup_path.unlink()
+        except OSError:
+            logger.warning("Could not delete old backup %s", backup_path, exc_info=True)
 
 
 def migrate_restored_database():

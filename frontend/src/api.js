@@ -29,7 +29,9 @@ export async function readJson(response, fallbackError = "") {
     const statusMessage = response.status >= 500
       ? `Server error (${response.status})`
       : `Request failed (${response.status})`;
-    throw new Error(payload?.error || fallbackError || statusMessage);
+    const error = new Error(payload?.error || fallbackError || statusMessage);
+    error.payload = payload; // e.g. the report of a failed import
+    throw error;
   }
   return payload ?? {};
 }
@@ -60,8 +62,28 @@ function withCsrfHeaders(options = {}) {
   };
 }
 
-export function apiFetch(path, options = {}) {
-  return fetch(path, withCsrfHeaders(options));
+// Fired on window when requests stop (or start again) reaching the backend at all;
+// event.detail.reachable says which. HTTP errors don't count: the backend answered.
+export const BACKEND_REACHABILITY_EVENT = "cashmoney:backend-reachability";
+let backendReachable = true;
+
+function reportReachability(reachable) {
+  if (reachable !== backendReachable) {
+    backendReachable = reachable;
+    window.dispatchEvent(new CustomEvent(BACKEND_REACHABILITY_EVENT, { detail: { reachable } }));
+  }
+}
+
+export async function apiFetch(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(path, withCsrfHeaders(options));
+  } catch {
+    reportReachability(false);
+    throw new Error("Can't reach the Cashmoney backend.");
+  }
+  reportReachability(true);
+  return response;
 }
 
 export async function apiGet(path, params = {}) {

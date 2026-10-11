@@ -2,6 +2,8 @@ import csv
 import io
 import json
 import re
+import time
+import unicodedata
 from bisect import bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -66,6 +68,9 @@ COMMON_CURRENCY_OPTIONS = [
 ]
 UNCATEGORIZED_SUGGESTION_SAMPLE_SIZE = 5
 UNCATEGORIZED_SUGGESTION_COUNT_WEIGHT = Decimal("25.00")
+# An import report lists at most this many failed rows (with their raw data);
+# skipped.error_count has the total.
+MAX_REPORTED_ERRORS = 100
 RECATEGORIZABLE_TRANSACTION_FIELDS = (
     "description",
     "counterparty_account_number",
@@ -104,6 +109,12 @@ INTERNAL_TRANSFER_TEXT_FIELDS = (
 
 def normalize_text(value):
     return re.sub(r"\s+", "", str(value or "")).casefold()
+
+
+def normalize_keyword_text(value):
+    """Keyword terms and the text they match ignore whitespace, case and accents."""
+    decomposed = unicodedata.normalize("NFD", normalize_text(value))
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
 
 
 def clean_account_number(value):
@@ -216,6 +227,17 @@ class ExchangeRateProviderError(Exception):
 class FrankfurterExchangeRateProvider:
     api_base_url = "https://api.frankfurter.dev/v2"
     user_agent = "Cashmoney"
+    # The calls run inside requests (imports, App Settings), so a stalled network
+    # must not hold them for long. After a network failure the provider is skipped
+    # for a while instead of timing out again on every import; an explicit sync
+    # (forget_failure) retries at once.
+    timeout_seconds = 5
+    unreachable_for_seconds = 300
+    unreachable_until = 0.0  # time.monotonic(); shared by all instances
+
+    @classmethod
+    def forget_failure(cls):
+        FrankfurterExchangeRateProvider.unreachable_until = 0.0
 
     def fetch_rates(self, base_currency, quote_currencies, start_date, end_date):
         quotes = sorted(
@@ -243,6 +265,11 @@ class FrankfurterExchangeRateProvider:
         return self._parse_currencies_payload(payload)
 
     def _fetch_json(self, url):
+        if time.monotonic() < FrankfurterExchangeRateProvider.unreachable_until:
+            raise ExchangeRateProviderError(
+                "Could not fetch Frankfurter data: it was unreachable a few minutes "
+                "ago. Retry from App Settings."
+            )
         request = Request(
             url,
             headers={
@@ -251,14 +278,21 @@ class FrankfurterExchangeRateProvider:
             },
         )
         try:
-            with urlopen(request, timeout=30) as response:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             message = self._error_message(exc)
             raise ExchangeRateProviderError(
                 f"Could not fetch Frankfurter data: {message}"
             ) from exc
-        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        except (URLError, TimeoutError, OSError) as exc:
+            FrankfurterExchangeRateProvider.unreachable_until = (
+                time.monotonic() + self.unreachable_for_seconds
+            )
+            raise ExchangeRateProviderError(
+                f"Could not fetch Frankfurter data: {exc}"
+            ) from exc
+        except json.JSONDecodeError as exc:
             raise ExchangeRateProviderError(
                 f"Could not fetch Frankfurter data: {exc}"
             ) from exc
@@ -393,13 +427,32 @@ def configured_currency_options():
     ]
 
 
+# The provider's currency list rarely changes, and Definitions asks for it on every
+# visit, so it is kept for a day (per backend process).
+CURRENCY_LIST_CACHE_SECONDS = 24 * 60 * 60
+_currency_list_cache = {"fetched_at": 0.0, "currencies": None}
+
+
+def clear_currency_list_cache():
+    _currency_list_cache.update(fetched_at=0.0, currencies=None)
+
+
 def available_currency_options(provider=None):
-    provider = provider or FrankfurterExchangeRateProvider()
-    currencies = provider.fetch_currencies()
+    cache = _currency_list_cache
+    if (
+        cache["currencies"] is None
+        or time.monotonic() - cache["fetched_at"] > CURRENCY_LIST_CACHE_SECONDS
+    ):
+        provider = provider or FrankfurterExchangeRateProvider()
+        cache.update(
+            currencies=provider.fetch_currencies(), fetched_at=time.monotonic()
+        )
     return {
         "source": FRANKFURTER_SOURCE,
         "fallback": False,
-        "currencies": merge_currency_options(currencies, configured_currency_options()),
+        "currencies": merge_currency_options(
+            cache["currencies"], configured_currency_options()
+        ),
     }
 
 
@@ -1258,10 +1311,14 @@ class CategorizationService:
                 {
                     "keyword": keyword,
                     "include": [
-                        normalize_text(term) for term in keyword.include_terms if term
+                        normalize_keyword_text(term)
+                        for term in keyword.include_terms
+                        if term
                     ],
                     "exclude": [
-                        normalize_text(term) for term in keyword.exclude_terms if term
+                        normalize_keyword_text(term)
+                        for term in keyword.exclude_terms
+                        if term
                     ],
                 }
             )
@@ -1307,7 +1364,7 @@ class CategorizationService:
                 result.subcategory = self.settings.internal_transfer_subcategory
                 return result
 
-        normalized_text = normalize_text(categorization_text)
+        normalized_text = normalize_keyword_text(categorization_text)
         matched = []
         for prepared in self.prepared_keywords:
             include_terms = prepared["include"]
@@ -1443,19 +1500,31 @@ class CSVRowExtractor:
         if raw.endswith("-") and not raw.startswith("-"):
             is_negative = True
             raw = raw[:-1]
-        raw = re.sub(r"[^\d,.\-]", "", raw)
+        raw = re.sub(r"[^\d,.\-]", "", raw)  # drops spaces, currency signs and the like
         if not re.search(r"\d", raw):
             raise ValueError(f"Could not parse amount '{value}'")
 
-        if self.csv_mapping.thousands_separator:
-            raw = raw.replace(self.csv_mapping.thousands_separator, "")
-        raw = raw.replace(" ", "")
-
-        if self.csv_mapping.decimal_separator == ",":
-            raw = raw.replace(".", "")
-            raw = raw.replace(",", ".")
-        else:
-            raw = raw.replace(",", "")
+        # The mark that isn't the decimal separator may only group thousands. Without
+        # this check, "12.50" with "," decimals silently became 1250.00 (and "12,50"
+        # with "." decimals too).
+        decimal_mark = "," if self.csv_mapping.decimal_separator == "," else "."
+        group_mark = "." if decimal_mark == "," else ","
+        integer_part, has_decimal, fraction = raw.partition(decimal_mark)
+        groups = integer_part.lstrip("-").split(group_mark)
+        if group_mark in fraction or (
+            len(groups) > 1
+            and not (
+                1 <= len(groups[0]) <= 3
+                and all(len(group) == 3 for group in groups[1:])
+            )
+        ):
+            raise ValueError(
+                f"Amount '{value}' doesn't match the import mapping's decimal "
+                f"separator ('{decimal_mark}')"
+            )
+        raw = integer_part.replace(group_mark, "")
+        if has_decimal:
+            raw = f"{raw}.{fraction}"
 
         try:
             amount = Decimal(raw).quantize(Decimal("0.01"))
@@ -1545,19 +1614,15 @@ class CSVImportService:
             rows = self._read_rows(file_obj)
         except Exception as exc:
             report["skipped"]["errors"].append({"error": str(exc)})
-            csv_import.status = CSVImport.STATUS_FAILED
-            csv_import.report = report
-            csv_import.error_count = 1
-            csv_import.save(
-                update_fields=["status", "report", "error_count", "updated_at"]
-            )
-            return csv_import, report
+            report["skipped"]["error_count"] = 1
+            return self._fail(csv_import, report, f"Could not read the file: {exc}")
 
         report["loaded"] = len(rows)
         if self.statement_report:
             report["statement"] = self.statement_report
 
         seen_keys = Counter()
+        error_count = 0
         for line_number, row in rows:
             try:
                 created_transaction = self._import_row(row, csv_import, seen_keys)
@@ -1571,14 +1636,16 @@ class CSVImportService:
                 )
                 continue
             except Exception as exc:
-                report["skipped"]["errors"].append(
-                    {
-                        "line": line_number,
-                        "error": str(exc),
-                        "description": self._row_description(row),
-                        "row": row,
-                    }
-                )
+                error_count += 1
+                if error_count <= MAX_REPORTED_ERRORS:
+                    report["skipped"]["errors"].append(
+                        {
+                            "line": line_number,
+                            "error": str(exc),
+                            "description": self._row_description(row),
+                            "row": row,
+                        }
+                    )
                 continue
 
             if created_transaction is None:
@@ -1611,13 +1678,32 @@ class CSVImportService:
                 report["created"]["uncategorized_count"] += 1
 
         report["created"]["count"] = len(report["created"]["transaction_ids"])
+        report["skipped"]["error_count"] = error_count
+        if not report["created"]["count"] and not report["skipped"]["duplicates"]:
+            if not report["loaded"]:
+                return self._fail(csv_import, report, "The file has no rows to import.")
+            return self._fail(
+                csv_import,
+                report,
+                f"None of the {report['loaded']} rows could be imported. Check that "
+                "the bank account's import mapping fits this file.",
+            )
         csv_import.loaded_count = report["loaded"]
         csv_import.created_count = report["created"]["count"]
         csv_import.skipped_count = len(report["skipped"]["duplicates"])
-        csv_import.error_count = len(report["skipped"]["errors"])
+        csv_import.error_count = error_count
         csv_import.status = CSVImport.STATUS_COMPLETED
         csv_import.report = report
         csv_import.save()
+        return csv_import, report
+
+    def _fail(self, csv_import, report, message):
+        """Nothing was imported, so the import isn't kept; its report goes back with the error."""
+        csv_import.delete()
+        csv_import.status = CSVImport.STATUS_FAILED
+        csv_import.loaded_count = report["loaded"]
+        csv_import.error_count = report["skipped"]["error_count"]
+        report["error"] = message
         return csv_import, report
 
     def preview_file(self, file_obj, source_filename="", sample_size=10):
