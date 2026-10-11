@@ -521,7 +521,11 @@ export default function DashboardPage({
         },
         transferFilterParams,
       );
-      notify(`${formatCount(result.created)} transfer pairs applied`);
+      notify(
+        result.skipped
+          ? `${formatCount(result.created)} transfer pairs applied, ${formatCount(result.skipped)} skipped because they were already matched or no longer qualify`
+          : `${formatCount(result.created)} transfer pairs applied`
+      );
       setSelectedTransferIds([]);
       await Promise.all([reloadDashboard(), loadTransferCandidates()]);
     } catch (error) {

@@ -1019,6 +1019,16 @@ class APITests(FinanceTestCase):
         transaction_obj.refresh_from_db()
         self.assertTrue(transaction_obj.is_categorization_locked)
 
+    def test_transfer_apply_counts_pairs_that_are_no_longer_offered(self):
+        response = self.post_json(
+            "/api/transactions/internal-transfers/apply/",
+            {"candidate_ids": ["no-longer-there"]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json_body(response)["created"], 0)
+        self.assertEqual(json_body(response)["skipped"], 1)
+
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)
 

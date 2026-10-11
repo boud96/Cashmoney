@@ -2312,9 +2312,11 @@ def apply_internal_transfer_candidates(
     skipped = 0
     used_transaction_ids = set()
 
+    offered_ids = set()
     for record in records:
         if record["id"] not in requested_ids:
             continue
+        offered_ids.add(record["id"])
         outgoing_transaction = record["outgoing"]
         incoming_transaction = record["incoming"]
         transaction_ids = {outgoing_transaction.id, incoming_transaction.id}
@@ -2360,6 +2362,9 @@ def apply_internal_transfer_candidates(
         match.incoming_transaction.refresh_from_db()
         matched_records.append(match)
 
+    # Requested pairs that are no longer offered (matched meanwhile, or the data
+    # changed since the preview) count as skipped instead of vanishing.
+    skipped += len(requested_ids - offered_ids)
     return {
         "created": len(matched_records),
         "skipped": skipped,
