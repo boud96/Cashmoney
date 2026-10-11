@@ -1021,7 +1021,7 @@ export default function DashboardPage({
             Older matching transactions are omitted from the table. Stats and charts still use the full filtered set.
           </div>
         ) : null}
-        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filterParams={filterParams} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
@@ -1660,7 +1660,7 @@ function InfoIcon() {
 
 const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filters, so this row is kept visible temporarily.";
 
-function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, hideAmounts, notify, refs, rows, updateTransaction }) {
+function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filterParams, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
   const [rawDataLoadingId, setRawDataLoadingId] = useState("");
   const [filterRetainedCells, setFilterRetainedCells] = useState({});
@@ -1673,7 +1673,6 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
   const accountLookup = useMemo(() => new Map(refs.accounts.map((item) => [item.id, item.name])), [refs.accounts]);
-  const filterSignature = useMemo(() => JSON.stringify(filters), [filters]);
 
   const rowData = useMemo(() => rows.map((row) => ({
     ...row,
@@ -1682,9 +1681,10 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
     subcategory_id: row.subcategory?.id || "",
   })), [conflictIds, rows]);
 
+  // Rows kept visible after an edit took them out of the filters clear when the filters change.
   useEffect(() => {
     setFilterRetainedCells({});
-  }, [filterSignature]);
+  }, [filterParams]);
 
   const getRetainedCellMarker = useCallback((params) => {
     const field = params.colDef?.field;
