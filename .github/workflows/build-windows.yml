@@ -60,6 +60,10 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           npm test
 
+      - name: Test desktop helpers
+        working-directory: desktop
+        run: npm test
+
       - name: Build packaged app
         shell: cmd
         run: build_packaged_app.bat

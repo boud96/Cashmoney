@@ -7,7 +7,8 @@
   "scripts": {
     "dist": "electron-builder --win --x64",
     "pack": "electron-builder --dir --win --x64",
-    "start": "electron ."
+    "start": "electron .",
+    "test": "node --test"
   },
   "devDependencies": {
     "electron": "^42.3.3",
@@ -21,6 +22,7 @@
     },
     "files": [
       "main.js",
+      "backend-support.js",
       "package.json"
     ],
     "extraResources": [

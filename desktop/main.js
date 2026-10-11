@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
+const { rotateIfLarge } = require("./backend-support.js");
+
 const BACKEND_PORT = app.isPackaged ? "8765" : "8000";
 const APP_URL = `http://127.0.0.1:${BACKEND_PORT}/`;
 const APP_USER_MODEL_ID = "local.cashmoney.desktop";
@@ -79,9 +81,13 @@ function packagedBackendPath() {
 function backendLogs() {
   const logDir = app.getPath("userData");
   fs.mkdirSync(logDir, { recursive: true });
+  const stderrPath = path.join(logDir, "backend.err.log");
+  const stdoutPath = path.join(logDir, "backend.out.log");
+  rotateIfLarge(stderrPath);
+  rotateIfLarge(stdoutPath);
   return {
-    stderr: fs.openSync(path.join(logDir, "backend.err.log"), "a"),
-    stdout: fs.openSync(path.join(logDir, "backend.out.log"), "a"),
+    stderr: fs.openSync(stderrPath, "a"),
+    stdout: fs.openSync(stdoutPath, "a"),
   };
 }
 

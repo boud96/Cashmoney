@@ -3,7 +3,22 @@
 import logging
 import os
 import sys
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
+
+# Log files would otherwise grow for the life of the install.
+LOG_MAX_BYTES = 1_000_000
+LOG_BACKUP_COUNT = 3
+
+
+def rotate_if_large(path, max_bytes=LOG_MAX_BYTES):
+    """Start a fresh file once it has grown past max_bytes; the previous one stays as .1."""
+    path = Path(path)
+    try:
+        if path.stat().st_size > max_bytes:
+            path.replace(path.with_name(f"{path.name}.1"))
+    except OSError:
+        pass  # no file yet, or in use: keep appending
 
 
 def default_data_dir():
@@ -26,12 +41,21 @@ def configure_environment():
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cashmoney_backend.settings")
 
     if sys.stdout is None:
+        rotate_if_large(data_dir / "backend.stdout.log")
         sys.stdout = open(data_dir / "backend.stdout.log", "a", encoding="utf-8")
     if sys.stderr is None:
+        rotate_if_large(data_dir / "backend.stderr.log")
         sys.stderr = open(data_dir / "backend.stderr.log", "a", encoding="utf-8")
 
     logging.basicConfig(
-        filename=data_dir / "backend.log",
+        handlers=[
+            RotatingFileHandler(
+                data_dir / "backend.log",
+                maxBytes=LOG_MAX_BYTES,
+                backupCount=LOG_BACKUP_COUNT,
+                encoding="utf-8",
+            )
+        ],
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
