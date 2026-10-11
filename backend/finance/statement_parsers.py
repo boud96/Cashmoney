@@ -7,6 +7,7 @@ and categorize them exactly like mapped CSV rows.
 
 import re
 import xml.etree.ElementTree as ET
+import xml.parsers.expat
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
@@ -210,11 +211,24 @@ def account_id(account_element):
 
 
 def reject_document_type_declarations(raw):
-    head = raw[:4096] if isinstance(raw, bytes) else raw[:4096].encode("utf-8")
-    if b"<!DOCTYPE" in head.upper() or b"<!ENTITY" in head.upper():
+    """Refuse DOCTYPE and entity declarations anywhere in the document.
+
+    expat reads the whole file in its declared encoding (UTF-16 included), so a
+    declaration can't hide behind a long comment or another encoding.
+    """
+
+    def refuse(*_args):
         raise ValueError(
             "XML statements with DOCTYPE or ENTITY declarations are not supported"
         )
+
+    parser = xml.parsers.expat.ParserCreate()
+    parser.StartDoctypeDeclHandler = refuse
+    parser.EntityDeclHandler = refuse
+    try:
+        parser.Parse(raw if isinstance(raw, bytes) else raw.encode("utf-8"), True)
+    except xml.parsers.expat.ExpatError as exc:
+        raise ValueError(f"Could not read XML statement: {exc}") from exc
 
 
 def parse_camt053(raw):

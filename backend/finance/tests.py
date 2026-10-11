@@ -3901,6 +3901,19 @@ class Camt053ParserTests(TestCase):
             parse_camt053(b"<Document><Other/></Document>")
         with self.assertRaisesMessage(ValueError, "Could not read XML"):
             parse_camt053(b"<Document>")
+        # A declaration after a long comment, or in UTF-16, is refused as well.
+        long_comment = b"<!--" + b"x" * 5000 + b"-->"
+        with self.assertRaisesMessage(ValueError, "DOCTYPE"):
+            parse_camt053(
+                b'<?xml version="1.0"?>'
+                + long_comment
+                + b'<!DOCTYPE x [<!ENTITY a "b">]><Document/>'
+            )
+        with self.assertRaisesMessage(ValueError, "DOCTYPE"):
+            parse_camt053(
+                '<?xml version="1.0" encoding="UTF-16"?>'
+                '<!DOCTYPE x [<!ENTITY a "b">]><Document/>'.encode("utf-16")
+            )
         with self.assertRaisesMessage(ValueError, "empty"):
             parse_camt053(b"  ")
 
