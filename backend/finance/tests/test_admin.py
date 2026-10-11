@@ -1,12 +1,16 @@
-"""The Django admin: list query counts, transfer matches, and model validation."""
+"""The Django admin: opening it without a password, list query counts, transfer
+matches, and model validation."""
 
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import connection
+from django.test import Client
 from django.test.utils import CaptureQueriesContext
 
+from ..admin_site import BUILT_IN_ADMIN_USERNAME
 from ..models import (
     BankAccount,
     ExchangeRate,
@@ -17,12 +21,117 @@ from ..models import (
 from .base import FinanceTestCase, json_body
 
 
+OPEN_ADMIN_URL = "/api/maintenance/admin-session/"
+
+
+class AdminAccessTests(FinanceTestCase):
+    def test_the_app_opens_the_admin_without_a_password(self):
+        before = self.client.get("/admin/")
+
+        response = self.post_json(OPEN_ADMIN_URL, {})
+        index = self.client.get("/admin/")
+
+        self.assertRedirects(
+            before, "/admin/login/?next=/admin/", fetch_redirect_response=False
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json_body(response), {"url": "/admin/"})
+        self.assertEqual(index.status_code, 200)
+        user = get_user_model().objects.get(username=BUILT_IN_ADMIN_USERNAME)
+        self.assertTrue(user.is_active and user.is_staff and user.is_superuser)
+        self.assertFalse(user.has_usable_password())
+
+    def test_the_login_page_takes_no_password(self):
+        # An admin user made with the old Maintenance form no longer opens the admin.
+        password = "River-Account-7429!"
+        get_user_model().objects.create_superuser(username="admin", password=password)
+
+        page = self.client.get("/admin/login/")
+        attempt = self.client.post(
+            "/admin/login/",
+            {"username": "admin", "password": password, "next": "/admin/"},
+        )
+
+        self.assertContains(page, "Maintenance → Advanced → Open database admin")
+        self.assertNotContains(page, 'name="password"')
+        self.assertEqual(attempt.status_code, 200)
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.get("/admin/").status_code, 302)
+
+    def test_staff_signed_in_another_way_get_no_admin(self):
+        # Sessions from the old password logins, or anything that skipped the app.
+        self.client.force_login(
+            get_user_model().objects.create_superuser(username="admin")
+        )
+
+        self.assertEqual(self.client.get("/admin/").status_code, 302)
+        self.assertEqual(
+            self.client.get("/admin/finance/transaction/").status_code, 302
+        )
+
+    def test_a_sign_in_ends_when_the_backend_restarts(self):
+        self.post_json(OPEN_ADMIN_URL, {})
+        before_restart = self.client.get("/admin/")
+
+        with patch("finance.admin_site.BACKEND_RUN_ID", "the-next-run"):
+            after_restart = self.client.get("/admin/")
+            self.post_json(OPEN_ADMIN_URL, {})
+            reopened = self.client.get("/admin/")
+
+        self.assertEqual(before_restart.status_code, 200)
+        self.assertEqual(after_restart.status_code, 302)
+        self.assertEqual(reopened.status_code, 200)
+
+    def test_opening_it_again_keeps_the_csrf_token_and_drops_a_password(self):
+        self.post_json(OPEN_ADMIN_URL, {})
+        token = self.client.cookies["csrftoken"].value
+        self.post_json(OPEN_ADMIN_URL, {})
+        token_after_reopening = self.client.cookies["csrftoken"].value
+
+        user = get_user_model().objects.get(username=BUILT_IN_ADMIN_USERNAME)
+        user.set_password("River-Account-7429!")
+        user.is_superuser = False
+        user.save()
+        self.post_json(OPEN_ADMIN_URL, {})
+        user.refresh_from_db()
+
+        # Open admin forms carry the token; a new one would make them fail.
+        self.assertEqual(token_after_reopening, token)
+        self.assertFalse(user.has_usable_password())
+        self.assertTrue(user.is_superuser)
+        self.assertEqual(
+            self.client.get("/admin/finance/transaction/").status_code, 200
+        )
+
+    def test_only_the_app_can_open_the_admin(self):
+        # The same checks as every other write: the app's CSRF token and origin.
+        client = Client(enforce_csrf_checks=True)
+        client.get("/")
+        token = client.cookies["csrftoken"].value
+
+        def open_admin(**headers):
+            return client.post(
+                OPEN_ADMIN_URL, data="{}", content_type="application/json", **headers
+            )
+
+        no_token = open_admin(HTTP_ORIGIN="http://127.0.0.1:8765")
+        other_site = open_admin(
+            HTTP_X_CSRFTOKEN=token, HTTP_ORIGIN="https://example.com"
+        )
+        refused_index = client.get("/admin/")
+        app = open_admin(HTTP_X_CSRFTOKEN=token, HTTP_ORIGIN="http://127.0.0.1:8765")
+
+        self.assertEqual(no_token.status_code, 403)
+        self.assertEqual(other_site.status_code, 403)
+        self.assertEqual(refused_index.status_code, 302)
+        self.assertEqual(app.status_code, 200)
+        self.assertEqual(client.get("/admin/").status_code, 200)
+
+
 class AdminTests(FinanceTestCase):
     def setUp(self):
         super().setUp()
-        self.client.force_login(
-            get_user_model().objects.create_superuser(username="admin-tests")
-        )
+        self.post_json(OPEN_ADMIN_URL, {})  # as Maintenance → Advanced does
 
     def add_transactions(self, count):
         return [

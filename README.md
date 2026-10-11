@@ -98,15 +98,11 @@ else.
 
 ## Django admin
 
-The app has no default admin account and no built-in admin credentials. To create or
-reset a local admin user, open Maintenance → Danger Zone in the app. Once an admin
-user exists, the same card has an Open Admin button for `/admin/`.
-
-For development you can also create one from the command line:
-
-```powershell
-.\.venv\Scripts\python.exe .\backend\manage.py createsuperuser
-```
+For fixes the app doesn't offer yet, Maintenance → Advanced → Open database admin
+opens Django's admin (`/admin/`). There is no admin password and no account to set
+up: the app signs its own window in as a built-in superuser, and access ends when the
+backend stops (in the desktop app, when it closes). Opening `/admin/` any other way
+only says where to open it from, so `createsuperuser` accounts can't log in either.
 
 ## Packaging
 

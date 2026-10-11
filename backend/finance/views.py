@@ -13,8 +13,6 @@ from decimal import Decimal
 from decimal import InvalidOperation
 from pathlib import Path
 
-from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.management import call_command
@@ -26,6 +24,7 @@ from django.http import Http404
 from django.http import FileResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
@@ -35,6 +34,7 @@ from django.views.csrf import csrf_failure as django_csrf_failure
 from django.views.defaults import bad_request as django_bad_request
 from django.views.defaults import server_error as django_server_error
 
+from .admin_site import open_admin_session
 from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .search import SEARCH_FIELDS, fold_search_text
 from .models import (
@@ -96,8 +96,6 @@ CONFIRM_DELETE_SAMPLE_DATA = "DELETE SAMPLE DATA"
 CONFIRM_DELETE_ALL_TRANSACTIONS = "DELETE ALL TRANSACTIONS"
 CONFIRM_DELETE_ALL_FINANCE_DATA = "DELETE ALL FINANCE DATA"
 CONFIRM_DELETE_BACKUP = "DELETE BACKUP"
-CONFIRM_CREATE_ADMIN_USER = "CREATE ADMIN USER"
-CONFIRM_RESET_ADMIN_PASSWORD = "RESET ADMIN PASSWORD"
 CONFIRM_RESTORE_DATABASE = "RESTORE DATABASE"
 REQUIRED_BACKUP_TABLES = {
     "finance_bankaccount",
@@ -1897,7 +1895,7 @@ class DashboardSummaryView(JsonView):
 
 
 def maintenance_counts():
-    counts = {
+    return {
         "transactions": Transaction.objects.count(),
         "internal_transfer_matches": InternalTransferMatch.objects.count(),
         "imports": CSVImport.objects.count(),
@@ -1919,21 +1917,6 @@ def maintenance_counts():
         "tags": Tag.objects.count(),
         "keywords": Keyword.objects.count(),
         "saved_filters": SavedFilter.objects.count(),
-    }
-    counts.update(admin_user_status())
-    return counts
-
-
-def admin_user_queryset():
-    User = get_user_model()
-    return User.objects.filter(is_superuser=True, is_staff=True, is_active=True)
-
-
-def admin_user_status():
-    admin_user_count = admin_user_queryset().count()
-    return {
-        "admin_user_count": admin_user_count,
-        "has_admin_user": admin_user_count > 0,
     }
 
 
@@ -2006,80 +1989,12 @@ class MaintenanceRecreateSampleDataView(JsonView):
         )
 
 
-def admin_password_field(data, field_name):
-    value = data.get(field_name)
-    if not isinstance(value, str) or not value:
-        raise APIValidationError("Missing required field", {"field": field_name})
-    return value
+class MaintenanceAdminSessionView(JsonView):
+    """Maintenance → Advanced → Open database admin: no password (admin_site.py)."""
 
-
-class MaintenanceAdminUserView(JsonView):
     def post(self, request):
-        data = parse_json_body(request)
-        mode = data.get("mode")
-        if mode not in ("create", "reset"):
-            raise APIValidationError(
-                "Unknown mode", {"field": "mode", "allowed": ["create", "reset"]}
-            )
-        expected_confirmation = (
-            CONFIRM_RESET_ADMIN_PASSWORD
-            if mode == "reset"
-            else CONFIRM_CREATE_ADMIN_USER
-        )
-        if data.get("confirmation") != expected_confirmation:
-            raise APIValidationError(
-                "Confirmation text does not match",
-                {"expected": expected_confirmation},
-            )
-
-        username = clean_text(data.get("username"), "username", required=True)
-        # Passwords are taken as typed: spaces at either end are part of them (CR-44).
-        password = admin_password_field(data, "password")
-        password_confirmation = admin_password_field(data, "password_confirmation")
-        if password != password_confirmation:
-            raise APIValidationError(
-                "Password confirmation does not match",
-                {"field": "password_confirmation"},
-            )
-
-        User = get_user_model()
-        user = User.objects.filter(username=username).first()
-        if mode == "create" and user is not None:
-            raise APIValidationError(
-                f"A user named {username} already exists.",
-                {"field": "username"},
-                status=409,
-            )
-        if mode == "reset" and user is None:
-            raise Http404(f"There is no user named {username}.")
-        validation_user = user or User(username=username)
-        try:
-            validate_password(password, validation_user)
-        except ValidationError as exc:
-            raise APIValidationError(
-                "Password does not meet the requirements",
-                {"messages": list(exc.messages)},
-            ) from exc
-
-        created = user is None
-        if created:
-            user = User(username=username)
-        user.is_active = True
-        user.is_staff = True
-        user.is_superuser = True
-        user.set_password(password)
-        user.save()
-
-        return json_response(
-            {
-                "admin": {
-                    "created": created,
-                    "username": user.get_username(),
-                },
-                "summary": maintenance_counts(),
-            },
-            status=201 if created else 200,
-        )
+        open_admin_session(request)
+        return json_response({"url": reverse("admin:index")})
 
 
 def delete_with_safety_backup(delete_function):

@@ -3942,36 +3942,6 @@ td {
   align-items: start;
 }
 
-.admin-tool-card {
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  align-items: stretch;
-}
-
-.admin-tool-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-}
-
-.admin-tool-header > div {
-  min-width: 0;
-}
-
-.admin-user-form {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr)) auto;
-  gap: 10px;
-  align-items: end;
-}
-
-.admin-user-submit {
-  min-height: 38px;
-  white-space: nowrap;
-}
-
 .restore-form {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) auto;
@@ -3998,10 +3968,6 @@ td {
   border-radius: 8px;
   padding: 9px 13px;
   font-weight: 760;
-}
-
-.danger-link-button {
-  text-decoration: none;
 }
 
 .danger-button:disabled {
@@ -4368,14 +4334,6 @@ td {
   .help-two-column {
     grid-template-columns: 1fr;
   }
-
-  .admin-user-form {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .admin-user-submit {
-    justify-self: start;
-  }
 }
 
 @media (max-width: 720px) {
@@ -4511,23 +4469,12 @@ td {
     max-height: 168px;
   }
 
-  .admin-tool-header,
   .backup-actions,
   .maintenance-backup-row,
   .maintenance-tool-card,
-  .admin-user-form,
   .restore-form {
     align-items: stretch;
     grid-template-columns: 1fr;
-  }
-
-  .admin-tool-header {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-user-submit {
-    justify-self: stretch;
-    width: 100%;
   }
 
   .help-support-panel {

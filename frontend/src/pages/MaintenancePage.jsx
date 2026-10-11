@@ -24,18 +24,8 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
   const [backups, setBackups] = useState([]);
   const [backupsLoading, setBackupsLoading] = useState(false);
   const [backupAction, setBackupAction] = useState("");
-  const [adminBusy, setAdminBusy] = useState(false);
-  const [adminDraft, setAdminDraft] = useState({
-    password: "",
-    passwordConfirmation: "",
-    username: "admin",
-  });
+  const [adminOpening, setAdminOpening] = useState(false);
   const counts = summary || {};
-  const hasAdminUser = Boolean(counts.has_admin_user);
-  const adminUserCount = Number(counts.admin_user_count || 0);
-  const adminMode = hasAdminUser ? "reset" : "create";
-  const adminConfirmation = hasAdminUser ? "RESET ADMIN PASSWORD" : "CREATE ADMIN USER";
-  const adminActionLabel = hasAdminUser ? "Reset Admin Password" : "Create Admin User";
   const definitionObjectCount = [
     counts.bank_accounts,
     counts.csv_mappings,
@@ -96,7 +86,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
       count: financeObjectCount,
       description: (
         "Remove transactions, imports, keywords, accounts, mappings, tags, "
-        + "subcategories, and categories. Admin users stay intact. A safety backup is saved first."
+        + "subcategories, and categories. A safety backup is saved first."
       ),
       endpoint: "/maintenance/finance-data/",
       phrase: "DELETE ALL FINANCE DATA",
@@ -291,45 +281,17 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
     }
   }
 
-  function updateAdminDraft(field, value) {
-    setAdminDraft((current) => ({ ...current, [field]: value }));
-  }
-
-  async function saveAdminUser(event) {
-    event.preventDefault();
-    if (adminDraft.password !== adminDraft.passwordConfirmation) {
-      notify("Password confirmation does not match");
-      return;
-    }
-    const confirmed = await confirmAction({
-      confirmLabel: hasAdminUser ? "Reset" : "Create",
-      danger: true,
-      message: `${adminActionLabel}?\n\nThis creates or updates a local Django admin user for direct database maintenance.`,
-      title: adminActionLabel,
-    });
-    if (!confirmed) {
-      return;
-    }
-    setAdminBusy(true);
+  // The backend signs this window's browser session in to Django admin, no password
+  // needed (admin_site.py); the admin then opens in its own window.
+  async function openDatabaseAdmin() {
+    setAdminOpening(true);
     try {
-      const payload = await apiPost("/maintenance/admin-user/", {
-        confirmation: adminConfirmation,
-        mode: adminMode,
-        password: adminDraft.password,
-        password_confirmation: adminDraft.passwordConfirmation,
-        username: adminDraft.username,
-      });
-      notify(payload.admin?.created ? "Admin user created" : "Admin password reset");
-      setAdminDraft((current) => ({
-        ...current,
-        password: "",
-        passwordConfirmation: "",
-      }));
-      await reloadMaintenance();
+      const payload = await apiPost("/maintenance/admin-session/");
+      window.open(payload.url, "_blank", "noopener");
     } catch (error) {
       notify(error.message);
     } finally {
-      setAdminBusy(false);
+      setAdminOpening(false);
     }
   }
 
@@ -518,67 +480,10 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
       <MaintenanceSection
         danger
         storageId="danger-zone"
-        subtitle="Permanent cleanup and direct database access."
+        subtitle="Permanent cleanup."
         title="Danger Zone"
       >
         <div className="maintenance-tool-grid">
-          <article className="maintenance-tool-card danger-tool-card admin-tool-card">
-            <div className="admin-tool-header">
-              <div>
-                <h3>Django admin</h3>
-              <p>
-                {hasAdminUser
-                  ? `Admin access is configured for ${formatCount(adminUserCount)} user${adminUserCount === 1 ? "" : "s"}.`
-                  : "Create a local admin user to open Django admin."}
-              </p>
-              </div>
-              {hasAdminUser && (
-                <a className="danger-button danger-link-button" href="/admin/" rel="noreferrer" target="_blank">
-                  Open Admin
-                </a>
-              )}
-            </div>
-            <form className="admin-user-form" onSubmit={saveAdminUser}>
-              <label>
-                <span>Username</span>
-                <input
-                  autoComplete="username"
-                  onChange={(event) => updateAdminDraft("username", event.target.value)}
-                  required
-                  value={adminDraft.username}
-                />
-              </label>
-              <label>
-                <span>Password</span>
-                <input
-                  autoComplete="new-password"
-                  onChange={(event) => updateAdminDraft("password", event.target.value)}
-                  required
-                  type="password"
-                  value={adminDraft.password}
-                />
-              </label>
-              <label>
-                <span>Confirm password</span>
-                <input
-                  autoComplete="new-password"
-                  onChange={(event) => updateAdminDraft("passwordConfirmation", event.target.value)}
-                  required
-                  type="password"
-                  value={adminDraft.passwordConfirmation}
-                />
-              </label>
-              <LoadingButton
-                busy={adminBusy}
-                busyLabel="Saving"
-                className="danger-button admin-user-submit"
-                disabled={Boolean(deleting)}
-                type="submit"
-              >
-                {adminActionLabel}
-              </LoadingButton>
-            </form>
-          </article>
           {dangerActions.map((action) => (
             <article className="maintenance-tool-card danger-tool-card" key={action.phrase}>
               <div>
@@ -598,6 +503,31 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
               </LoadingButton>
             </article>
           ))}
+        </div>
+      </MaintenanceSection>
+
+      <MaintenanceSection
+        storageId="advanced"
+        subtitle="Direct database access. Not needed for everyday use."
+        title="Advanced"
+      >
+        <div className="maintenance-tool-grid">
+          <article className="maintenance-tool-card">
+            <div>
+              <h3>Database admin</h3>
+              <p>Edit any record directly, for fixes the app doesn't offer yet. It skips some of the app's checks.</p>
+            </div>
+            <LoadingButton
+              busy={adminOpening}
+              busyLabel="Opening"
+              className="link-button"
+              disabled={Boolean(safeBusy) || Boolean(deleting)}
+              onClick={openDatabaseAdmin}
+              type="button"
+            >
+              Open database admin
+            </LoadingButton>
+          </article>
         </div>
       </MaintenanceSection>
     </>

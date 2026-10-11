@@ -208,9 +208,9 @@ export default function HelpPage() {
             <li><strong>Export database backup:</strong> downloads a SQLite backup of the current local database. <strong>Save backup</strong> keeps one in the app's list of saved backups instead (labeled Manual), where it can be restored with one click.</li>
             <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically. A backup made by a newer version of Cashmoney is refused; update the app first.</li>
             <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
-            <li><strong>Admin:</strong> create or reset a local Django admin user, then open Django admin for power users.</li>
             <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Before deleting all transactions or all finance data, a safety backup is saved automatically and listed under saved backups.</li>
             <li><strong>Saved backups:</strong> the app keeps the newest 10 pre-restore and 10 pre-delete backups, plus every one from the last 90 days, and deletes older ones when it saves a new one. Manual backups, files you put in the backups folder yourself, and exports you download are never deleted.</li>
+            <li><strong>Advanced:</strong> <strong>Open database admin</strong> opens Django's admin in its own window, where any record can be edited directly, for fixes the app doesn't offer yet. It skips some of the app's checks. No password is needed, and access ends when Cashmoney closes.</li>
           </ul>
         </HelpCard>
 
