@@ -106,7 +106,9 @@ export default function HelpPage() {
           </ol>
           <p>
             Recent Imports shows the latest import batches. Import Report shows loaded, created,
-            duplicate, and error counts for the last import in the session.
+            duplicate, and error counts for the last import in the session, and lists the rows that
+            failed. Delete on a recent import removes it together with the transactions it created,
+            for example to import the file again with a corrected mapping.
           </p>
           <p>
             Exchange rates sync automatically after imported transactions are saved. If the provider
@@ -156,6 +158,7 @@ export default function HelpPage() {
             <li><strong>Tags:</strong> opens the tag editor for multi-tag changes.</li>
             <li><strong>Ignored:</strong> toggles whether the transaction is excluded from normal analysis.</li>
             <li><strong>Locked:</strong> manually protect or unlock categorization.</li>
+            <li><strong>Delete:</strong> the trash button at the end of a row deletes that transaction after a confirmation.</li>
           </ul>
           <p>
             Manual changes to subcategory, WNI, tags, ignored, or category-related fields lock the
@@ -174,7 +177,8 @@ export default function HelpPage() {
             <li><strong>Recategorize:</strong> reruns keyword matching for the filtered transactions.</li>
             <li><strong>Include locked:</strong> resets locked filtered transactions and lets recategorization overwrite them.</li>
             <li><strong>Bulk assign:</strong> updates subcategory, tags, WNI, ignored, or locked fields for all filtered transactions.</li>
-            <li><strong>Find Transfers:</strong> previews likely transfers between defined accounts by matching opposite same-currency amounts across nearby dates.</li>
+            <li><strong>Delete:</strong> deletes all filtered transactions after showing how many will go. It can't be undone; importing their files again brings them back.</li>
+            <li><strong>Find Transfers:</strong> previews likely transfers between defined accounts by matching opposite same-currency amounts across nearby dates. The Matched view lists applied transfers, and Unmatch restores what applying them changed.</li>
             <li><strong>Review uncategorized:</strong> reviews uncategorized transaction groups and creates keyword rules from suggested terms.</li>
           </ul>
         </HelpCard>
@@ -202,7 +206,7 @@ export default function HelpPage() {
             <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically.</li>
             <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
             <li><strong>Admin:</strong> create or reset a local Django admin user, then open Django admin for power users.</li>
-            <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Export a backup first.</li>
+            <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Before deleting all transactions or all finance data, a safety backup is saved automatically and listed under saved backups.</li>
           </ul>
         </HelpCard>
 
