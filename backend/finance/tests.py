@@ -481,6 +481,32 @@ class CSVImportServiceTests(FinanceTestCase):
         self.assertEqual(report["skipped"]["errors"][0]["line"], 4)
         self.assertIn("Koruna", report["skipped"]["errors"][0]["error"])
 
+    def test_import_report_describes_skipped_rows(self):
+        mapping = CSVMapping.objects.create(
+            name="Czech bank",
+            date_format="%Y-%m-%d",
+            column_map={
+                "original_id": "ID",
+                "transaction_date": "Datum",
+                "description": "Zpráva",
+                "amount": "Částka",
+            },
+        )
+        body = (
+            "ID,Datum,Zpráva,Částka\n"
+            "cz-1,2026-01-02,Pekárna,-40\n"
+            "cz-2,2026-02-30,Lékárna,-90\n"
+        )
+        CSVImportService(mapping, self.account).import_file(self.csv_file(body))
+
+        _csv_import, report = CSVImportService(mapping, self.account).import_file(
+            self.csv_file(body)
+        )
+
+        self.assertEqual(report["skipped"]["duplicates"][0]["description"], "Pekárna")
+        self.assertEqual(report["skipped"]["errors"][0]["description"], "Lékárna")
+        self.assertIn("2026-02-30", report["skipped"]["errors"][0]["error"])
+
     def test_identical_rows_without_ids_all_import_once(self):
         body = (
             "Date,Description,Amount\n"

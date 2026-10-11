@@ -3358,6 +3358,11 @@ select option {
   white-space: nowrap;
 }
 
+.import-duplicate-item .import-error-message {
+  color: var(--red);
+  overflow-wrap: anywhere;
+}
+
 .import-empty-state {
   display: grid;
   place-items: center;

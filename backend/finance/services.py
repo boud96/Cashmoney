@@ -1480,18 +1480,33 @@ class CSVImportService:
                 created_transaction = self._import_row(row, csv_import, seen_keys)
             except IntegrityError:
                 report["skipped"]["duplicates"].append(
-                    {"line": line_number, "reason": "Duplicate original id", "row": row}
+                    {
+                        "line": line_number,
+                        "reason": "Duplicate original id",
+                        "description": self._row_description(row),
+                        "row": row,
+                    }
                 )
                 continue
             except Exception as exc:
                 report["skipped"]["errors"].append(
-                    {"line": line_number, "error": str(exc), "row": row}
+                    {
+                        "line": line_number,
+                        "error": str(exc),
+                        "description": self._row_description(row),
+                        "row": row,
+                    }
                 )
                 continue
 
             if created_transaction is None:
                 report["skipped"]["duplicates"].append(
-                    {"line": line_number, "reason": "Possible duplicate", "row": row}
+                    {
+                        "line": line_number,
+                        "reason": "Possible duplicate",
+                        "description": self._row_description(row),
+                        "row": row,
+                    }
                 )
                 continue
 
@@ -1501,6 +1516,7 @@ class CSVImportService:
                     {
                         "line": line_number,
                         "reason": "Duplicate transaction",
+                        "description": self._row_description(row),
                         "row": row,
                         "duplicate_transaction": self._duplicate_ref(duplicate),
                     }
@@ -1633,6 +1649,13 @@ class CSVImportService:
         position = seen_keys[key] - 1
         matches = existing.order_by("created_at", "id")[position : position + 1]
         return matches[0] if matches else None
+
+    def _row_description(self, row):
+        # Shown in the import report so users can recognize skipped rows.
+        try:
+            return self.extractor.get_value(row, "description")
+        except Exception:
+            return ""
 
     def _duplicate_ref(self, transaction_obj):
         if not transaction_obj:

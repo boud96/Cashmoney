@@ -318,6 +318,7 @@ function previewRowLabel(row) {
 
 function ImportReport({ report }) {
   const duplicates = report.skipped?.duplicates || [];
+  const errors = report.skipped?.errors || [];
   return (
     <div className="import-report-content">
       <div className="metrics-grid report-grid">
@@ -327,6 +328,7 @@ function ImportReport({ report }) {
         <Metric label="Errors" tone="negative" value={formatCount(report.skipped?.errors?.length)} />
       </div>
       <StatementChecks statement={report.statement} />
+      {errors.length ? <ErrorList errors={errors} /> : null}
       {duplicates.length ? <DuplicateList duplicates={duplicates} /> : null}
     </div>
   );
@@ -351,8 +353,7 @@ function DuplicateList({ duplicates }) {
       <div className="import-duplicate-list-title">Skipped duplicates</div>
       {duplicates.slice(0, 12).map((duplicate, index) => {
         const existing = duplicateDisplay(duplicate.duplicate_transaction, false);
-        const imported = duplicate.row || {};
-        const importedDescription = imported.Description || imported.description || imported.Popis || "";
+        const importedDescription = duplicate.description || "";
         return (
           <div className="import-duplicate-item" key={`${duplicate.line || index}-${index}`}>
             <span>Line {duplicate.line || "?"}</span>
@@ -363,6 +364,24 @@ function DuplicateList({ duplicates }) {
       })}
       {duplicates.length > 12 ? (
         <div className="muted">+{formatCount(duplicates.length - 12)} more duplicates</div>
+      ) : null}
+    </div>
+  );
+}
+
+function ErrorList({ errors }) {
+  return (
+    <div className="import-duplicate-list">
+      <div className="import-duplicate-list-title">Rows with errors</div>
+      {errors.slice(0, 12).map((error, index) => (
+        <div className="import-duplicate-item" key={`${error.line || index}-${index}`}>
+          <span>{error.line ? `Line ${error.line}` : "File"}</span>
+          <strong title={error.description || ""}>{error.description || "No description"}</strong>
+          <span className="import-error-message">{error.error || "Could not import this row"}</span>
+        </div>
+      ))}
+      {errors.length > 12 ? (
+        <div className="muted">+{formatCount(errors.length - 12)} more errors</div>
       ) : null}
     </div>
   );
