@@ -17,6 +17,8 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
+from cashmoney_backend.secret_key import load_or_create_secret_key
+
 from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .models import (
     BankAccount,
@@ -124,6 +126,18 @@ class FinanceTestCase(TestCase):
         )
         keyword.tags.add(self.tag)
         return keyword
+
+
+class SecretKeyTests(TestCase):
+    def test_each_data_dir_gets_its_own_lasting_key(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first = load_or_create_secret_key(temp_dir)
+            again = load_or_create_secret_key(temp_dir)
+            other = load_or_create_secret_key(Path(temp_dir) / "other-install")
+
+        self.assertEqual(first, again)
+        self.assertGreaterEqual(len(first), 50)
+        self.assertNotEqual(first, other)
 
 
 class ModelTests(FinanceTestCase):

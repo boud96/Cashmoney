@@ -22,6 +22,7 @@ def configure_environment():
     data_dir = default_data_dir()
     data_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("CASHMONEY_DATA_DIR", str(data_dir))
+    os.environ.setdefault("CASHMONEY_DEBUG", "0")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cashmoney_backend.settings")
 
     if sys.stdout is None:
@@ -42,19 +43,19 @@ def main():
     port = os.environ.get("CASHMONEY_PORT", "8000")
 
     import django
-    from django.core.management import call_command, execute_from_command_line
+    from django.core.management import call_command
 
     django.setup()
     call_command("migrate", interactive=False, verbosity=0)
     call_command("seed_sample_data", "--if-empty", "--skip-admin", verbosity=0)
-    execute_from_command_line(
-        [
-            "cashmoney-backend",
-            "runserver",
-            f"127.0.0.1:{port}",
-            "--noreload",
-        ]
-    )
+
+    # A production WSGI server instead of Django's development server (runserver).
+    from waitress import serve
+
+    from cashmoney_backend.wsgi import application
+
+    logging.info("Serving on 127.0.0.1:%s", port)
+    serve(application, host="127.0.0.1", port=int(port), threads=8)
 
 
 if __name__ == "__main__":
