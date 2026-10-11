@@ -144,7 +144,7 @@ export default function HelpPage() {
           <ul>
             <li><strong>Stats:</strong> Incomes, Expenses, Net, Transactions, and Uncategorized reflect the current filters in the app default currency.</li>
             <li><strong>Charts:</strong> Monthly Flow, Income Categories, Expense Categories, Want / Need / Investment, and Top Expense Subcategories.</li>
-            <li><strong>Exchange rates:</strong> original imported amounts stay unchanged; converted totals use cached rates that sync after imports and default currency changes.</li>
+            <li><strong>Exchange rates:</strong> original imported amounts stay unchanged; converted totals use cached rates that sync after imports and default currency changes. In the table, a payment in another currency shows its original amount under the converted one, with the rate on hover.</li>
             <li><strong>Hide amounts:</strong> the eye button hides amount values in the dashboard and import preview.</li>
             <li><strong>Accent and theme:</strong> use the sidebar footer controls for accent color and light/dark mode.</li>
           </ul>

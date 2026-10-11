@@ -2807,6 +2807,20 @@ select option {
   font-weight: 700;
 }
 
+.transaction-grid .amount-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 100%;
+  line-height: 1.25;
+}
+
+.transaction-grid .amount-original {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .transaction-grid .ag-cell.editable-cell {
   cursor: pointer;
 }

@@ -1844,6 +1844,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
     { field: "description", headerName: "Description", flex: 2, minWidth: 260, wrapText: true, autoHeight: true },
     {
       cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
+      cellRenderer: (params) => <AmountCell data={params.data} hideAmounts={hideAmounts} text={params.valueFormatted} />,
       comparator: compareAmounts,
       field: "converted_amount",
       headerName: "Amount",
@@ -2553,6 +2554,25 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, optional =
   );
 }
 
+
+// The amount in the default currency; a row in another currency also shows its
+// original amount, with the rate in the tooltip.
+function AmountCell({ data, hideAmounts, text }) {
+  if (!data?.currency || !data.converted_currency || data.currency === data.converted_currency) {
+    return text;
+  }
+  const original = formatAmountWithCurrency(data.amount, data.currency, hideAmounts);
+  const rate = Number(data.conversion_rate);
+  const rateText = Number.isFinite(rate) && rate > 0
+    ? `1 ${data.currency} = ${Number(rate.toFixed(4))} ${data.converted_currency}${data.conversion_rate_date ? ` (rate of ${data.conversion_rate_date})` : ""}`
+    : "No exchange rate yet";
+  return (
+    <span className="amount-cell" title={hideAmounts ? undefined : `Original amount ${original}. ${rateText}.`}>
+      <span>{text}</span>
+      <span className="amount-original">{original}</span>
+    </span>
+  );
+}
 
 function ConflictCell() {
   return <span className="color-cell conflict-cell"><span className="color-cell-label">Conflict</span></span>;
