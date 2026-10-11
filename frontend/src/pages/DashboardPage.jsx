@@ -25,6 +25,7 @@ import {
   getStoredFilterPresets,
   normalizeName,
   normalizeTagSelection,
+  offeredSubcategories,
   presetFilterCount,
   storeFilterPresets,
   subLabel,
@@ -105,6 +106,7 @@ const emptyBulkAssignDraft = {
 export default function DashboardPage({
   confirmAction,
   deleteTransaction,
+  filterDefaults,
   filters,
   filterParams,
   hideAmounts,
@@ -181,21 +183,15 @@ export default function DashboardPage({
   const [transferMatchesLoading, setTransferMatchesLoading] = useState(false);
   const [unmatchingTransferId, setUnmatchingTransferId] = useState("");
   const localFilterPresetsMigrated = useRef(false);
-  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
+  const activeFilterCount = useMemo(
+    () => countActiveFilters(filters, refs, filterDefaults),
+    [filterDefaults, filters, refs],
+  );
   const subcategoryFilterOptions = useMemo(() => {
-    const selectedCategories = filters.category || [];
-    if (!selectedCategories.length) {
-      return [[UNASSIGNED, "Unassigned subcategory"], ...refs.subcategories.map((item) => [item.id, subLabel(item)])];
-    }
-    const selectedCategoryIds = new Set(selectedCategories.filter((item) => item !== UNASSIGNED));
-    const options = selectedCategories.includes(UNASSIGNED)
-      ? [[UNASSIGNED, "Unassigned subcategory"]]
-      : [];
+    const offered = offeredSubcategories(filters.category, refs.subcategories);
     return [
-      ...options,
-      ...refs.subcategories
-        .filter((item) => selectedCategoryIds.has(item.category?.id))
-        .map((item) => [item.id, subLabel(item)]),
+      ...(offered.unassigned ? [[UNASSIGNED, "Unassigned subcategory"]] : []),
+      ...offered.items.map((item) => [item.id, subLabel(item)]),
     ];
   }, [filters.category, refs.subcategories]);
   const availableSubcategoryValues = useMemo(
@@ -745,8 +741,9 @@ export default function DashboardPage({
                 onLoad={loadFilterPreset}
                 onNameChange={setSavedFilterName}
                 onSave={saveCurrentFilterPreset}
+                dateDefaults={filterDefaults}
                 presets={savedFilters}
-                tags={refs.tags}
+                refs={refs}
               />
             </div>
             <div className="filter-main-stack">
@@ -2449,7 +2446,7 @@ function RelativeRangeForm({ setFilters }) {
   );
 }
 
-function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave, presets, tags }) {
+function SavedFiltersPanel({ busy, dateDefaults, name, onDelete, onLoad, onNameChange, onSave, presets, refs }) {
   return (
     <div className="filter-card saved-filters-card">
       <div className="filter-card-header">
@@ -2472,7 +2469,7 @@ function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave,
           <div className="saved-filter-row" key={preset.id}>
             <button className="saved-filter-load-button" disabled={busy} onClick={() => onLoad(preset)} type="button">
               <span>{preset.name}</span>
-              <small>{formatCount(presetFilterCount(preset.filters, tags))} filters</small>
+              <small>{formatCount(presetFilterCount(preset.filters, refs, dateDefaults))} filters</small>
             </button>
             <button aria-label={`Delete ${preset.name}`} className="icon-button" disabled={busy} onClick={() => onDelete(preset.id)} type="button">x</button>
           </div>

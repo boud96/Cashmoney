@@ -213,10 +213,22 @@ export function normalizeTagSelection(selection, tags) {
   return values.includes(UNASSIGNED) && coversAllTags ? [] : values;
 }
 
-// The number of filters a saved preset applies; an old preset with "Untagged" plus
-// every tag applies no tag filter at all.
-export function presetFilterCount(filters, tags) {
-  return countActiveFilters({ ...filters, tag: normalizeTagSelection(filters?.tag, tags) });
+// The subcategories the filter offers: selecting categories narrows them.
+export function offeredSubcategories(selectedCategories, subcategories) {
+  const selected = selectedCategories || [];
+  if (!selected.length) {
+    return { unassigned: true, items: subcategories };
+  }
+  const categoryIds = new Set(selected.filter((item) => item !== UNASSIGNED));
+  return {
+    unassigned: selected.includes(UNASSIGNED),
+    items: subcategories.filter((item) => categoryIds.has(item.category?.id)),
+  };
+}
+
+// The number of filters a saved preset applies, counted like the live filters.
+export function presetFilterCount(filters, refs, dateDefaults) {
+  return countActiveFilters(filters || {}, refs, dateDefaults);
 }
 
 export function cloneFilters(filters) {
@@ -232,16 +244,41 @@ export function cloneFilters(filters) {
   };
 }
 
-export function countActiveFilters(filters) {
-  return Object.entries(filters).reduce((count, [key, value]) => {
-    if (Array.isArray(value)) {
-      return count + value.length;
-    }
-    if (typeof value === "boolean") {
-      return count + (value ? 1 : 0);
-    }
-    return count + (value ? 1 : 0);
-  }, 0);
+// How many filters narrow the transactions. A checklist counts once when it leaves out
+// something it offers; the tag filter and search when set; the date range when it
+// differs from the default range (oldest transaction to today); the ignored and locked
+// switches when not at their defaults. "Divide by owners" changes amounts, not rows.
+export function countActiveFilters(filters, refs, dateDefaults) {
+  const offeredValues = initialChecklistFilters(refs);
+  const subcategories = offeredSubcategories(filters.category, refs.subcategories);
+  offeredValues.subcategory = [
+    ...(subcategories.unassigned ? [UNASSIGNED] : []),
+    ...subcategories.items.map((item) => item.id),
+  ];
+  let count = ["bank_account", "category", "direction", "subcategory", "want_need_investment"]
+    .filter((key) => {
+      const selected = new Set(filters[key] || []);
+      return offeredValues[key].some((value) => !selected.has(value));
+    })
+    .length;
+  if (normalizeTagSelection(filters.tag, refs.tags).length) {
+    count += 1;
+  }
+  if (String(filters.q || "").trim()) {
+    count += 1;
+  }
+  const dateFrom = filters.date_from || "";
+  const dateTo = filters.date_to || "";
+  if (dateDefaults ? dateFrom !== (dateDefaults.from || "") || dateTo !== (dateDefaults.to || "") : dateFrom || dateTo) {
+    count += 1;
+  }
+  if (filters.include_ignored) {
+    count += 1;
+  }
+  if (filters.include_locked === false) {
+    count += 1;
+  }
+  return count;
 }
 
 export function getStoredFilterPresets() {

@@ -394,6 +394,7 @@ export default function App() {
         <PageErrorBoundary key={activePage}>
           {activePage === "dashboard" && (
             <DashboardPage
+              filterDefaults={filterDefaults}
               filters={filters}
               hideAmounts={hideAmounts}
               importBusy={dashboardBusy}

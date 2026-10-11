@@ -7,10 +7,13 @@ import {
   buildFilterParams,
   compareAmounts,
   completeMonthlyRows,
+  countActiveFilters,
+  emptyFilters,
   fileTooLargeMessage,
   formatAmountWithCurrency,
   formatDateInput,
   formatMoneyWithCurrency,
+  initialChecklistFilters,
   normalizeName,
   normalizeTagSelection,
   presetFilterCount,
@@ -117,10 +120,46 @@ describe("filters", () => {
     expect(synced.tag).toEqual([ANY_TAG]);
   });
 
-  it("counts a saved preset as it applies", () => {
-    const tags = [{ id: "t1" }, { id: "t2" }];
-    expect(presetFilterCount({ bank_account: ["a"], tag: [UNASSIGNED, "t1", "t2"] }, tags)).toBe(1);
-    expect(presetFilterCount({ bank_account: ["a"], tag: ["t1"] }, tags)).toBe(2);
+  describe("active filter count", () => {
+    const refs = {
+      accounts: [{ id: "a" }, { id: "b" }],
+      categories: [{ id: "c1" }, { id: "c2" }],
+      subcategories: [{ id: "s1", category: { id: "c1" } }, { id: "s2", category: { id: "c2" } }],
+      tags: [{ id: "t1" }, { id: "t2" }],
+    };
+    const dates = { from: "2024-01-01", to: "2026-10-11" };
+    const startup = () => ({
+      ...emptyFilters(),
+      ...initialChecklistFilters(refs),
+      date_from: dates.from,
+      date_to: dates.to,
+    });
+
+    it("is zero at startup, although every checklist option is checked", () => {
+      expect(countActiveFilters(startup(), refs, dates)).toBe(0);
+    });
+
+    it("counts each filter that narrows the rows once", () => {
+      const filters = {
+        ...startup(),
+        bank_account: ["a"],
+        direction: ["expense"],
+        q: " kava ",
+        date_from: "2026-01-01",
+        include_ignored: true,
+      };
+      expect(countActiveFilters(filters, refs, dates)).toBe(5);
+    });
+
+    it("doesn't count the subcategories a category choice hides", () => {
+      expect(countActiveFilters({ ...startup(), category: ["c1"], subcategory: ["s1"] }, refs, dates)).toBe(1);
+    });
+
+    it("counts a saved preset as it applies", () => {
+      expect(presetFilterCount({ ...startup(), tag: [UNASSIGNED, "t1", "t2"] }, refs, dates)).toBe(0);
+      expect(presetFilterCount({ ...startup(), tag: ["t1"] }, refs, dates)).toBe(1);
+      expect(presetFilterCount({ ...startup(), include_locked: false, split_by_owners: false }, refs, dates)).toBe(1);
+    });
   });
 
   it("keeps the same filters object when the references didn't change", () => {
