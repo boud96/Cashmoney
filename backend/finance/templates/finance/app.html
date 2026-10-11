@@ -4,6 +4,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    {# Bank texts are shown everywhere; nothing but the app's own code may run. AG Grid and Plotly add <style> tags, hence 'unsafe-inline' for styles. #}
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
     <title>Cashmoney</title>
     <link rel="icon" href="{% static 'favicon.ico' %}">
     {% for css_file in react_entry_css %}

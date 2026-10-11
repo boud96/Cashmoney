@@ -1285,6 +1285,13 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("csrftoken", csrf_client.cookies)
 
+    def test_app_shell_sets_a_content_security_policy(self):
+        page = self.client.get("/").content.decode()
+
+        self.assertIn('http-equiv="Content-Security-Policy"', page)
+        self.assertIn("script-src 'self';", page)
+        self.assertIn("object-src 'none'", page)
+
     def test_json_mutation_requires_csrf_token(self):
         csrf_client = Client(enforce_csrf_checks=True)
 
