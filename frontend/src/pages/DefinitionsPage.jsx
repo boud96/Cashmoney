@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
-import { apiDelete, apiFetch, apiGet, apiPatch, apiPost } from "../api.js";
-import { CloseButton, HelpTooltip, LoadingButton, Select } from "../components.jsx";
+import { apiDelete, apiFetch, apiGet, apiPatch, apiPost, readJson } from "../api.js";
+import { CloseButton, HelpTooltip, LoadingButton, ModalEscape, Select } from "../components.jsx";
 import {
   categorizationFieldOptions,
   coerceArray,
@@ -737,6 +737,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeAccountModal()} role="presentation">
+          <ModalEscape onClose={closeAccountModal} />
           <form aria-labelledby="account-modal-title" aria-modal="true" className="definition-modal" key={editingItem?.id || "new-account"} onSubmit={submit} role="dialog">
             <div className="definition-modal-header">
               <div>
@@ -1167,6 +1168,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeWizard()} role="presentation">
+          <ModalEscape onClose={closeWizard} />
           <form aria-labelledby="mapping-wizard-title" aria-modal="true" className="mapping-wizard-modal" key={editingItem?.id || "new-mapping"} onSubmit={submit} ref={formRef} role="dialog">
             <div className="mapping-wizard-header">
               <div>
@@ -1325,6 +1327,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeItemModal()} role="presentation">
+          <ModalEscape onClose={closeItemModal} />
           <form aria-labelledby={`${endpoint.replace(/\W/g, "")}-modal-title`} aria-modal="true" className="definition-modal" key={editingItem?.id || `${endpoint}-new`} onSubmit={submit} role="dialog">
             <div className="definition-modal-header">
               <div>
@@ -1417,6 +1420,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeSubcategoryModal()} role="presentation">
+          <ModalEscape onClose={closeSubcategoryModal} />
           <form aria-labelledby="subcategory-modal-title" aria-modal="true" className="definition-modal" key={editingItem?.id || "new-subcategory"} onSubmit={submit} role="dialog">
             <div className="definition-modal-header">
               <div>
@@ -1641,6 +1645,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
       </div>
       {isOpen ? (
         <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && closeKeywordModal()} role="presentation">
+          <ModalEscape onClose={closeKeywordModal} />
           <form aria-labelledby="keyword-modal-title" aria-modal="true" className="definition-modal keyword-modal" key={editingItem?.id || "new-keyword"} onSubmit={submit} role="dialog">
             <div className="definition-modal-header">
               <div>

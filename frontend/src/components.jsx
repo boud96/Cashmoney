@@ -74,6 +74,13 @@ function useModalEscape(onClose, closeDisabled = false) {
   }, [closeDisabled, onClose]);
 }
 
+// For dialogs that are rendered conditionally inside an always-mounted component:
+// render this inside the open dialog so Escape closes it.
+export function ModalEscape({ onClose }) {
+  useModalEscape(onClose);
+  return null;
+}
+
 export function ModalShell({
   children,
   className = "",
