@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import re
+import unicodedata
 from bisect import bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -104,6 +105,12 @@ INTERNAL_TRANSFER_TEXT_FIELDS = (
 
 def normalize_text(value):
     return re.sub(r"\s+", "", str(value or "")).casefold()
+
+
+def normalize_keyword_text(value):
+    """Keyword terms and the text they match ignore whitespace, case and accents."""
+    decomposed = unicodedata.normalize("NFD", normalize_text(value))
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
 
 
 def clean_account_number(value):
@@ -1258,10 +1265,14 @@ class CategorizationService:
                 {
                     "keyword": keyword,
                     "include": [
-                        normalize_text(term) for term in keyword.include_terms if term
+                        normalize_keyword_text(term)
+                        for term in keyword.include_terms
+                        if term
                     ],
                     "exclude": [
-                        normalize_text(term) for term in keyword.exclude_terms if term
+                        normalize_keyword_text(term)
+                        for term in keyword.exclude_terms
+                        if term
                     ],
                 }
             )
@@ -1307,7 +1318,7 @@ class CategorizationService:
                 result.subcategory = self.settings.internal_transfer_subcategory
                 return result
 
-        normalized_text = normalize_text(categorization_text)
+        normalized_text = normalize_keyword_text(categorization_text)
         matched = []
         for prepared in self.prepared_keywords:
             include_terms = prepared["include"]

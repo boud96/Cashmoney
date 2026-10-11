@@ -74,7 +74,7 @@ export default function HelpPage() {
             <li><strong>Bank Accounts:</strong> store account details and set the default import mapping used by Import.</li>
             <li><strong>Categories and Subcategories:</strong> define the reporting hierarchy shown in filters, charts, and the table.</li>
             <li><strong>Tags:</strong> add cross-cutting labels such as projects, people, trips, or special cases.</li>
-            <li><strong>Keywords:</strong> match transaction text and assign subcategory, WNI, tags, or ignored status.</li>
+            <li><strong>Keywords:</strong> match transaction text and assign subcategory, WNI, tags, or ignored status. Matching ignores case, spaces, and accents, so the term "lekarna" also matches "LÉKÁRNA".</li>
           </ul>
         </HelpCard>
 

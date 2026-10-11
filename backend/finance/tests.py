@@ -803,6 +803,25 @@ class CategorizationTests(FinanceTestCase):
         self.assertEqual(wni_only.want_need_investment, WantNeedInvestment.INVESTMENT)
         self.assertTrue(own_transfer.is_ignored)
 
+    def test_keyword_matching_ignores_accents(self):
+        self.keyword("Ceska lekarna", ["ceska lekarna"])
+        self.keyword("Nájem", ["Nájem"])
+        self.keyword("Kavárna", ["kavarna"], exclude_terms=["záloha"])
+
+        categorizer = CategorizationService()
+
+        def matched(text):
+            return [
+                keyword.name for keyword in categorizer.apply(text).matched_keywords
+            ]
+
+        self.assertEqual(
+            matched("ČESKÁ LÉKÁRNA HOLDING, a.s. DR. MAX"), ["Ceska lekarna"]
+        )
+        self.assertEqual(matched("NAJEM BYT 2/2026"), ["Nájem"])
+        self.assertEqual(matched("Kavárna Praha"), ["Kavárna"])
+        self.assertEqual(matched("KAVARNA ZALOHA"), [])
+
     def test_internal_account_reference_ignore_setting(self):
         BankAccount.objects.create(name="Savings", account_number="456-789/0100")
 
