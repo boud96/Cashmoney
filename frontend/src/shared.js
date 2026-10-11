@@ -12,7 +12,7 @@ export const CHECKLIST_FILTER_KEYS = [
 export const OPTIONAL_CHECKLIST_FILTER_KEYS = ["tag"];
 export const pages = {
   dashboard: ["Dashboard", "Monthly flow, category mix, and transaction review."],
-  import: ["Import", "Load bank statement CSV files into the local transaction database."],
+  import: ["Import", "Load bank statements (CSV or camt.053 XML) into the local transaction database."],
   settings: ["Definitions", "Manage accounts, mappings, categories, tags, and keyword rules."],
   maintenance: ["Maintenance", "Database snapshot and destructive cleanup tools."],
   help: ["Help", "Usage guide for importing, categorizing, reviewing, and maintaining your finance data."],

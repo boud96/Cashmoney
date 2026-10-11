@@ -1800,6 +1800,13 @@ class ImportTransactionsView(JsonView):
 
 
 class ImportDetailView(JsonView):
+    def get(self, request, pk):
+        # The stored report (compact since CR-13), for "Report" in Recent Imports.
+        csv_import = get_object_or_404(CSVImport, id=pk)
+        return json_response(
+            {"import": serialize_csv_import(csv_import), "report": csv_import.report}
+        )
+
     def delete(self, request, pk):
         csv_import = get_object_or_404(CSVImport, id=pk)
         deleted = delete_transactions(

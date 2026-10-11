@@ -1183,10 +1183,16 @@ class APITests(FinanceTestCase):
         )
 
         imports = json_body(self.client.get("/api/imports/"))
+        detail = self.client.get(f"/api/imports/{imports[0]['id']}/")
+        missing = self.client.get("/api/imports/00000000-0000-0000-0000-000000000000/")
 
         self.assertEqual(len(imports), 1)
         self.assertNotIn("report", imports[0])
         self.assertEqual(imports[0]["created_count"], 1)
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(json_body(detail)["import"]["id"], imports[0]["id"])
+        self.assertEqual(json_body(detail)["report"]["created"]["count"], 1)
+        self.assertEqual(missing.status_code, 404)
 
     def test_row_edit_reports_whether_the_row_still_matches_the_filters(self):
         other = Subcategory.objects.create(name="Groceries", category=self.category)

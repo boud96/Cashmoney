@@ -3427,6 +3427,13 @@ select option {
   flex-shrink: 0;
 }
 
+.recent-import-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
 .recent-import-counts {
   display: flex;
   flex-wrap: wrap;

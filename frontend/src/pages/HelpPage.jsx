@@ -19,8 +19,8 @@ const conceptItems = [
 ];
 
 const troubleshootingItems = [
-  ["Import button is disabled", "Choose a CSV file, select a bank account, make sure that account has a default import mapping, then run Preview Import first."],
-  ["CSV preview has errors", "Check the import mapping's delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
+  ["Import button is disabled", "Choose a CSV or XML statement, select a bank account, make sure that account has a default import mapping, then run Preview Import first."],
+  ["The preview has errors", "Check the import mapping's delimiter, header row, encoding, date format, decimal separator, and required mapped columns. An amount that doesn't fit the decimal separator (12.50 when the mapping expects 12,50) is an error rather than a wrong amount."],
   ["No transactions are shown", "A checklist filter with no selected items means show nothing (except Tag, where it means any tag). Use Select all or load a saved filter."],
   ["A row did not recategorize", "It may be locked. Enable Include locked before recategorizing if you intentionally want to reset locked rows."],
   ["Internal transfers are not detected", "Use Find Transfers from Dashboard Actions, increase the date offset if bank posting dates differ, and check that both account statements have been imported."],
@@ -108,8 +108,10 @@ export default function HelpPage() {
           <p>
             Recent Imports shows the latest import batches. Import Report shows loaded, created,
             duplicate, and error counts for the last import in the session, and lists the rows that
-            failed. Delete on a recent import removes it together with the transactions it created,
-            for example to import the file again with a corrected mapping.
+            failed; Report on a recent import opens that import's report. An import where no row
+            can be imported is refused and not kept, and its report says why. Delete on a recent
+            import removes it together with the transactions it created, for example to import the
+            file again with a corrected mapping.
           </p>
           <p>
             Exchange rates sync automatically after imported transactions are saved. If the provider

@@ -12,6 +12,8 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
   const [recentImports, setRecentImports] = useState([]);
   const [recentImportsBusy, setRecentImportsBusy] = useState(false);
   const [deletingImportId, setDeletingImportId] = useState("");
+  const [reportImportId, setReportImportId] = useState("");
+  const reportPanelRef = useRef(null);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
@@ -65,6 +67,22 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
     return formData;
   }
 
+  async function showImportReport(item) {
+    setReportImportId(item.id);
+    try {
+      const payload = await apiGet(`/imports/${item.id}/`);
+      setImportReport({
+        ...payload.report,
+        source: { filename: item.source_filename, createdAt: item.created_at },
+      });
+      reportPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setReportImportId("");
+    }
+  }
+
   async function deleteImport(item) {
     setDeletingImportId(item.id);
     try {
@@ -103,7 +121,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
       const response = await apiFetch("/api/imports/preview/", { method: "POST", body: formData });
       const payload = await readJson(response, "Preview failed");
       setPreview(payload);
-      notify("CSV preview ready");
+      notify("Preview ready");
     } catch (error) {
       notify(error.message);
     } finally {
@@ -114,23 +132,26 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
   async function submitImport(event) {
     event.preventDefault();
     if (!canImport) {
-      notify("Preview the CSV before importing");
+      notify("Preview the file before importing");
       return;
     }
     setImporting(true);
     try {
       const response = await apiFetch("/api/imports/", { method: "POST", body: buildFormData() });
       const payload = await readJson(response, "Import failed");
-      setImportReport(payload.report);
+      setImportReport({
+        ...payload.report,
+        source: { filename: payload.import?.source_filename, createdAt: payload.import?.created_at },
+      });
       setPreview(null);
       setSelectedFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
       if (payload.exchange_rate_sync?.synced === false) {
-        notify("CSV imported, but exchange rates need retry");
+        notify("Statement imported, but exchange rates need a retry");
       } else {
-        notify("CSV imported");
+        notify("Statement imported");
       }
       await Promise.all([
         reloadAll(),
@@ -139,7 +160,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
       ]);
     } catch (error) {
       if (error.payload?.report) {
-        setImportReport(error.payload.report);
+        setImportReport({ ...error.payload.report, source: { filename: selectedFile?.name } });
       }
       notify(error.message);
     } finally {
@@ -156,7 +177,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
   return (
     <div className="import-workspace">
       <section className="filter-panel import-source-panel" aria-labelledby="import-source-title">
-        <h2 className="dashboard-section-title" id="import-source-title">Import CSV</h2>
+        <h2 className="dashboard-section-title" id="import-source-title">Import Statement</h2>
         <form className="import-form" onSubmit={submitImport}>
           <fieldset disabled={importing || previewing}>
             <label
@@ -197,7 +218,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
             {(importing || previewing) && (
               <div className="inline-status">
                 <Spinner />
-                {previewing ? "Reading CSV preview" : "Saving transactions"}
+                {previewing ? "Reading the file" : "Saving transactions"}
               </div>
             )}
           </fieldset>
@@ -209,7 +230,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
         {preview ? <ImportPreview hideAmounts={hideAmounts} preview={preview} /> : <ImportEmptyState />}
       </section>
 
-      <section className="filter-panel import-report-panel" aria-labelledby="import-report-title">
+      <section className="filter-panel import-report-panel" aria-labelledby="import-report-title" ref={reportPanelRef}>
         <h2 className="dashboard-section-title" id="import-report-title">Import Report</h2>
         {importReport ? <ImportReport report={importReport} /> : <div className="muted">Run an import to see the latest result.</div>}
       </section>
@@ -219,7 +240,14 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
           <h2 className="dashboard-section-title" id="recent-imports-title">Recent Imports</h2>
           {recentImportsBusy ? <span className="inline-status"><Spinner /> Loading</span> : null}
         </div>
-        <RecentImports deletingId={deletingImportId} imports={recentImports} onDelete={deleteImport} />
+        <RecentImports
+          busyId={deletingImportId || reportImportId}
+          deletingId={deletingImportId}
+          imports={recentImports}
+          onDelete={deleteImport}
+          onShowReport={showImportReport}
+          reportId={reportImportId}
+        />
       </section>
     </div>
   );
@@ -330,6 +358,12 @@ function ImportReport({ report }) {
   const errorCount = report.skipped?.error_count ?? errors.length;
   return (
     <div className="import-report-content">
+      {report.source?.filename ? (
+        <div className="muted">
+          {report.source.filename}
+          {report.source.createdAt ? `, imported ${formatDateTime(report.source.createdAt)}` : ""}
+        </div>
+      ) : null}
       {report.error ? <div className="mapping-status mapping-status-warning">{report.error}</div> : null}
       <div className="metrics-grid report-grid">
         <Metric label="Loaded" value={formatCount(report.loaded)} />
@@ -419,12 +453,12 @@ function duplicateDisplay(transaction, hideAmounts) {
 function ImportEmptyState() {
   return (
     <div className="import-empty-state">
-      Select a CSV file and bank account, then preview the import before saving transactions.
+      Select a CSV or camt.053 XML statement and a bank account, then preview the import before saving transactions.
     </div>
   );
 }
 
-function RecentImports({ deletingId, imports, onDelete }) {
+function RecentImports({ busyId, deletingId, imports, onDelete, onShowReport, reportId }) {
   if (!imports.length) {
     return <div className="muted">No imports yet.</div>;
   }
@@ -433,7 +467,7 @@ function RecentImports({ deletingId, imports, onDelete }) {
       {imports.map((item) => (
         <div className="recent-import-item" key={item.id}>
           <div>
-            <strong>{item.source_filename || "CSV import"}</strong>
+            <strong>{item.source_filename || "Import"}</strong>
             <span>{item.bank_account?.name || "No account"} | {formatDateTime(item.created_at)}</span>
           </div>
           <div className="recent-import-counts">
@@ -441,16 +475,28 @@ function RecentImports({ deletingId, imports, onDelete }) {
             <span>{formatCount(item.skipped_count)} skipped</span>
             <span>{formatCount(item.error_count)} errors</span>
           </div>
-          <LoadingButton
-            busy={deletingId === item.id}
-            busyLabel="Checking"
-            className="delete-button recent-import-delete"
-            disabled={Boolean(deletingId)}
-            onClick={() => onDelete(item)}
-            type="button"
-          >
-            Delete
-          </LoadingButton>
+          <div className="recent-import-actions">
+            <LoadingButton
+              busy={reportId === item.id}
+              busyLabel="Loading"
+              className="link-button"
+              disabled={Boolean(busyId)}
+              onClick={() => onShowReport(item)}
+              type="button"
+            >
+              Report
+            </LoadingButton>
+            <LoadingButton
+              busy={deletingId === item.id}
+              busyLabel="Checking"
+              className="delete-button recent-import-delete"
+              disabled={Boolean(busyId)}
+              onClick={() => onDelete(item)}
+              type="button"
+            >
+              Delete
+            </LoadingButton>
+          </div>
         </div>
       ))}
     </div>
