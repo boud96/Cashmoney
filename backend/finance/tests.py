@@ -1,6 +1,8 @@
 import json
+import os
 import sqlite3
 import tempfile
+import time
 from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
@@ -51,6 +53,7 @@ from .services import (
     transaction_mentions_account,
 )
 from .statement_parsers import parse_camt053
+from .views import create_safety_backup
 
 
 def json_body(response):
@@ -96,6 +99,15 @@ class FinanceTestCase(TestCase):
 
     def backup_dir(self):
         return self.data_dir / "backups"
+
+    def saved_backup(self, name, age_days):
+        """A placeholder file in the backups folder, last modified age_days ago."""
+        self.backup_dir().mkdir(parents=True, exist_ok=True)
+        path = self.backup_dir() / name
+        path.write_bytes(b"backup")
+        modified = time.time() - age_days * 24 * 60 * 60
+        os.utime(path, (modified, modified))
+        return path
 
     def csv_file(self, body):
         return SimpleUploadedFile(
@@ -3462,6 +3474,56 @@ class APITests(FinanceTestCase):
         finally:
             backup.close()
         self.assertEqual(descriptions, ["Keep me in the backup"])
+
+    def test_old_safety_backups_are_pruned_per_kind(self):
+        young = [
+            self.saved_backup("pre-delete-20260901-120000.sqlite3", 10),
+            self.saved_backup("pre-delete-20260902-120000.sqlite3", 20),
+        ]
+        # 101 to 110 days old, newest first.
+        old = [
+            self.saved_backup(
+                f"pre-delete-2025{month:02d}01-120000.sqlite3", 100 + month
+            )
+            for month in range(1, 11)
+        ]
+        other_kind = [
+            self.saved_backup(f"pre-restore-2024{month:02d}01-120000.sqlite3", 200)
+            for month in range(1, 13)
+        ]
+        not_made_by_the_app = [
+            self.saved_backup("cashmoney-backup-20240101-120000.sqlite3", 300),
+            self.saved_backup("my copy.sqlite3", 300),
+            self.saved_backup("pre-delete-before-cleanup.sqlite3", 300),
+        ]
+
+        response = self.delete_json(
+            "/api/maintenance/transactions/",
+            {"confirmation": "DELETE ALL TRANSACTIONS"},
+        )
+        payload = json_body(response)
+
+        # The new backup, the two young ones and the 7 newest old ones are the 10
+        # kept; the 3 oldest are past both limits. Other files stay.
+        self.assertEqual(response.status_code, 200)
+        kept = young + old[:7] + other_kind + not_made_by_the_app
+        self.assertEqual([path for path in old[7:] if path.exists()], [])
+        self.assertEqual([path for path in kept if not path.exists()], [])
+        self.assertEqual(
+            {backup["filename"] for backup in payload["backups"]},
+            {path.name for path in kept} | {payload["safety_backup"]},
+        )
+
+    def test_safety_backups_from_the_last_90_days_are_kept(self):
+        recent = [
+            self.saved_backup(f"pre-restore-202610{day:02d}-120000.sqlite3", day)
+            for day in range(1, 13)
+        ]
+
+        new_backup = create_safety_backup("pre-restore")
+
+        self.assertTrue(new_backup.exists())
+        self.assertEqual([path for path in recent if not path.exists()], [])
 
     def test_maintenance_delete_finance_data_preserves_auth_users(self):
         user = get_user_model().objects.create_user(

@@ -3813,6 +3813,13 @@ td {
   overflow-x: hidden;
 }
 
+.maintenance-backup-note {
+  margin: 10px 0 14px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .maintenance-backup-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

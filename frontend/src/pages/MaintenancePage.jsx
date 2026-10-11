@@ -412,6 +412,10 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
             </div>
           )}
         </div>
+        <p className="maintenance-backup-note">
+          The app keeps the newest 10 safety backups of each kind and every one from the last 90 days, and deletes
+          older ones when it saves a new one. Exports you download aren't affected.
+        </p>
         <div className="maintenance-tool-grid">
           <article className="maintenance-tool-card restore-card">
             <div>

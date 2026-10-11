@@ -4,6 +4,7 @@ import logging
 import re
 import sqlite3
 import tempfile
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from decimal import InvalidOperation
@@ -2185,7 +2186,33 @@ def create_safety_backup(prefix):
         backup_path = backup_dir / f"{prefix}-{timestamp}-{suffix}.sqlite3"
         suffix += 1
     backup_database_to(backup_path)
+    prune_safety_backups(prefix)
     return backup_path
+
+
+# Of each kind of safety backup, the newest SAFETY_BACKUP_KEEP always stay, and so
+# does every one younger than SAFETY_BACKUP_KEEP_DAYS.
+SAFETY_BACKUP_KEEP = 10
+SAFETY_BACKUP_KEEP_DAYS = 90
+
+
+def prune_safety_backups(prefix):
+    """Delete the safety backups of one kind that are past both limits.
+
+    Only files named the way create_safety_backup names them count, so anything
+    else in the folder (an exported backup copied there, a renamed file) stays.
+    """
+    name_pattern = re.compile(rf"{re.escape(prefix)}-\d{{8}}-\d{{6}}(-\d+)?\.sqlite3")
+    backups = [
+        path for path in saved_backup_files() if name_pattern.fullmatch(path.name)
+    ]
+    cutoff = time.time() - SAFETY_BACKUP_KEEP_DAYS * 24 * 60 * 60
+    for backup_path in backups[SAFETY_BACKUP_KEEP:]:  # newest first
+        try:
+            if backup_path.stat().st_mtime < cutoff:
+                backup_path.unlink()
+        except OSError:
+            logger.warning("Could not delete old backup %s", backup_path, exc_info=True)
 
 
 def migrate_restored_database():

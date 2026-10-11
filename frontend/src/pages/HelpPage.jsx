@@ -207,6 +207,7 @@ export default function HelpPage() {
             <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
             <li><strong>Admin:</strong> create or reset a local Django admin user, then open Django admin for power users.</li>
             <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Before deleting all transactions or all finance data, a safety backup is saved automatically and listed under saved backups.</li>
+            <li><strong>Saved backups:</strong> the app keeps the newest 10 pre-restore and 10 pre-delete backups, plus every one from the last 90 days, and deletes older ones when it saves a new one. Files you put in the backups folder yourself and exports you download are never deleted.</li>
           </ul>
         </HelpCard>
 
