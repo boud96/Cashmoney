@@ -2594,6 +2594,10 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     summary = {
         "default_currency": default_currency,
         "missing_conversions": annotated.filter(_summary_amount__isnull=True).count(),
+        # Counted here, not from the table page, which is capped at 10 000 rows.
+        "uncategorized_count": base_queryset.filter(
+            subcategory__isnull=True, is_ignored=False
+        ).count(),
         "monthly": [],
         "income_categories": [],
         "expense_categories": [],

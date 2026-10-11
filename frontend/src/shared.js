@@ -288,11 +288,13 @@ export function buildFilterParams(filters) {
 export function buildMetrics(summary, transactionPage, hideAmounts = false, defaultCurrency = "") {
   const monthly = summary?.monthly || [];
   const currency = defaultCurrency || summary?.default_currency || "";
-  const monthCount = monthly.length || 1;
+  // Months without transactions still count, so sparse periods don't inflate the averages.
+  const monthCount = completeMonthlyRows(monthly).length || 1;
   const income = monthly.reduce((acc, row) => acc + Number(row.income || 0), 0);
   const expense = monthly.reduce((acc, row) => acc + Number(row.expense || 0), 0);
   const net = income - expense;
-  const uncategorized = (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
+  const uncategorized = summary?.uncategorized_count
+    ?? (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
   return [
     ["Incomes", formatMoneyWithCurrency(income, currency, hideAmounts), "positive", { value: formatMoneyWithCurrency(income / monthCount, currency, hideAmounts), tone: "positive" }],
     ["Expenses", formatMoneyWithCurrency(expense, currency, hideAmounts), "negative", { value: formatMoneyWithCurrency(expense / monthCount, currency, hideAmounts), tone: "negative" }],

@@ -874,6 +874,29 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["report"]["created"]["count"], 1)
         self.assertFalse(payload["exchange_rate_sync"]["synced"])
 
+    def test_dashboard_summary_counts_uncategorized_transactions(self):
+        for subcategory, ignored in [
+            (self.subcategory, False),
+            (None, False),
+            (None, True),
+        ]:
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                description="Payment",
+                amount=Decimal("-10.00"),
+                subcategory=subcategory,
+                is_ignored=ignored,
+            )
+
+        default_scope = json_body(self.client.get("/api/dashboard/summary/"))
+        with_ignored = json_body(
+            self.client.get("/api/dashboard/summary/", {"include_ignored": "true"})
+        )
+
+        self.assertEqual(default_scope["uncategorized_count"], 1)
+        self.assertEqual(with_ignored["uncategorized_count"], 1)
+
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)
 
