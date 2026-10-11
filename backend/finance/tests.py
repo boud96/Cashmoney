@@ -507,6 +507,55 @@ class CSVImportServiceTests(FinanceTestCase):
         self.assertEqual(report["skipped"]["errors"][0]["description"], "Lékárna")
         self.assertIn("2026-02-30", report["skipped"]["errors"][0]["error"])
 
+    def test_amount_signs_and_missing_amounts(self):
+        _csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(
+                "ID,Date,Description,Amount\n"
+                "m-1,2026-01-02,Unicode minus,−120.50\n"
+                "m-2,2026-01-02,Trailing minus,80-\n"
+                "m-3,2026-01-02,Empty amount,\n"
+                "m-4,2026-01-02,Dash only,-\n"
+                "m-5,2026-01-02,Not a number,n/a\n"
+            )
+        )
+
+        self.assertEqual(
+            dict(Transaction.objects.values_list("original_id", "amount")),
+            {"m-1": Decimal("-120.50"), "m-2": Decimal("-80.00")},
+        )
+        errors = {
+            entry["line"]: entry["error"] for entry in report["skipped"]["errors"]
+        }
+        self.assertEqual(errors[4], "Amount is missing")
+        self.assertEqual(errors[5], "Amount is missing")
+        self.assertIn("n/a", errors[6])
+
+    def test_dash_placeholder_in_debit_column_does_not_hide_the_credit(self):
+        mapping = CSVMapping.objects.create(
+            name="Split amounts",
+            date_format="%Y-%m-%d",
+            column_map={
+                "original_id": "ID",
+                "transaction_date": "Date",
+                "description": "Description",
+                "debit_amount": "Debit",
+                "credit_amount": "Credit",
+            },
+        )
+
+        CSVImportService(mapping, self.account).import_file(
+            self.csv_file(
+                "ID,Date,Description,Debit,Credit\n"
+                "d-1,2026-01-02,Refund,-,50\n"
+                "d-2,2026-01-02,Shop,30,\n"
+            )
+        )
+
+        self.assertEqual(
+            dict(Transaction.objects.values_list("original_id", "amount")),
+            {"d-1": Decimal("50.00"), "d-2": Decimal("-30.00")},
+        )
+
     def test_identical_rows_without_ids_all_import_once(self):
         body = (
             "Date,Description,Amount\n"

@@ -118,6 +118,24 @@ def clean_account_number_variants(value):
     return {variant for variant in variants if variant}
 
 
+# Dashes that exports use as a minus sign: minus, figure dash, en dash, em dash,
+# small and fullwidth hyphen-minus.
+MINUS_SIGNS = "−‒–—﹣－"
+
+
+def normalize_minus_signs(value):
+    for sign in MINUS_SIGNS:
+        value = value.replace(sign, "-")
+    return value
+
+
+def is_blank_amount(value):
+    """An empty amount cell, including a lone dash placeholder."""
+    if value is None:
+        return True
+    return normalize_minus_signs(str(value).replace("\xa0", " ").strip()) in ("", "-")
+
+
 def coerce_list(value):
     if value is None:
         return []
@@ -1356,13 +1374,19 @@ class CSVRowExtractor:
             raise ValueError(f"Could not parse date '{value}'") from exc
 
     def parse_money(self, value):
-        raw = str(value or "").replace("\xa0", " ").strip()
+        raw = normalize_minus_signs(str(value or "").replace("\xa0", " ").strip())
         if not raw:
             return Decimal("0.00")
 
         is_negative = raw.startswith("(") and raw.endswith(")")
-        raw = raw.strip("()")
+        raw = raw.strip("()").strip()
+        # Some exports put the sign last ("123,45-").
+        if raw.endswith("-") and not raw.startswith("-"):
+            is_negative = True
+            raw = raw[:-1]
         raw = re.sub(r"[^\d,.\-]", "", raw)
+        if not re.search(r"\d", raw):
+            raise ValueError(f"Could not parse amount '{value}'")
 
         if self.csv_mapping.thousands_separator:
             raw = raw.replace(self.csv_mapping.thousands_separator, "")
@@ -1374,9 +1398,6 @@ class CSVRowExtractor:
         else:
             raw = raw.replace(",", "")
 
-        if not raw or raw == "-":
-            return Decimal("0.00")
-
         try:
             amount = Decimal(raw).quantize(Decimal("0.01"))
         except InvalidOperation as exc:
@@ -1386,15 +1407,15 @@ class CSVRowExtractor:
 
     def extract(self, row):
         amount = self.get_value(row, "amount", None)
-        if amount in (None, ""):
+        if is_blank_amount(amount):
             debit = self.get_value(row, "debit_amount", "")
             credit = self.get_value(row, "credit_amount", "")
-            if debit:
+            if not is_blank_amount(debit):
                 amount = -abs(self.parse_money(debit))
-            elif credit:
+            elif not is_blank_amount(credit):
                 amount = abs(self.parse_money(credit))
             else:
-                amount = Decimal("0.00")
+                raise ValueError("Amount is missing")
         else:
             amount = self.parse_money(amount)
 
