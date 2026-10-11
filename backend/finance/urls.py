@@ -108,6 +108,16 @@ urlpatterns = [
         name="internal-transfer-apply",
     ),
     path(
+        "transactions/internal-transfers/matches/",
+        views.InternalTransferMatchCollectionView.as_view(),
+        name="internal-transfer-matches",
+    ),
+    path(
+        "transactions/internal-transfers/matches/<uuid:pk>/",
+        views.InternalTransferMatchDetailView.as_view(),
+        name="internal-transfer-match-detail",
+    ),
+    path(
         "transactions/<uuid:pk>/",
         views.TransactionDetailView.as_view(),
         name="transaction-detail",

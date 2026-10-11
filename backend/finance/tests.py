@@ -2137,6 +2137,134 @@ class APITests(FinanceTestCase):
         # A query with nothing searchable doesn't filter at all.
         self.assertEqual(len(found("&")), 4)
 
+    def apply_transfer_pair(self, subcategory=None, **outgoing_fields):
+        transfer_subcategory = Subcategory.objects.create(
+            name="Internal Transfer", category=self.category
+        )
+        savings = BankAccount.objects.create(
+            name="Savings", account_number="456/0100", default_csv_mapping=self.mapping
+        )
+        outgoing = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Transfer to savings",
+            amount=Decimal("-100.00"),
+            counterparty_account_number="456/0100",
+            subcategory=subcategory,
+            **outgoing_fields,
+        )
+        incoming = Transaction.objects.create(
+            bank_account=savings,
+            transaction_date="2026-01-02",
+            description="Transfer from main",
+            amount=Decimal("100.00"),
+            counterparty_account_number="123/0100",
+        )
+        candidate = json_body(
+            self.client.get("/api/transactions/internal-transfers/preview/")
+        )["candidates"][0]
+        applied = self.post_json(
+            "/api/transactions/internal-transfers/apply/",
+            {
+                "candidate_ids": [candidate["id"]],
+                "subcategory_id": str(transfer_subcategory.id),
+            },
+        )
+        self.assertEqual(json_body(applied)["created"], 1)
+        return outgoing, incoming, InternalTransferMatch.objects.get()
+
+    def test_unmatching_a_transfer_restores_what_the_match_changed(self):
+        outgoing, incoming, match = self.apply_transfer_pair(
+            subcategory=self.subcategory
+        )
+        outgoing.refresh_from_db()
+        self.assertTrue(outgoing.is_ignored)
+        self.assertNotEqual(outgoing.subcategory, self.subcategory)
+
+        response = self.delete_json(
+            f"/api/transactions/internal-transfers/matches/{match.id}/"
+        )
+
+        self.assertEqual(json_body(response), {"unmatched": True, "restored": True})
+        self.assertFalse(InternalTransferMatch.objects.exists())
+        outgoing.refresh_from_db()
+        incoming.refresh_from_db()
+        self.assertEqual(outgoing.subcategory, self.subcategory)
+        self.assertIsNone(incoming.subcategory)
+        for leg in (outgoing, incoming):
+            self.assertFalse(leg.is_ignored)
+            self.assertFalse(leg.is_categorization_locked)
+
+    def test_unmatching_keeps_edits_made_after_matching(self):
+        other = Subcategory.objects.create(name="Gifts", category=self.category)
+        outgoing, _incoming, match = self.apply_transfer_pair(
+            subcategory=self.subcategory
+        )
+        Transaction.objects.filter(id=outgoing.id).update(
+            subcategory=other, is_categorization_locked=False
+        )
+
+        self.delete_json(f"/api/transactions/internal-transfers/matches/{match.id}/")
+
+        outgoing.refresh_from_db()
+        self.assertEqual(outgoing.subcategory, other)
+        self.assertFalse(outgoing.is_categorization_locked)
+        self.assertFalse(outgoing.is_ignored)
+
+    def test_unmatching_an_older_match_recategorizes_both_rows(self):
+        self.keyword("Savings transfers", ["savings"])
+        savings = BankAccount.objects.create(
+            name="Savings", default_csv_mapping=self.mapping
+        )
+        legs = [
+            Transaction.objects.create(
+                bank_account=account,
+                transaction_date="2026-01-02",
+                description=description,
+                amount=Decimal(amount),
+                is_ignored=True,
+                is_categorization_locked=True,
+            )
+            for account, description, amount in [
+                (self.account, "To savings", "-100"),
+                (savings, "From main", "100"),
+            ]
+        ]
+        match = InternalTransferMatch.objects.create(
+            outgoing_transaction=legs[0], incoming_transaction=legs[1]
+        )
+
+        response = self.delete_json(
+            f"/api/transactions/internal-transfers/matches/{match.id}/"
+        )
+
+        self.assertEqual(json_body(response), {"unmatched": True, "restored": False})
+        for leg in legs:
+            leg.refresh_from_db()
+            self.assertFalse(leg.is_ignored)
+            self.assertFalse(leg.is_categorization_locked)
+        self.assertEqual(legs[0].subcategory, self.subcategory)
+        self.assertIsNone(legs[1].subcategory)
+
+    def test_matched_transfers_are_listed_for_the_current_filters(self):
+        _outgoing, _incoming, match = self.apply_transfer_pair()
+        scope = "include_ignored=true&include_locked=true"
+
+        listed = json_body(
+            self.client.get(f"/api/transactions/internal-transfers/matches/?{scope}")
+        )
+        later = json_body(
+            self.client.get(
+                f"/api/transactions/internal-transfers/matches/?{scope}"
+                "&date_from=2026-02-01"
+            )
+        )
+
+        self.assertEqual(listed["count"], 1)
+        self.assertEqual(listed["matches"][0]["id"], str(match.id))
+        self.assertTrue(listed["matches"][0]["restorable"])
+        self.assertEqual(later, {"count": 0, "matches": []})
+
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(

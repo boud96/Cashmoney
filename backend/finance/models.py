@@ -478,6 +478,10 @@ class InternalTransferMatch(TimestampedModel):
     confidence_score = models.PositiveIntegerField(default=0)
     match_reasons = models.JSONField(default=empty_list, blank=True)
     date_delta_days = models.PositiveIntegerField(default=0)
+    # What applying the match changed, so an unmatch can restore it: the applied
+    # subcategory and each transaction's earlier ignored/locked/subcategory values.
+    # Empty for matches made before this was recorded.
+    previous_values = models.JSONField(default=empty_dict, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

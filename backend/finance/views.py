@@ -73,11 +73,13 @@ from .services import (
     detect_csv_columns,
     exchange_rate_status,
     fallback_currency_options,
+    matched_internal_transfers,
     normalize_currency_code,
     recategorize_transactions,
     recalculate_transaction_conversions,
     serialize_categorization_result,
     sync_missing_exchange_rates,
+    unmatch_internal_transfer,
 )
 
 
@@ -1330,6 +1332,22 @@ class InternalTransferApplyView(JsonView):
                 subcategory_provided=subcategory_provided,
             )
         )
+
+
+class InternalTransferMatchCollectionView(JsonView):
+    def get(self, request):
+        return json_response(matched_internal_transfers(filtered_transactions(request)))
+
+
+class InternalTransferMatchDetailView(JsonView):
+    def delete(self, request, pk):
+        match = get_object_or_404(
+            InternalTransferMatch.objects.select_related(
+                "outgoing_transaction", "incoming_transaction"
+            ),
+            id=pk,
+        )
+        return json_response({"unmatched": True, **unmatch_internal_transfer(match)})
 
 
 class TransactionFilterMetadataView(JsonView):

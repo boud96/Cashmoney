@@ -35,6 +35,7 @@ from .models import (
     FinanceSettings,
     InternalTransferMatch,
     Keyword,
+    Subcategory,
     Transaction,
 )
 from .serializers import (
@@ -2111,6 +2112,110 @@ def serialize_internal_transfer_match(match):
     }
 
 
+def internal_transfer_previous_values(
+    transactions, applied_subcategory, sets_subcategory
+):
+    return {
+        "sets_subcategory": sets_subcategory,
+        "applied_subcategory_id": (
+            str(applied_subcategory.id) if applied_subcategory else None
+        ),
+        "transactions": {
+            str(transaction_obj.id): {
+                "is_ignored": transaction_obj.is_ignored,
+                "is_categorization_locked": transaction_obj.is_categorization_locked,
+                "subcategory_id": (
+                    str(transaction_obj.subcategory_id)
+                    if transaction_obj.subcategory_id
+                    else None
+                ),
+            }
+            for transaction_obj in transactions
+        },
+    }
+
+
+@transaction.atomic
+def unmatch_internal_transfer(match):
+    """Delete a transfer match and undo what applying it changed.
+
+    A value is restored only while it still holds what the match set, so edits
+    made after matching are kept. Matches from before previous values were
+    recorded can't be restored exactly; both rows are unlocked, un-ignored and
+    run through the keyword rules again.
+    """
+    previous = match.previous_values or {}
+    stored = previous.get("transactions") or {}
+    legs = [match.outgoing_transaction, match.incoming_transaction]
+    leg_ids = [leg.id for leg in legs]
+    match.delete()
+
+    if not stored:
+        Transaction.objects.filter(id__in=leg_ids).update(
+            is_ignored=False,
+            is_categorization_locked=False,
+            updated_at=timezone.now(),
+        )
+        recategorize_transactions(Transaction.objects.filter(id__in=leg_ids))
+        return {"restored": False}
+
+    applied_subcategory_id = previous.get("applied_subcategory_id")
+    for leg in legs:
+        values = stored.get(str(leg.id))
+        if values is None:
+            continue
+        updates = {}
+        if leg.is_ignored:
+            updates["is_ignored"] = values["is_ignored"]
+        if leg.is_categorization_locked:
+            updates["is_categorization_locked"] = values["is_categorization_locked"]
+        current_subcategory_id = str(leg.subcategory_id) if leg.subcategory_id else None
+        if (
+            previous.get("sets_subcategory")
+            and current_subcategory_id == applied_subcategory_id
+        ):
+            subcategory_id = values["subcategory_id"]
+            if (
+                subcategory_id
+                and not Subcategory.objects.filter(id=subcategory_id).exists()
+            ):
+                subcategory_id = None
+            updates["subcategory_id"] = subcategory_id
+        if updates:
+            Transaction.objects.filter(id=leg.id).update(
+                **updates, updated_at=timezone.now()
+            )
+    return {"restored": True}
+
+
+def serialize_matched_internal_transfer(match):
+    return {
+        **serialize_internal_transfer_match(match),
+        "restorable": bool((match.previous_values or {}).get("transactions")),
+    }
+
+
+def matched_internal_transfers(queryset, limit=200):
+    """Matches with at least one transaction in the queryset, newest transfer first."""
+    ids = queryset.order_by().values("id")
+    matches = (
+        InternalTransferMatch.objects.filter(
+            Q(outgoing_transaction_id__in=ids) | Q(incoming_transaction_id__in=ids)
+        )
+        .select_related(
+            "outgoing_transaction__bank_account",
+            "incoming_transaction__bank_account",
+        )
+        .order_by("-outgoing_transaction__transaction_date", "-created_at")
+    )
+    return {
+        "count": matches.count(),
+        "matches": [
+            serialize_matched_internal_transfer(match) for match in matches[:limit]
+        ],
+    }
+
+
 @transaction.atomic
 def apply_internal_transfer_candidates(
     queryset,
@@ -2153,6 +2258,7 @@ def apply_internal_transfer_candidates(
             skipped += 1
             continue
 
+        sets_subcategory = bool(subcategory_provided or apply_subcategory)
         try:
             with transaction.atomic():
                 match = InternalTransferMatch.objects.create(
@@ -2161,6 +2267,11 @@ def apply_internal_transfer_candidates(
                     confidence_score=record["confidence_score"],
                     match_reasons=record["match_reasons"],
                     date_delta_days=record["date_delta_days"],
+                    previous_values=internal_transfer_previous_values(
+                        (outgoing_transaction, incoming_transaction),
+                        apply_subcategory if sets_subcategory else None,
+                        sets_subcategory,
+                    ),
                 )
         except IntegrityError:
             skipped += 1
@@ -2171,7 +2282,7 @@ def apply_internal_transfer_candidates(
             "is_categorization_locked": True,
             "updated_at": timezone.now(),
         }
-        if subcategory_provided or apply_subcategory:
+        if sets_subcategory:
             update_values["subcategory"] = apply_subcategory
         Transaction.objects.filter(id__in=transaction_ids).update(**update_values)
         used_transaction_ids.update(transaction_ids)
