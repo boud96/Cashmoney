@@ -162,6 +162,17 @@ class SecretKeyTests(TestCase):
         self.assertNotEqual(first, other)
 
 
+class DatabaseSettingsTests(TestCase):
+    def test_writes_wait_for_the_write_lock(self):
+        # With deferred transactions, a write that had already read failed at once
+        # while another request held the write lock (CR-39). The scripted check is
+        # .claude/tools/analysis/lock_check.py.
+        options = connection.settings_dict["OPTIONS"]
+
+        self.assertEqual(options["transaction_mode"], "IMMEDIATE")
+        self.assertGreaterEqual(options["timeout"], 20)
+
+
 class ModelTests(FinanceTestCase):
     def test_transaction_direction_is_calculated_from_amount(self):
         income = Transaction.objects.create(

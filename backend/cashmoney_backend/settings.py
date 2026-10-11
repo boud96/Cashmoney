@@ -73,6 +73,11 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": DATA_DIR / "db.sqlite3",
+        # Writes start with BEGIN IMMEDIATE and wait up to 20 s for the write lock.
+        # With the default deferred transactions, a write that had already read
+        # failed at once with "database is locked" whenever another request was
+        # writing, e.g. a row edit during an import (the server is multi-threaded).
+        "OPTIONS": {"timeout": 20, "transaction_mode": "IMMEDIATE"},
     }
 }
 
