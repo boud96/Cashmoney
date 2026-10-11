@@ -60,9 +60,34 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           npm test
 
+      - name: Test desktop helpers
+        working-directory: desktop
+        run: npm test
+
       - name: Build packaged app
         shell: cmd
         run: build_packaged_app.bat
+
+      # The PyInstaller backend just built, on a fresh data folder (sample data), with a
+      # launch token as the desktop app passes it. Headless Chrome opens every page and
+      # fails on console errors; a build alone doesn't prove the pages render.
+      - name: Check the packaged app in a browser
+        shell: pwsh
+        run: |
+          $env:CASHMONEY_DATA_DIR = Join-Path $env:RUNNER_TEMP "cashmoney-smoke"
+          $env:CASHMONEY_PORT = "8765"
+          $env:CASHMONEY_INSTANCE_TOKEN = [guid]::NewGuid().ToString("N")
+          $backend = Start-Process -FilePath "backend/dist/cashmoney-backend/cashmoney-backend.exe" -PassThru -WindowStyle Hidden
+          try {
+            node frontend/scripts/ui-smoke.mjs
+            $code = $LASTEXITCODE
+          } finally {
+            Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
+          }
+          if ($code) {
+            Get-Content (Join-Path $env:CASHMONEY_DATA_DIR "backend.log") -ErrorAction SilentlyContinue
+            exit $code
+          }
 
       - name: Prepare Windows artifacts
         shell: pwsh

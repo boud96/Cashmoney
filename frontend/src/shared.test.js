@@ -14,6 +14,7 @@ import {
   formatDateInput,
   formatMoneyWithCurrency,
   initialChecklistFilters,
+  isChunkLoadError,
   normalizeName,
   normalizeTagSelection,
   presetFilterCount,
@@ -119,6 +120,14 @@ describe("filters", () => {
     const after = { ...before, tags: [{ id: "t2" }] };
     const synced = syncChecklistFilters({ bank_account: [], category: [], subcategory: [], tag: [ANY_TAG, "t1"] }, before, after);
     expect(synced.tag).toEqual([ANY_TAG]);
+  });
+
+  it("recognizes a page whose code couldn't be loaded", () => {
+    expect(isChunkLoadError(new TypeError("Failed to fetch dynamically imported module: http://127.0.0.1:8765/static/a.js"))).toBe(true);
+    expect(isChunkLoadError(new TypeError("error loading dynamically imported module: http://x/a.js"))).toBe(true);
+    expect(isChunkLoadError(new TypeError("Importing a module script failed."))).toBe(true);
+    expect(isChunkLoadError(new TypeError("Cannot read properties of undefined (reading 'map')"))).toBe(false);
+    expect(isChunkLoadError(null)).toBe(false);
   });
 
   it("keeps longer toasts up longer, within limits", () => {

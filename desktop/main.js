@@ -1,16 +1,26 @@
 const { app, BrowserWindow, Menu, screen, shell } = require("electron");
-const { spawn } = require("node:child_process");
+const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
+
+const { newSecret, provesInstance, rotateIfLarge } = require("./backend-support.js");
 
 const BACKEND_PORT = app.isPackaged ? "8765" : "8000";
 const APP_URL = `http://127.0.0.1:${BACKEND_PORT}/`;
 const APP_USER_MODEL_ID = "local.cashmoney.desktop";
 const WINDOW_STATE_FILE = "window-state.json";
+// The installed app waits for its backend as long as the process runs, up to this
+// limit: the first start after an update migrates the database first.
+const PACKAGED_STARTUP_LIMIT_MS = 120000;
+const DEV_STARTUP_LIMIT_MS = 20000;
+// A fresh secret per launch, which the bundled backend must prove (backend-support.js).
+const INSTANCE_TOKEN = app.isPackaged ? newSecret() : "";
 let backendProcess = null;
 let mainWindow = null;
 let isQuitting = false;
+let foreignServerSeen = false;
+let backendErrorShown = false;
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
@@ -79,9 +89,13 @@ function packagedBackendPath() {
 function backendLogs() {
   const logDir = app.getPath("userData");
   fs.mkdirSync(logDir, { recursive: true });
+  const stderrPath = path.join(logDir, "backend.err.log");
+  const stdoutPath = path.join(logDir, "backend.out.log");
+  rotateIfLarge(stderrPath);
+  rotateIfLarge(stdoutPath);
   return {
-    stderr: fs.openSync(path.join(logDir, "backend.err.log"), "a"),
-    stdout: fs.openSync(path.join(logDir, "backend.out.log"), "a"),
+    stderr: fs.openSync(stderrPath, "a"),
+    stdout: fs.openSync(stdoutPath, "a"),
   };
 }
 
@@ -221,83 +235,175 @@ function showBackendError(title, message) {
   targetWindow.show();
 }
 
-function waitForBackend(deadlineMs = 20000) {
+function startingHtml() {
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Starting Cashmoney</title>
+  <style>
+    :root { color-scheme: dark; font-family: "Segoe UI", system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0e1117; color: #e6edf3; }
+    main { width: min(520px, calc(100vw - 40px)); text-align: center; }
+    h1 { margin: 0 0 8px; font-size: 20px; font-weight: 600; }
+    p { margin: 0; color: #8b949e; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Starting Cashmoney…</h1>
+    <p>The first start after an update can take a little longer while the database is updated.</p>
+  </main>
+</body>
+</html>`;
+}
+
+function showStartingPage() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(startingHtml())}`);
+  }
+}
+
+// Resolves once the backend answers /api/health/. The installed app also requires the
+// launch-token proof (backend-support.js), so only the backend it started counts, and
+// it stops waiting as soon as that process exits.
+function waitForBackend(deadlineMs) {
   const start = Date.now();
   return new Promise((resolve, reject) => {
-    const probe = () => {
-      const request = http.get(`http://127.0.0.1:${BACKEND_PORT}/api/health/`, (response) => {
-        response.resume();
-        if (response.statusCode >= 200 && response.statusCode < 300) {
-          resolve();
-        } else {
-          retry();
-        }
-      });
-      request.on("error", retry);
-      request.setTimeout(1000, () => {
-        request.destroy();
-        retry();
-      });
-    };
-
     const retry = () => {
-      if (Date.now() - start > deadlineMs) {
+      if (app.isPackaged && backendProcess === null) {
+        reject(new Error("The backend stopped while starting."));
+      } else if (Date.now() - start > deadlineMs) {
         reject(new Error("Backend did not start in time."));
       } else {
         setTimeout(probe, 400);
       }
     };
 
+    const probe = () => {
+      const nonce = app.isPackaged ? newSecret(16) : "";
+      let finished = false;
+      const finish = (ready) => {
+        if (finished) {
+          return;
+        }
+        finished = true;
+        if (ready) {
+          resolve();
+        } else {
+          retry();
+        }
+      };
+      const query = nonce ? `?nonce=${nonce}` : "";
+      const request = http.get(`http://127.0.0.1:${BACKEND_PORT}/api/health/${query}`, (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            finish(false);
+            return;
+          }
+          if (!app.isPackaged) {
+            finish(true);
+            return;
+          }
+          let payload = null;
+          try {
+            payload = JSON.parse(body);
+          } catch {
+            payload = null;
+          }
+          const proven = provesInstance(payload, INSTANCE_TOKEN, nonce);
+          if (!proven) {
+            foreignServerSeen = true;
+          }
+          finish(proven);
+        });
+      });
+      request.on("error", () => finish(false));
+      request.setTimeout(1000, () => {
+        request.destroy();
+        finish(false);
+      });
+    };
+
     probe();
   });
 }
 
-async function startBackendIfNeeded() {
-  try {
-    await waitForBackend(1200);
-    return;
-  } catch {
-    if (app.isPackaged) {
-      const backendExe = packagedBackendPath();
-      const logs = backendLogs();
-      backendProcess = spawn(
-        backendExe,
-        [],
-        {
-          env: { ...process.env, CASHMONEY_DATA_DIR: app.getPath("userData"), CASHMONEY_PORT: BACKEND_PORT },
-          windowsHide: true,
-          stdio: ["ignore", logs.stdout, logs.stderr],
-        }
-      );
-    } else {
-      backendProcess = spawn(
-        pythonPath(),
-        ["manage.py", "runserver", "127.0.0.1:8000", "--noreload"],
-        {
-          cwd: backendRoot(),
-          windowsHide: true,
-          stdio: "ignore",
-        }
-      );
-    }
-    backendProcess.once("exit", (code, signal) => {
-      backendProcess = null;
-      if (!isQuitting) {
-        showBackendError(
-          "Cashmoney backend stopped",
-          `The local backend process exited unexpectedly${code === null ? "" : ` with code ${code}`}${signal ? ` and signal ${signal}` : ""}.`,
-        );
-      }
-    });
-    backendProcess.once("error", (error) => {
-      backendProcess = null;
-      if (!isQuitting) {
-        showBackendError("Cashmoney backend failed", error.message);
-      }
-    });
-    backendProcess.unref();
-    await waitForBackend();
+// A backend left over from an earlier launch that ended abruptly would hold the port.
+// The single-instance lock means no other Cashmoney is running, so it can go.
+function stopLeftoverBackend() {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/IM", path.basename(packagedBackendPath()), "/F"], { stdio: "ignore", windowsHide: true });
   }
+}
+
+function backendExitMessage(code, signal) {
+  const exited = `The local backend process exited unexpectedly${code === null ? "" : ` with code ${code}`}${signal ? ` and signal ${signal}` : ""}.`;
+  if (!foreignServerSeen) {
+    return exited;
+  }
+  return `${exited} Another program is answering on port ${BACKEND_PORT}, so the backend could not start. Close that program, then start Cashmoney again.`;
+}
+
+async function startBackendIfNeeded() {
+  if (app.isPackaged) {
+    // The installed app always uses the backend it starts (CR-45).
+    stopLeftoverBackend();
+    const logs = backendLogs();
+    backendProcess = spawn(
+      packagedBackendPath(),
+      [],
+      {
+        env: {
+          ...process.env,
+          CASHMONEY_DATA_DIR: app.getPath("userData"),
+          CASHMONEY_INSTANCE_TOKEN: INSTANCE_TOKEN,
+          CASHMONEY_PORT: BACKEND_PORT,
+        },
+        windowsHide: true,
+        stdio: ["ignore", logs.stdout, logs.stderr],
+      }
+    );
+    showStartingPage();
+  } else {
+    // Development: run_app.bat may already serve the app.
+    try {
+      await waitForBackend(1200);
+      return;
+    } catch {
+      // Not running yet: start it below.
+    }
+    backendProcess = spawn(
+      pythonPath(),
+      ["manage.py", "runserver", "127.0.0.1:8000", "--noreload"],
+      {
+        cwd: backendRoot(),
+        windowsHide: true,
+        stdio: "ignore",
+      }
+    );
+  }
+  backendProcess.once("exit", (code, signal) => {
+    backendProcess = null;
+    if (!isQuitting) {
+      backendErrorShown = true;
+      showBackendError("Cashmoney backend stopped", backendExitMessage(code, signal));
+    }
+  });
+  backendProcess.once("error", (error) => {
+    backendProcess = null;
+    if (!isQuitting) {
+      backendErrorShown = true;
+      showBackendError("Cashmoney backend failed", error.message);
+    }
+  });
+  backendProcess.unref();
+  await waitForBackend(app.isPackaged ? PACKAGED_STARTUP_LIMIT_MS : DEV_STARTUP_LIMIT_MS);
 }
 
 function createWindow(options = {}) {
@@ -362,7 +468,10 @@ if (gotSingleInstanceLock) {
         mainWindow.loadURL(APP_URL);
       }
     } catch (error) {
-      showBackendError("Cashmoney backend did not start", error.message);
+      // An exited backend already shows its own error page.
+      if (!backendErrorShown) {
+        showBackendError("Cashmoney backend did not start", error.message);
+      }
     }
 
     app.on("activate", () => {

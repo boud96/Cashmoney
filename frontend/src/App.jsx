@@ -17,6 +17,7 @@ import {
   getStoredTheme,
   HIDE_AMOUNTS_STORAGE_KEY,
   initialChecklistFilters,
+  isChunkLoadError,
   normalizeHexColor,
   pages,
   syncChecklistFilters,
@@ -578,12 +579,27 @@ class PageErrorBoundary extends Component {
   }
 
   render() {
-    if (this.state.error) {
+    const { error } = this.state;
+    if (error && isChunkLoadError(error)) {
+      // React keeps the failed import, so only a reload can fetch the page's code again.
+      return (
+        <section className="panel page-error-panel">
+          <div>
+            <h2>This page can't load right now</h2>
+            <p>Its code comes from the Cashmoney backend, which isn't answering. Reload once the backend is running again.</p>
+          </div>
+          <button className="link-button" onClick={() => window.location.reload()} type="button">
+            Reload
+          </button>
+        </section>
+      );
+    }
+    if (error) {
       return (
         <section className="panel page-error-panel">
           <div>
             <h2>Page failed to render</h2>
-            <p>{this.state.error.message || "An unexpected frontend error occurred."}</p>
+            <p>{error.message || "An unexpected frontend error occurred."}</p>
           </div>
           <button className="link-button" onClick={() => this.setState({ error: null })} type="button">
             Try again

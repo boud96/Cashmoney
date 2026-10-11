@@ -1,4 +1,7 @@
+import hashlib
+import hmac
 import json
+import logging
 import os
 import sqlite3
 import tempfile
@@ -6,10 +9,12 @@ import time
 from datetime import date, timedelta
 from decimal import Decimal
 from io import StringIO
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import URLError
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
@@ -17,10 +22,17 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
-from django.test import Client, TestCase, TransactionTestCase, override_settings
+from django.test import (
+    Client,
+    SimpleTestCase,
+    TestCase,
+    TransactionTestCase,
+    override_settings,
+)
 from django.utils import timezone
 
 from cashmoney_backend.secret_key import load_or_create_secret_key
+from packaged_backend import configure_environment, rotate_if_large
 
 from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .models import (
@@ -160,6 +172,46 @@ class SecretKeyTests(TestCase):
         self.assertEqual(first, again)
         self.assertGreaterEqual(len(first), 50)
         self.assertNotEqual(first, other)
+
+
+class PackagedBackendTests(SimpleTestCase):
+    def test_a_large_log_starts_fresh_and_keeps_one_old_copy(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log = Path(temp_dir) / "backend.stdout.log"
+            log.write_bytes(b"x" * 2000)
+            (Path(temp_dir) / "backend.stdout.log.1").write_bytes(b"older")
+
+            rotate_if_large(log, max_bytes=1000)
+            rotated = (Path(temp_dir) / "backend.stdout.log.1").read_bytes()
+            log.write_bytes(b"small")
+            rotate_if_large(log, max_bytes=1000)
+
+            self.assertEqual(len(rotated), 2000)
+            self.assertEqual(log.read_bytes(), b"small")
+
+    def test_the_backend_log_rotates(self):
+        root = logging.getLogger()
+        handlers = list(root.handlers)
+        self.addCleanup(root.setLevel, root.level)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
+                for handler in handlers:
+                    root.removeHandler(handler)
+                with patch.dict(os.environ, {"CASHMONEY_DATA_DIR": temp_dir}):
+                    configure_environment()
+                rotating = [
+                    handler
+                    for handler in root.handlers
+                    if isinstance(handler, RotatingFileHandler)
+                ]
+                self.assertEqual(len(rotating), 1)
+                self.assertEqual(rotating[0].maxBytes, 1_000_000)
+            finally:
+                for handler in list(root.handlers):
+                    root.removeHandler(handler)
+                    handler.close()
+                for handler in handlers:
+                    root.addHandler(handler)
 
 
 class DatabaseSettingsTests(TestCase):
@@ -1233,6 +1285,13 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("csrftoken", csrf_client.cookies)
 
+    def test_app_shell_sets_a_content_security_policy(self):
+        page = self.client.get("/").content.decode()
+
+        self.assertIn('http-equiv="Content-Security-Policy"', page)
+        self.assertIn("script-src 'self';", page)
+        self.assertIn("object-src 'none'", page)
+
     def test_json_mutation_requires_csrf_token(self):
         csrf_client = Client(enforce_csrf_checks=True)
 
@@ -1298,6 +1357,18 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    def test_health_proves_the_desktop_apps_launch_token(self):
+        nonce = "4f1c2a"
+        with patch.dict(os.environ, {"CASHMONEY_INSTANCE_TOKEN": "launch-token"}):
+            proven = json_body(self.client.get("/api/health/", {"nonce": nonce}))
+            no_nonce = json_body(self.client.get("/api/health/"))
+        without_token = json_body(self.client.get("/api/health/", {"nonce": nonce}))
+
+        expected = hmac.new(b"launch-token", nonce.encode(), hashlib.sha256)
+        self.assertEqual(proven["proof"], expected.hexdigest())
+        self.assertNotIn("proof", no_nonce)
+        self.assertNotIn("proof", without_token)
 
     def test_untrusted_unsafe_preflight_is_rejected(self):
         response = self.client.options(
@@ -3538,6 +3609,63 @@ class APITests(FinanceTestCase):
         payload = json_body(response)
         self.assertEqual(payload["error"], "Password confirmation does not match")
 
+    def test_maintenance_admin_user_checks_the_mode_and_existing_users(self):
+        User = get_user_model()
+        User.objects.create_user(username="taken", password="Old-Password-7429!")
+        passwords = {
+            "password": "River-Account-7429!",
+            "password_confirmation": "River-Account-7429!",
+        }
+
+        def post(**fields):
+            return self.post_json(
+                "/api/maintenance/admin-user/", {**passwords, **fields}
+            )
+
+        no_mode = post(confirmation="CREATE ADMIN USER", username="new-admin")
+        create_taken = post(
+            mode="create", confirmation="CREATE ADMIN USER", username="taken"
+        )
+        reset_missing = post(
+            mode="reset", confirmation="RESET ADMIN PASSWORD", username="nobody"
+        )
+
+        self.assertEqual(no_mode.status_code, 400)
+        self.assertEqual(json_body(no_mode)["error"], "Unknown mode")
+        self.assertEqual(create_taken.status_code, 409)
+        self.assertEqual(
+            json_body(create_taken)["error"], "A user named taken already exists."
+        )
+        taken = User.objects.get(username="taken")
+        self.assertTrue(taken.check_password("Old-Password-7429!"))
+        self.assertFalse(taken.is_superuser)
+        self.assertEqual(reset_missing.status_code, 404)
+        self.assertEqual(
+            json_body(reset_missing)["error"], "There is no user named nobody."
+        )
+        self.assertFalse(
+            User.objects.filter(username__in=["new-admin", "nobody"]).exists()
+        )
+
+    def test_maintenance_admin_user_keeps_spaces_in_passwords(self):
+        password = "  River-Account-7429!  "
+
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "CREATE ADMIN USER",
+                "mode": "create",
+                "password": password,
+                "password_confirmation": password,
+                "username": "local-admin",
+            },
+        )
+        user = get_user_model().objects.get(username="local-admin")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(user.check_password(password))
+        self.assertFalse(user.check_password(password.strip()))
+
     def test_maintenance_delete_rejects_wrong_confirmation(self):
         response = self.delete_json(
             "/api/maintenance/transactions/",
@@ -3717,6 +3845,37 @@ class APITests(FinanceTestCase):
 
         self.assertTrue(new_backup.exists())
         self.assertEqual([path for path in recent if not path.exists()], [])
+
+    def test_save_backup_keeps_a_manual_backup_that_is_never_pruned(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="In the manual backup",
+            amount=Decimal("-12.50"),
+        )
+        older = [
+            self.saved_backup(f"cashmoney-backup-2025{month:02d}01-120000.sqlite3", 200)
+            for month in range(1, 13)
+        ]
+
+        response = self.client.post("/api/maintenance/backups/")
+        payload = json_body(response)
+        create_safety_backup("pre-delete")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(payload["saved"].startswith("cashmoney-backup-"))
+        listed = {backup["filename"]: backup["label"] for backup in payload["backups"]}
+        self.assertEqual(listed[payload["saved"]], "Manual")
+        self.assertEqual([path for path in older if not path.exists()], [])
+        backup = sqlite3.connect(self.backup_dir() / payload["saved"])
+        try:
+            descriptions = [
+                row[0]
+                for row in backup.execute("SELECT description FROM finance_transaction")
+            ]
+        finally:
+            backup.close()
+        self.assertEqual(descriptions, ["In the manual backup"])
 
     def test_maintenance_delete_finance_data_preserves_auth_users(self):
         user = get_user_model().objects.create_user(
@@ -3967,6 +4126,46 @@ class MaintenanceRestoreTests(TransactionTestCase):
         self.assertFalse(
             Transaction.objects.filter(description="Current transaction").exists()
         )
+
+    def test_database_restore_refuses_a_backup_from_a_newer_version(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Still here",
+            amount=Decimal("-12.50"),
+        )
+        connection.ensure_connection()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            newer_path = Path(temp_dir) / "newer.sqlite3"
+            newer_path.write_bytes(connection.connection.serialize())
+            newer = sqlite3.connect(str(newer_path))
+            newer.execute(
+                "INSERT INTO django_migrations (app, name, applied) "
+                "VALUES ('finance', '0099_from_a_newer_version', '2027-01-01')"
+            )
+            newer.commit()
+            newer.close()
+            backup_bytes = newer_path.read_bytes()
+
+        response = self.client.post(
+            "/api/maintenance/database-restore/",
+            {
+                "confirmation": "RESTORE DATABASE",
+                "backup_file": SimpleUploadedFile(
+                    "newer.sqlite3", backup_bytes, content_type="application/x-sqlite3"
+                ),
+            },
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("newer version of Cashmoney", payload["error"])
+        self.assertEqual(
+            payload["details"]["unknown_migrations"],
+            ["finance.0099_from_a_newer_version"],
+        )
+        self.assertTrue(Transaction.objects.filter(description="Still here").exists())
+        self.assertFalse((Path(settings.DATA_DIR) / "backups").exists())
 
     def test_database_restore_migrates_backup_without_internal_transfer_table(self):
         restored_transaction = Transaction.objects.create(

@@ -88,7 +88,7 @@ export default function HelpPage() {
             <li><strong>Required fields:</strong> transaction date and amount must be mapped.</li>
             <li><strong>Description:</strong> can combine multiple CSV columns into the dashboard description.</li>
             <li><strong>Categorization Fields:</strong> decide which parsed transaction fields Keywords inspect during import and recategorization.</li>
-            <li><strong>Advanced parsing:</strong> delimiter, quote character, encoding, header row, date format, and separators stay editable.</li>
+            <li><strong>Advanced parsing:</strong> delimiter, quote character, encoding, header row, date format, and decimal separator stay editable. The other mark (a dot when the decimal separator is a comma, and the reverse) may only group thousands, and spaces are ignored, so 1 234,50 and 1.234,50 both read as 1234.50 with comma decimals.</li>
             <li><strong>camt.053 XML:</strong> choose this format for ISO 20022 XML bank statements. Columns are mapped automatically, and the preview checks that the statement balances add up and that its account matches the bank account.</li>
           </ul>
         </HelpCard>
@@ -205,12 +205,12 @@ export default function HelpPage() {
           </p>
           <ul>
             <li><strong>Database Snapshot:</strong> shows current counts for finance objects and sample data.</li>
-            <li><strong>Export database backup:</strong> downloads a SQLite backup of the current local database.</li>
-            <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically.</li>
+            <li><strong>Export database backup:</strong> downloads a SQLite backup of the current local database. <strong>Save backup</strong> keeps one in the app's list of saved backups instead (labeled Manual), where it can be restored with one click.</li>
+            <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically. A backup made by a newer version of Cashmoney is refused; update the app first.</li>
             <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
             <li><strong>Admin:</strong> create or reset a local Django admin user, then open Django admin for power users.</li>
             <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Before deleting all transactions or all finance data, a safety backup is saved automatically and listed under saved backups.</li>
-            <li><strong>Saved backups:</strong> the app keeps the newest 10 pre-restore and 10 pre-delete backups, plus every one from the last 90 days, and deletes older ones when it saves a new one. Files you put in the backups folder yourself and exports you download are never deleted.</li>
+            <li><strong>Saved backups:</strong> the app keeps the newest 10 pre-restore and 10 pre-delete backups, plus every one from the last 90 days, and deletes older ones when it saves a new one. Manual backups, files you put in the backups folder yourself, and exports you download are never deleted.</li>
           </ul>
         </HelpCard>
 

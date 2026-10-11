@@ -30,4 +30,10 @@ export default [
     files: ["src/**/*.test.js"],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // Node scripts, such as the CI browser smoke test.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: { ecmaVersion: "latest", sourceType: "module", globals: { ...globals.node } },
+    rules: { ...js.configs.recommended.rules },
+  },
 ];

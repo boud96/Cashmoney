@@ -213,6 +213,12 @@ export function normalizeTagSelection(selection, tags) {
   return values.includes(UNASSIGNED) && coversAllTags ? [] : values;
 }
 
+// A lazily loaded page whose code can't be fetched (the backend isn't answering) fails
+// with one of these messages: Chrome and Electron, Firefox, Safari.
+export function isChunkLoadError(error) {
+  return /dynamically imported module|Importing a module script failed/i.test(String(error?.message || ""));
+}
+
 // How long a toast stays: 2.6 s for a short note, longer for longer messages (errors
 // usually are), at most 12 s.
 export function toastDuration(message) {

@@ -1106,8 +1106,8 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
             <FormField label="Encoding"><input name="encoding" onChange={(event) => updateParsingSetting("encoding", event.target.value)} placeholder="utf-8-sig" value={parsingSettings.encoding} /></FormField>
             <FormField label="Header Row"><input min="0" name="header_row" onChange={(event) => updateParsingSetting("header_row", event.target.value)} placeholder="0" type="number" value={parsingSettings.header_row} /></FormField>
             <FormField label="Quote Character"><input maxLength="1" name="quotechar" onChange={(event) => updateParsingSetting("quotechar", event.target.value)} placeholder={'"'} value={parsingSettings.quotechar} /></FormField>
+            {/* No thousands-separator field: parsing treats the other mark as the only grouping mark and ignores spaces (CR-59). */}
             <FormField label="Decimal Separator"><input maxLength="1" name="decimal_separator" onChange={(event) => updateParsingSetting("decimal_separator", event.target.value)} placeholder="." value={parsingSettings.decimal_separator} /></FormField>
-            <FormField label="Thousands Separator"><input name="thousands_separator" onChange={(event) => updateParsingSetting("thousands_separator", event.target.value)} placeholder="Optional" value={parsingSettings.thousands_separator} /></FormField>
             <div className="mapping-parser-action">
               <LoadingButton busy={detecting} busyLabel="Detecting" className="link-button mapping-detect-button" disabled={saving} onClick={detectColumns} type="button">Detect Columns</LoadingButton>
               {draft.detected ? <span className="mapping-detection-status">{draft.detected.headers?.length || 0} columns detected</span> : null}

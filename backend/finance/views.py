@@ -1,6 +1,9 @@
 import codecs
+import hashlib
+import hmac
 import json
 import logging
+import os
 import re
 import sqlite3
 import tempfile
@@ -17,6 +20,7 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.management import call_command
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, connection, transaction
+from django.db.migrations.loader import MigrationLoader
 from django.db.models import Q
 from django.http import Http404
 from django.http import FileResponse
@@ -110,10 +114,11 @@ REQUIRED_BACKUP_TABLES = {
 
 
 class APIValidationError(Exception):
-    def __init__(self, message, details=None):
+    def __init__(self, message, details=None, status=400):
         super().__init__(message)
         self.message = message
         self.details = details or {}
+        self.status = status
 
 
 def json_response(data, status=200):
@@ -584,7 +589,7 @@ class JsonView(View):
             return json_response({"error": "Invalid JSON body"}, status=400)
         except APIValidationError as exc:
             return json_response(
-                {"error": exc.message, "details": exc.details}, status=400
+                {"error": exc.message, "details": exc.details}, status=exc.status
             )
         except KeyError as exc:
             return json_response(
@@ -627,7 +632,16 @@ class DeleteImpactView(JsonView):
 
 class HealthView(JsonView):
     def get(self, request):
-        return json_response({"status": "ok"})
+        payload = {"status": "ok"}
+        # The desktop app starts its backend with a per-launch token and asks for this
+        # proof, so it never uses some other program answering on the port (CR-45).
+        token = os.environ.get("CASHMONEY_INSTANCE_TOKEN", "")
+        nonce = request.GET.get("nonce", "")
+        if token and nonce:
+            payload["proof"] = hmac.new(
+                token.encode(), nonce.encode(), hashlib.sha256
+            ).hexdigest()
+        return json_response(payload)
 
 
 class FinanceSettingsView(JsonView):
@@ -1969,10 +1983,21 @@ class MaintenanceRecreateSampleDataView(JsonView):
         )
 
 
+def admin_password_field(data, field_name):
+    value = data.get(field_name)
+    if not isinstance(value, str) or not value:
+        raise APIValidationError("Missing required field", {"field": field_name})
+    return value
+
+
 class MaintenanceAdminUserView(JsonView):
     def post(self, request):
         data = parse_json_body(request)
-        mode = clean_text(data.get("mode"), "mode") or "create"
+        mode = data.get("mode")
+        if mode not in ("create", "reset"):
+            raise APIValidationError(
+                "Unknown mode", {"field": "mode", "allowed": ["create", "reset"]}
+            )
         expected_confirmation = (
             CONFIRM_RESET_ADMIN_PASSWORD
             if mode == "reset"
@@ -1985,14 +2010,9 @@ class MaintenanceAdminUserView(JsonView):
             )
 
         username = clean_text(data.get("username"), "username", required=True)
-        password = clean_text(data.get("password"), "password", required=True)
-        password_confirmation = clean_text(
-            data.get("password_confirmation"),
-            "password_confirmation",
-            required=True,
-        )
-        email_provided = "email" in data
-        email = clean_text(data.get("email"), "email") if email_provided else ""
+        # Passwords are taken as typed: spaces at either end are part of them (CR-44).
+        password = admin_password_field(data, "password")
+        password_confirmation = admin_password_field(data, "password_confirmation")
         if password != password_confirmation:
             raise APIValidationError(
                 "Password confirmation does not match",
@@ -2001,7 +2021,15 @@ class MaintenanceAdminUserView(JsonView):
 
         User = get_user_model()
         user = User.objects.filter(username=username).first()
-        validation_user = user or User(username=username, email=email)
+        if mode == "create" and user is not None:
+            raise APIValidationError(
+                f"A user named {username} already exists.",
+                {"field": "username"},
+                status=409,
+            )
+        if mode == "reset" and user is None:
+            raise Http404(f"There is no user named {username}.")
+        validation_user = user or User(username=username)
         try:
             validate_password(password, validation_user)
         except ValidationError as exc:
@@ -2013,8 +2041,6 @@ class MaintenanceAdminUserView(JsonView):
         created = user is None
         if created:
             user = User(username=username)
-        if created or email_provided:
-            user.email = email
         user.is_active = True
         user.is_staff = True
         user.is_superuser = True
@@ -2191,9 +2217,43 @@ def validate_sqlite_backup(backup_path):
             "Backup database does not match the Cashmoney schema",
             {"missing_tables": missing},
         )
+    newer = migrations_unknown_here(backup_path)
+    if newer:
+        raise APIValidationError(
+            "This backup was made by a newer version of Cashmoney. Update the app, "
+            "then restore it.",
+            {"unknown_migrations": newer},
+        )
 
 
-def create_safety_backup(prefix):
+def migrations_unknown_here(backup_path):
+    """Migrations applied in the backup that this version doesn't have.
+
+    Restoring such a backup would leave a schema the code doesn't know: migrate has
+    nothing to do, so nothing would complain until something broke later.
+    """
+    candidate = sqlite3.connect(
+        f"{Path(backup_path).resolve().as_uri()}?mode=ro", uri=True
+    )
+    try:
+        applied = candidate.execute(
+            "SELECT app, name FROM django_migrations"
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return []  # no migration table: the schema check above decides
+    finally:
+        candidate.close()
+    known = set(MigrationLoader(None, ignore_no_migrations=True).disk_migrations)
+    known_apps = {app for app, _name in known}
+    return sorted(
+        f"{app}.{name}"
+        for app, name in applied
+        if app in known_apps and (app, name) not in known
+    )
+
+
+def create_saved_backup(prefix):
+    """Save a copy of the database in the backups folder as <prefix>-<time>.sqlite3."""
     connection.ensure_connection()
     timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
     backup_dir = backup_directory()
@@ -2204,8 +2264,17 @@ def create_safety_backup(prefix):
         backup_path = backup_dir / f"{prefix}-{timestamp}-{suffix}.sqlite3"
         suffix += 1
     backup_database_to(backup_path)
+    return backup_path
+
+
+def create_safety_backup(prefix):
+    backup_path = create_saved_backup(prefix)
     prune_safety_backups(prefix)
     return backup_path
+
+
+# Backups the user saves with "Save backup" (listed as Manual, never pruned).
+MANUAL_BACKUP_PREFIX = "cashmoney-backup"
 
 
 # Of each kind of safety backup, the newest SAFETY_BACKUP_KEEP always stay, and so
@@ -2255,8 +2324,16 @@ def restore_sqlite_database_from_path(backup_path):
 
 
 class MaintenanceSavedBackupsView(JsonView):
+    atomic_writes = False  # the backup API copies page by page outside a transaction
+
     def get(self, request):
         return json_response({"backups": saved_backup_payload()})
+
+    def post(self, request):
+        backup_path = create_saved_backup(MANUAL_BACKUP_PREFIX)
+        return json_response(
+            {"saved": backup_path.name, "backups": saved_backup_payload()}, status=201
+        )
 
 
 class MaintenanceSavedBackupExportView(JsonView):
