@@ -42,6 +42,7 @@ There is no Vite dev-server proxy. `api.js` calls `/api` on the page's own origi
 - `cashmoney_backend/settings.py` hardcodes `DEBUG`/`SECRET_KEY` and ignores the root `.env`. The DB is `DATA_DIR/db.sqlite3`, where `DATA_DIR = $CASHMONEY_DATA_DIR` or `backend/`. Time zone is `Europe/Prague`.
 - `views.py`: the API is hand-rolled class-based views that subclass `JsonView`, not DRF. `JsonView.dispatch` turns exceptions into JSON errors: `APIValidationError(message, details)`, `KeyError` and `ValueError` → 400, `IntegrityError` → 409, `Http404` → 404. Validation therefore works by raising; don't build error responses by hand. Request bodies go through `parse_json_body`, and responses through `json_response` plus the `serialize_*` helpers in `serializers.py`.
 - `services.py` holds the domain logic: CSV decoding/dialect/column detection and import, `CategorizationService` (active keywords by priority, include/exclude terms, targets subcategory/tags/WNI/ignored), Frankfurter exchange rates cached in `ExchangeRate`, ORM-aggregated dashboard summaries, and internal-transfer matching.
+- Transaction search ignores case, accents and punctuation: `search.py` `fold_search_text` (a SQLite function plus the `searchfold` lookup, registered in `models.py`) must stay identical to `normalizeName` in `frontend/src/shared.js`, which the dashboard uses to decide whether an edited row still matches the filters.
 - `AppShellView` serves `templates/finance/app.html` and finds the hashed React bundle through the Vite manifest at `finance/static/finance/react/.vite/manifest.json`. That directory is generated and gitignored; never edit it by hand.
 - `packaged_backend.py` is the PyInstaller entry point. It runs migrations, seeds sample data only if the DB is empty (`--skip-admin`), then starts `runserver` on `$CASHMONEY_PORT`.
 - Maintenance endpoints (backup/restore/delete/admin user) require exact confirmation phrases (e.g. `RESTORE DATABASE`). A restore makes a pre-restore backup and then migrates, so schema changes must keep older SQLite backups restorable.
@@ -58,7 +59,7 @@ There is no Vite dev-server proxy. `api.js` calls `/api` on the page's own origi
 
 **Versioning and releases**
 - The product version comes from `desktop/package.json` and `desktop/package-lock.json`. `frontend/vite.config.js` reads the lockfile to show the version in Help → About, so run `npm install` in `desktop/` after a bump. `frontend/package.json`'s version is not the product version.
-- `.github/workflows/build-windows.yml` builds on PRs and pushes to `main`. A pushed `vX.Y.Z` tag publishes `Cashmoney-Setup.exe`, `Cashmoney-Portable.exe` and `checksums.txt` to a GitHub Release; README download links depend on those names. To release, merge to `main`, then tag that exact `main` commit.
+- `.github/workflows/build-windows.yml` builds on PRs into `main` and on manual runs, not on pushes to `main`. A pushed `vX.Y.Z` tag publishes `Cashmoney-Setup.exe`, `Cashmoney-Portable.exe` and `checksums.txt` to a GitHub Release; README download links depend on those names. To release, merge to `main`, then tag that exact `main` commit.
 - Git flow: feature work on `develop` → PR to `main`.
 
 ## Project-specific rules

@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { apiFetch, apiGet } from "../api.js";
+import { apiDelete, apiFetch, apiGet } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
 import { formatAmountValue, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
-export default function ImportPage({ hideAmounts = false, importReport, notify, refs, reloadAll, reloadDashboard, setImportReport }) {
+export default function ImportPage({ confirmAction, hideAmounts = false, importReport, notify, refs, reloadAll, reloadDashboard, setImportReport }) {
   const [dragActive, setDragActive] = useState(false);
   const [importing, setImporting] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState(null);
   const [recentImports, setRecentImports] = useState([]);
   const [recentImportsBusy, setRecentImportsBusy] = useState(false);
+  const [deletingImportId, setDeletingImportId] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const fileInputRef = useRef(null);
@@ -55,6 +56,33 @@ export default function ImportPage({ hideAmounts = false, importReport, notify, 
     formData.append("bank_account_id", selectedAccountId);
     formData.append("csv_file", selectedFile);
     return formData;
+  }
+
+  async function deleteImport(item) {
+    setDeletingImportId(item.id);
+    try {
+      const impact = await apiGet(`/imports/${item.id}/delete-impact/`);
+      const confirmed = await confirmAction({
+        confirmLabel: "Delete",
+        danger: true,
+        message: [
+          `Delete the import of ${item.source_filename || "this file"}?`,
+          ...(impact.effects || []),
+          "Rows of this file that were skipped as duplicates belong to earlier imports and stay. This can't be undone.",
+        ].join("\n\n"),
+        title: "Delete import",
+      });
+      if (!confirmed) {
+        return;
+      }
+      const result = await apiDelete(`/imports/${item.id}/`);
+      notify(`Import deleted, ${formatCount(result.transactions)} ${result.transactions === 1 ? "transaction" : "transactions"} removed`);
+      await Promise.all([loadRecentImports(), reloadDashboard()]);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setDeletingImportId("");
+    }
   }
 
   async function previewImport() {
@@ -187,7 +215,7 @@ export default function ImportPage({ hideAmounts = false, importReport, notify, 
           <h2 className="dashboard-section-title" id="recent-imports-title">Recent Imports</h2>
           {recentImportsBusy ? <span className="inline-status"><Spinner /> Loading</span> : null}
         </div>
-        <RecentImports imports={recentImports} />
+        <RecentImports deletingId={deletingImportId} imports={recentImports} onDelete={deleteImport} />
       </section>
     </div>
   );
@@ -290,6 +318,7 @@ function previewRowLabel(row) {
 
 function ImportReport({ report }) {
   const duplicates = report.skipped?.duplicates || [];
+  const errors = report.skipped?.errors || [];
   return (
     <div className="import-report-content">
       <div className="metrics-grid report-grid">
@@ -299,6 +328,7 @@ function ImportReport({ report }) {
         <Metric label="Errors" tone="negative" value={formatCount(report.skipped?.errors?.length)} />
       </div>
       <StatementChecks statement={report.statement} />
+      {errors.length ? <ErrorList errors={errors} /> : null}
       {duplicates.length ? <DuplicateList duplicates={duplicates} /> : null}
     </div>
   );
@@ -323,8 +353,7 @@ function DuplicateList({ duplicates }) {
       <div className="import-duplicate-list-title">Skipped duplicates</div>
       {duplicates.slice(0, 12).map((duplicate, index) => {
         const existing = duplicateDisplay(duplicate.duplicate_transaction, false);
-        const imported = duplicate.row || {};
-        const importedDescription = imported.Description || imported.description || imported.Popis || "";
+        const importedDescription = duplicate.description || "";
         return (
           <div className="import-duplicate-item" key={`${duplicate.line || index}-${index}`}>
             <span>Line {duplicate.line || "?"}</span>
@@ -335,6 +364,24 @@ function DuplicateList({ duplicates }) {
       })}
       {duplicates.length > 12 ? (
         <div className="muted">+{formatCount(duplicates.length - 12)} more duplicates</div>
+      ) : null}
+    </div>
+  );
+}
+
+function ErrorList({ errors }) {
+  return (
+    <div className="import-duplicate-list">
+      <div className="import-duplicate-list-title">Rows with errors</div>
+      {errors.slice(0, 12).map((error, index) => (
+        <div className="import-duplicate-item" key={`${error.line || index}-${index}`}>
+          <span>{error.line ? `Line ${error.line}` : "File"}</span>
+          <strong title={error.description || ""}>{error.description || "No description"}</strong>
+          <span className="import-error-message">{error.error || "Could not import this row"}</span>
+        </div>
+      ))}
+      {errors.length > 12 ? (
+        <div className="muted">+{formatCount(errors.length - 12)} more errors</div>
       ) : null}
     </div>
   );
@@ -366,7 +413,7 @@ function ImportEmptyState() {
   );
 }
 
-function RecentImports({ imports }) {
+function RecentImports({ deletingId, imports, onDelete }) {
   if (!imports.length) {
     return <div className="muted">No imports yet.</div>;
   }
@@ -383,6 +430,16 @@ function RecentImports({ imports }) {
             <span>{formatCount(item.skipped_count)} skipped</span>
             <span>{formatCount(item.error_count)} errors</span>
           </div>
+          <LoadingButton
+            busy={deletingId === item.id}
+            busyLabel="Checking"
+            className="delete-button recent-import-delete"
+            disabled={Boolean(deletingId)}
+            onClick={() => onDelete(item)}
+            type="button"
+          >
+            Delete
+          </LoadingButton>
         </div>
       ))}
     </div>

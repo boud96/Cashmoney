@@ -20,6 +20,7 @@ import {
   formatAmountValue,
   formatCount,
   formatDateInput,
+  formatDateTime,
   formatMoneyValue,
   formatNumber,
   getStoredFilterPresets,
@@ -102,6 +103,7 @@ const emptyBulkAssignDraft = {
 
 export default function DashboardPage({
   confirmAction,
+  deleteTransaction,
   filters,
   filterParams,
   hideAmounts,
@@ -139,6 +141,7 @@ export default function DashboardPage({
   const [bulkAssignEditorOpen, setBulkAssignEditorOpen] = useState(false);
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
   const [recategorizeModalOpen, setRecategorizeModalOpen] = useState(false);
   const [recategorizeIncludeLocked, setRecategorizeIncludeLocked] = useState(false);
@@ -164,6 +167,10 @@ export default function DashboardPage({
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferApplying, setTransferApplying] = useState(false);
   const [transferError, setTransferError] = useState("");
+  const [transferView, setTransferView] = useState("candidates");
+  const [transferMatches, setTransferMatches] = useState({ count: 0, matches: [] });
+  const [transferMatchesLoading, setTransferMatchesLoading] = useState(false);
+  const [unmatchingTransferId, setUnmatchingTransferId] = useState("");
   const localFilterPresetsMigrated = useRef(false);
   const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
   const subcategoryFilterOptions = useMemo(() => {
@@ -397,6 +404,25 @@ export default function DashboardPage({
     }
   }, [notify, transferFilterParams]);
 
+  const loadTransferMatches = useCallback(async () => {
+    setTransferMatchesLoading(true);
+    setTransferError("");
+    try {
+      // Matched transfers are ignored and locked, so include those rows in the scope.
+      const payload = await apiGet("/transactions/internal-transfers/matches/", {
+        ...filterParams,
+        include_ignored: "true",
+        include_locked: "true",
+      });
+      setTransferMatches({ count: payload.count || 0, matches: payload.matches || [] });
+    } catch (error) {
+      setTransferError(error.message);
+      notify(error.message);
+    } finally {
+      setTransferMatchesLoading(false);
+    }
+  }, [filterParams, notify]);
+
   async function loadUncategorizedSuggestions(preferredSuggestionId = selectedSuggestionId) {
     setUncategorizedSuggestionsLoading(true);
     try {
@@ -426,8 +452,15 @@ export default function DashboardPage({
     }
   }, [loadTransferCandidates, transferReviewOpen]);
 
+  useEffect(() => {
+    if (transferReviewOpen && transferView === "matched") {
+      loadTransferMatches();
+    }
+  }, [loadTransferMatches, transferReviewOpen, transferView]);
+
   function openTransferReview() {
     setTransferError("");
+    setTransferView("candidates");
     setTransferSubcategoryId(refs.settings?.internal_transfer_subcategory?.id || "");
     setTransferReviewOpen(true);
   }
@@ -438,6 +471,29 @@ export default function DashboardPage({
         ? current.filter((item) => item !== candidateId)
         : [...current, candidateId]
     ));
+  }
+
+  async function unmatchTransfer(match) {
+    const confirmed = await confirmAction({
+      confirmLabel: "Unmatch",
+      message: match.restorable
+        ? "Unmatch this transfer?\n\nBoth transactions get back the ignored, locked and subcategory values they had before the match, except anything you have changed since."
+        : "Unmatch this transfer?\n\nIt was matched before Cashmoney kept the earlier values, so both transactions are unlocked, stop being ignored, and are recategorized by your keyword rules.",
+      title: "Unmatch transfer",
+    });
+    if (!confirmed) {
+      return;
+    }
+    setUnmatchingTransferId(match.id);
+    try {
+      await apiDelete(`/transactions/internal-transfers/matches/${match.id}/`);
+      notify("Transfer unmatched");
+      await Promise.all([reloadDashboard(), loadTransferMatches(), loadTransferCandidates()]);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setUnmatchingTransferId("");
+    }
   }
 
   async function applySelectedTransfers() {
@@ -525,6 +581,37 @@ export default function DashboardPage({
 
   function bulkAssignHasChanges() {
     return Object.keys(bulkAssignPayload()).length > 0;
+  }
+
+  async function deleteFilteredTransactions() {
+    setBulkDeleting(true);
+    try {
+      const impact = await apiGet("/transactions/bulk-delete/", filterParams);
+      if (!impact.count) {
+        notify("No transactions match the current filters");
+        return;
+      }
+      const confirmed = await confirmAction({
+        confirmLabel: "Delete",
+        danger: true,
+        message: [
+          `Delete ${formatCount(impact.count)} ${impact.count === 1 ? "transaction" : "transactions"} matching the current filters?`,
+          ...(impact.effects || []),
+          "This can't be undone. Importing their files again would bring them back.",
+        ].join("\n\n"),
+        title: "Delete transactions",
+      });
+      if (!confirmed) {
+        return;
+      }
+      const result = await apiPost("/transactions/bulk-delete/", { expected_count: impact.count }, filterParams);
+      notify(`${formatCount(result.deleted)} ${result.deleted === 1 ? "transaction" : "transactions"} deleted`);
+      await reloadDashboard();
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setBulkDeleting(false);
+    }
   }
 
   async function submitBulkAssign() {
@@ -780,6 +867,16 @@ export default function DashboardPage({
                 Bulk assign
               </button>
               <LoadingButton
+                busy={bulkDeleting}
+                busyLabel="Checking"
+                className="link-button"
+                disabled={!transactionPage.count || importBusy}
+                onClick={deleteFilteredTransactions}
+                type="button"
+              >
+                Delete
+              </LoadingButton>
+              <LoadingButton
                 busy={transferLoading && transferReviewOpen}
                 busyLabel="Scanning"
                 className="link-button"
@@ -826,8 +923,12 @@ export default function DashboardPage({
           hideAmounts={hideAmounts}
           includeIgnored={transferIncludeIgnored}
           includeLocked={transferIncludeLocked}
+          matches={transferMatches}
+          matchesBusy={transferMatchesLoading}
           meta={transferMeta}
           onApply={applySelectedTransfers}
+          onUnmatch={unmatchTransfer}
+          onViewChange={setTransferView}
           onClose={() => {
             if (!transferApplying) {
               setTransferReviewOpen(false);
@@ -841,6 +942,8 @@ export default function DashboardPage({
           selectedIds={selectedTransferIds}
           subcategoryId={transferSubcategoryId}
           subcategoryOptions={transferSubcategoryOptions}
+          unmatchingId={unmatchingTransferId}
+          view={transferView}
         />
       )}
       {uncategorizedReviewOpen && (
@@ -913,7 +1016,7 @@ export default function DashboardPage({
             Older matching transactions are omitted from the table. Stats and charts still use the full filtered set.
           </div>
         ) : null}
-        <TransactionGrid conflictIds={conflictIds} defaultCurrency={defaultCurrency} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
@@ -1083,6 +1186,8 @@ function InternalTransferReviewPanel({
   hideAmounts,
   includeIgnored,
   includeLocked,
+  matches,
+  matchesBusy,
   meta,
   onApply,
   onClose,
@@ -1091,78 +1196,143 @@ function InternalTransferReviewPanel({
   onIncludeLockedChange,
   onSubcategoryChange,
   onToggleCandidate,
+  onUnmatch,
+  onViewChange,
   selectedIds,
   subcategoryId,
   subcategoryOptions,
+  unmatchingId,
+  view,
 }) {
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const showingMatched = view === "matched";
+  const matchList = matches.matches || [];
   return (
     <ModalShell
       className="transfer-review-modal"
-      closeDisabled={applying}
+      closeDisabled={applying || Boolean(unmatchingId)}
       closeLabel="Close transfer review"
-      description="Scan the current filtered scope for matching outgoing and incoming transactions across defined accounts."
+      description="Find matching outgoing and incoming transactions across your accounts in the current filter scope, or review and undo pairs already matched."
       headerClassName="transfer-review-modal-header"
       onClose={onClose}
       title="Find Transfers"
       titleId="transfer-review-title"
     >
         <div className="transfer-review-layout">
-          <div className="bulk-assign-warning transfer-review-summary">
-            {formatCount(meta.count)} candidates. {formatCount(meta.high_confidence_count)} high confidence, {formatCount(meta.ambiguous_count)} ambiguous.
+          <div className="transfer-view-switch" role="group" aria-label="Transfer view">
+            <button aria-pressed={!showingMatched} className={`link-button ${showingMatched ? "" : "is-active"}`.trim()} disabled={applying} onClick={() => onViewChange("candidates")} type="button">
+              Candidates
+            </button>
+            <button aria-pressed={showingMatched} className={`link-button ${showingMatched ? "is-active" : ""}`.trim()} disabled={applying} onClick={() => onViewChange("matched")} type="button">
+              Matched
+            </button>
           </div>
-          <div className="transfer-review-controls">
-            <label className="form-field">
-              <span>Date offset</span>
-              <input
-                min="0"
-                max="14"
-                onChange={(event) => onDateToleranceChange(Number(event.target.value || 0))}
-                type="number"
-                value={dateTolerance}
-              />
-            </label>
-            <label className="check-row">
-              <input checked={includeIgnored} onChange={(event) => onIncludeIgnoredChange(event.target.checked)} type="checkbox" />
-              <span>Include ignored</span>
-            </label>
-            <label className="check-row">
-              <input checked={includeLocked} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
-              <span>Include locked</span>
-            </label>
-          </div>
+          {showingMatched ? (
+            <div className="bulk-assign-warning transfer-review-summary">
+              {formatCount(matches.count)} matched {matches.count === 1 ? "transfer" : "transfers"} in the current filter scope.
+              {matches.count > matchList.length ? ` Showing the newest ${formatCount(matchList.length)}.` : ""}
+            </div>
+          ) : (
+            <>
+              <div className="bulk-assign-warning transfer-review-summary">
+                {formatCount(meta.count)} candidates. {formatCount(meta.high_confidence_count)} high confidence, {formatCount(meta.ambiguous_count)} ambiguous.
+              </div>
+              <div className="transfer-review-controls">
+                <label className="form-field">
+                  <span>Date offset</span>
+                  <input
+                    min="0"
+                    max="14"
+                    onChange={(event) => onDateToleranceChange(Number(event.target.value || 0))}
+                    type="number"
+                    value={dateTolerance}
+                  />
+                </label>
+                <label className="check-row">
+                  <input checked={includeIgnored} onChange={(event) => onIncludeIgnoredChange(event.target.checked)} type="checkbox" />
+                  <span>Include ignored</span>
+                </label>
+                <label className="check-row">
+                  <input checked={includeLocked} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
+                  <span>Include locked</span>
+                </label>
+              </div>
+            </>
+          )}
           {error && <div className="transfer-review-error">{error}</div>}
-          <div className="transfer-candidate-list">
-            {busy && !candidates.length ? (
-              <div className="transfer-empty-state">Scanning filtered transactions</div>
-            ) : candidates.length ? (
-              candidates.map((candidate) => (
-                <InternalTransferCandidateCard
-                  candidate={candidate}
-                  checked={selectedSet.has(candidate.id)}
-                  hideAmounts={hideAmounts}
-                  key={candidate.id}
-                  onToggle={() => onToggleCandidate(candidate.id)}
-                />
-              ))
-            ) : (
-              <div className="transfer-empty-state">No transfer candidates found in the current filter scope.</div>
-            )}
-          </div>
-          <div className="transfer-review-actions">
-            <span>{formatCount(selectedIds.length)} selected</span>
-            <label className="transfer-apply-subcategory">
-              <span>Subcategory</span>
-              <select disabled={applying} onChange={(event) => onSubcategoryChange(event.target.value)} value={subcategoryId}>
-                {subcategoryOptions.map(([value, label]) => <option key={value || "none"} value={value}>{label}</option>)}
-              </select>
-            </label>
-            <LoadingButton busy={applying} busyLabel="Applying" className="primary-action transfer-apply-button" disabled={!selectedIds.length || busy} onClick={onApply} type="button">
-              Apply
-            </LoadingButton>
-          </div>
+          {showingMatched ? (
+            <div className="transfer-candidate-list">
+              {matchesBusy && !matchList.length ? (
+                <div className="transfer-empty-state">Loading matched transfers</div>
+              ) : matchList.length ? (
+                matchList.map((match) => (
+                  <InternalTransferMatchCard
+                    busy={unmatchingId === match.id}
+                    disabled={Boolean(unmatchingId)}
+                    hideAmounts={hideAmounts}
+                    key={match.id}
+                    match={match}
+                    onUnmatch={() => onUnmatch(match)}
+                  />
+                ))
+              ) : (
+                <div className="transfer-empty-state">No matched transfers in the current filter scope.</div>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="transfer-candidate-list">
+                {busy && !candidates.length ? (
+                  <div className="transfer-empty-state">Scanning filtered transactions</div>
+                ) : candidates.length ? (
+                  candidates.map((candidate) => (
+                    <InternalTransferCandidateCard
+                      candidate={candidate}
+                      checked={selectedSet.has(candidate.id)}
+                      hideAmounts={hideAmounts}
+                      key={candidate.id}
+                      onToggle={() => onToggleCandidate(candidate.id)}
+                    />
+                  ))
+                ) : (
+                  <div className="transfer-empty-state">No transfer candidates found in the current filter scope.</div>
+                )}
+              </div>
+              <div className="transfer-review-actions">
+                <span>{formatCount(selectedIds.length)} selected</span>
+                <label className="transfer-apply-subcategory">
+                  <span>Subcategory</span>
+                  <select disabled={applying} onChange={(event) => onSubcategoryChange(event.target.value)} value={subcategoryId}>
+                    {subcategoryOptions.map(([value, label]) => <option key={value || "none"} value={value}>{label}</option>)}
+                  </select>
+                </label>
+                <LoadingButton busy={applying} busyLabel="Applying" className="primary-action transfer-apply-button" disabled={!selectedIds.length || busy} onClick={onApply} type="button">
+                  Apply
+                </LoadingButton>
+              </div>
+            </>
+          )}
         </div>
     </ModalShell>
+  );
+}
+
+function InternalTransferMatchCard({ busy, disabled, hideAmounts, match, onUnmatch }) {
+  return (
+    <div className="transfer-candidate-card transfer-match-card">
+      <div className="transfer-candidate-body">
+        <div className="transfer-candidate-header">
+          <strong>Matched {formatDateTime(match.created_at)}</strong>
+          <LoadingButton busy={busy} busyLabel="Unmatching" className="link-button transfer-unmatch-button" disabled={disabled} onClick={onUnmatch} type="button">
+            Unmatch
+          </LoadingButton>
+        </div>
+        <div className="transfer-pair-grid">
+          <TransferTransactionSummary label="Outgoing" transaction={match.outgoing} hideAmounts={hideAmounts} />
+          <TransferTransactionSummary label="Incoming" transaction={match.incoming} hideAmounts={hideAmounts} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1449,6 +1619,17 @@ function IconSvg({ children }) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <IconSvg>
+      <path d="M4 7h16" />
+      <path d="M10 11v6M14 11v6" />
+      <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12" />
+      <path d="M9 7V4h6v3" />
+    </IconSvg>
+  );
+}
+
 function LockIcon({ locked }) {
   return (
     <IconSvg>
@@ -1474,7 +1655,7 @@ function InfoIcon() {
 
 const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filters, so this row is kept visible temporarily.";
 
-function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
+function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
   const [rawDataLoadingId, setRawDataLoadingId] = useState("");
   const [filterRetainedCells, setFilterRetainedCells] = useState({});
@@ -1608,6 +1789,29 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
       rowId: row.id,
     });
   }, [hideAmounts, notify, rawDataPopover]);
+
+  const removeTransaction = useCallback(async (row) => {
+    try {
+      const impact = await apiGet(`/transactions/${row.id}/delete-impact/`);
+      const confirmed = await confirmAction({
+        confirmLabel: "Delete",
+        danger: true,
+        message: [
+          `Delete "${row.description || "this transaction"}" from ${row.transaction_date}?`,
+          ...(impact.effects || []),
+          "This can't be undone. Importing its file again would bring it back.",
+        ].join("\n\n"),
+        title: "Delete transaction",
+      });
+      if (!confirmed) {
+        return;
+      }
+      await deleteTransaction(row);
+      notify("Transaction deleted");
+    } catch (error) {
+      notify(error.message);
+    }
+  }, [confirmAction, deleteTransaction, notify]);
 
   const columnDefs = useMemo(() => [
     {
@@ -1766,7 +1970,29 @@ function TransactionGrid({ conflictIds, defaultCurrency, filters, hideAmounts, n
       tooltipValueGetter: retainedCellTooltip,
       width: 96,
     },
-  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, rawDataLoadingId, refs.tags, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
+    {
+      cellClass: "lock-cell",
+      cellRenderer: (params) => (
+        <button
+          aria-label="Delete transaction"
+          className="lock-cell-button delete-cell-button"
+          onClick={(event) => {
+            event.stopPropagation();
+            removeTransaction(params.data);
+          }}
+          title="Delete transaction"
+          type="button"
+        >
+          <TrashIcon />
+        </button>
+      ),
+      colId: "delete",
+      headerName: "",
+      resizable: false,
+      sortable: false,
+      width: 56,
+    },
+  ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, rawDataLoadingId, refs.tags, removeTransaction, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
 
   async function onCellValueChanged(event) {
     if (event.oldValue === event.newValue || !["subcategory_id", "want_need_investment"].includes(event.colDef.field)) {

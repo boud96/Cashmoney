@@ -1780,6 +1780,31 @@ select option {
   margin-bottom: 0;
 }
 
+.transfer-view-switch {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transfer-view-switch .link-button.is-active {
+  background: color-mix(in srgb, var(--action) 18%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action) 18%, transparent);
+}
+
+.transfer-candidate-card.transfer-match-card {
+  grid-template-columns: minmax(0, 1fr);
+  cursor: default;
+}
+
+.transfer-match-card .transfer-candidate-header {
+  justify-content: space-between;
+}
+
+.transfer-unmatch-button {
+  padding: 6px 10px;
+}
+
 .transfer-review-controls {
   display: grid;
   grid-template-columns: minmax(120px, 0.35fr) minmax(0, auto) minmax(0, auto);
@@ -2760,6 +2785,13 @@ select option {
   outline: none;
 }
 
+.delete-cell-button:hover,
+.delete-cell-button:focus {
+  background: var(--danger-soft);
+  border-color: rgba(179, 69, 69, 0.35);
+  color: var(--red);
+}
+
 .transaction-grid .ag-cell.amount-income {
   color: var(--green);
   font-weight: 700;
@@ -3351,6 +3383,11 @@ select option {
   white-space: nowrap;
 }
 
+.import-duplicate-item .import-error-message {
+  color: var(--red);
+  overflow-wrap: anywhere;
+}
+
 .import-empty-state {
   display: grid;
   place-items: center;
@@ -3379,6 +3416,10 @@ select option {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.recent-import-delete {
+  flex-shrink: 0;
 }
 
 .recent-import-counts {
@@ -4360,6 +4401,10 @@ td {
 
   .recent-import-counts {
     justify-content: flex-start;
+  }
+
+  .recent-import-delete {
+    align-self: flex-start;
   }
 
   .wide-field,

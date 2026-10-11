@@ -2,12 +2,12 @@ name: Build Windows App
 
 on:
   workflow_dispatch:
+  # PRs into main are where builds get checked; a merge to main would only rebuild
+  # the code the PR already built. Version tags build again and publish the release.
   pull_request:
     branches:
       - main
   push:
-    branches:
-      - main
     tags:
       - "v*"
 

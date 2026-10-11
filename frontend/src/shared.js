@@ -288,11 +288,13 @@ export function buildFilterParams(filters) {
 export function buildMetrics(summary, transactionPage, hideAmounts = false, defaultCurrency = "") {
   const monthly = summary?.monthly || [];
   const currency = defaultCurrency || summary?.default_currency || "";
-  const monthCount = monthly.length || 1;
+  // Months without transactions still count, so sparse periods don't inflate the averages.
+  const monthCount = completeMonthlyRows(monthly).length || 1;
   const income = monthly.reduce((acc, row) => acc + Number(row.income || 0), 0);
   const expense = monthly.reduce((acc, row) => acc + Number(row.expense || 0), 0);
   const net = income - expense;
-  const uncategorized = (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
+  const uncategorized = summary?.uncategorized_count
+    ?? (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
   return [
     ["Incomes", formatMoneyWithCurrency(income, currency, hideAmounts), "positive", { value: formatMoneyWithCurrency(income / monthCount, currency, hideAmounts), tone: "positive" }],
     ["Expenses", formatMoneyWithCurrency(expense, currency, hideAmounts), "negative", { value: formatMoneyWithCurrency(expense / monthCount, currency, hideAmounts), tone: "negative" }],
@@ -781,7 +783,10 @@ export function subtractRelativeDate(date, amount, unit) {
   if (unit === "weeks") {
     next.setDate(next.getDate() - amount * 7);
   } else if (unit === "months") {
-    next.setMonth(next.getMonth() - amount);
+    // Clamp to the target month's last day; setMonth would roll Mar 31 - 1 month into Mar 3.
+    const targetMonth = next.getMonth() - amount;
+    const lastDay = new Date(next.getFullYear(), targetMonth + 1, 0).getDate();
+    next.setFullYear(next.getFullYear(), targetMonth, Math.min(next.getDate(), lastDay));
   } else {
     next.setDate(next.getDate() - amount);
   }

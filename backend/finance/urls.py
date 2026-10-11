@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import models, views
 
 
 urlpatterns = [
@@ -108,6 +108,16 @@ urlpatterns = [
         name="internal-transfer-apply",
     ),
     path(
+        "transactions/internal-transfers/matches/",
+        views.InternalTransferMatchCollectionView.as_view(),
+        name="internal-transfer-matches",
+    ),
+    path(
+        "transactions/internal-transfers/matches/<uuid:pk>/",
+        views.InternalTransferMatchDetailView.as_view(),
+        name="internal-transfer-match-detail",
+    ),
+    path(
         "transactions/<uuid:pk>/",
         views.TransactionDetailView.as_view(),
         name="transaction-detail",
@@ -122,7 +132,13 @@ urlpatterns = [
         views.RecategorizeTransactionsView.as_view(),
         name="recategorize-transactions",
     ),
+    path(
+        "transactions/bulk-delete/",
+        views.BulkDeleteTransactionsView.as_view(),
+        name="bulk-delete-transactions",
+    ),
     path("imports/preview/", views.ImportPreviewView.as_view(), name="import-preview"),
+    path("imports/<uuid:pk>/", views.ImportDetailView.as_view(), name="import-detail"),
     path(
         "imports/", views.ImportTransactionsView.as_view(), name="import-transactions"
     ),
@@ -191,4 +207,23 @@ urlpatterns = [
         views.MaintenanceDatabaseRestoreView.as_view(),
         name="maintenance-database-restore",
     ),
+]
+
+# What a delete would change, shown in the delete dialogs.
+urlpatterns += [
+    path(
+        f"{prefix}/<uuid:pk>/delete-impact/",
+        views.DeleteImpactView.as_view(model=model),
+        name=f"{prefix}-delete-impact",
+    )
+    for prefix, model in [
+        ("bank-accounts", models.BankAccount),
+        ("csv-mappings", models.CSVMapping),
+        ("categories", models.Category),
+        ("subcategories", models.Subcategory),
+        ("tags", models.Tag),
+        ("keywords", models.Keyword),
+        ("transactions", models.Transaction),
+        ("imports", models.CSVImport),
+    ]
 ]

@@ -35,6 +35,7 @@ from .models import (
     FinanceSettings,
     InternalTransferMatch,
     Keyword,
+    Subcategory,
     Transaction,
 )
 from .serializers import (
@@ -44,7 +45,7 @@ from .serializers import (
     serialize_transaction,
     transaction_converted_amount,
 )
-from .statement_parsers import parse_camt053
+from .statement_parsers import CZECH_IBAN_RE, parse_camt053
 
 ENCODING_CANDIDATES = ["utf-8-sig", "utf-8", "cp1250", "windows-1250", "latin-1"]
 DELIMITER_CANDIDATES = [",", ";", "\t", "|"]
@@ -115,6 +116,75 @@ def clean_account_number_variants(value):
         account_without_bank_code = raw_value.rsplit("/", 1)[0]
         variants.add(clean_account_number(account_without_bank_code))
     return {variant for variant in variants if variant}
+
+
+LOCAL_ACCOUNT_NUMBER_RE = re.compile(r"(?:(\d+)-)?(\d+)(?:/(\d+))?")
+ACCOUNT_TOKEN_RE = re.compile(r"[0-9A-Za-z]+(?:[-/][0-9A-Za-z]+)*")
+SPACED_IBAN_RE = re.compile(r"\b(?:CZ|SK)\d{2}(?: ?\d{4}){5}\b", re.IGNORECASE)
+# Shorter numbers in free text (symbols, amounts, references) match accounts by chance.
+MIN_ACCOUNT_REFERENCE_LENGTH = 6
+
+
+def account_number_variants(value):
+    """Comparable forms of an account number, with and without the bank code.
+
+    Czech-style numbers (prefix-number/bank) and Czech/Slovak IBANs become digits
+    without separators or leading zeros, so "000000-1234567890/0800" and
+    "CZ65 0800 0000 0012 3456 7890" both match "1234567890/0800".
+    """
+    raw = re.sub(r"\s+", "", str(value or ""))
+    iban = CZECH_IBAN_RE.match(raw.upper())
+    if iban:
+        _country, bank_code, prefix, number = iban.groups()
+    else:
+        local = LOCAL_ACCOUNT_NUMBER_RE.fullmatch(raw)
+        if not local:
+            cleaned = clean_account_number(raw)
+            return {cleaned} if cleaned else set()
+        prefix, number, bank_code = local.groups()
+    account = (prefix or "").lstrip("0") + number.lstrip("0")
+    if not account:
+        return set()
+    return {account, account + bank_code} if bank_code else {account}
+
+
+def text_account_variants(text):
+    """Account-number forms of each account-like token in one field of text.
+
+    Tokens are compared whole, so digits from neighbouring fields or from a longer
+    reference number never combine into an account number.
+    """
+    field_text = SPACED_IBAN_RE.sub(
+        lambda match: match.group(0).replace(" ", ""), str(text or "")
+    )
+    variants = set()
+    for token in ACCOUNT_TOKEN_RE.findall(field_text):
+        if not any(char.isdigit() for char in token):
+            continue
+        variants.update(
+            variant
+            for variant in account_number_variants(token)
+            if len(variant) >= MIN_ACCOUNT_REFERENCE_LENGTH
+        )
+    return variants
+
+
+# Dashes that exports use as a minus sign: minus, figure dash, en dash, em dash,
+# small and fullwidth hyphen-minus.
+MINUS_SIGNS = "−‒–—﹣－"
+
+
+def normalize_minus_signs(value):
+    for sign in MINUS_SIGNS:
+        value = value.replace(sign, "-")
+    return value
+
+
+def is_blank_amount(value):
+    """An empty amount cell, including a lone dash placeholder."""
+    if value is None:
+        return True
+    return normalize_minus_signs(str(value).replace("\xa0", " ").strip()) in ("", "-")
 
 
 def coerce_list(value):
@@ -1192,7 +1262,7 @@ class CategorizationService:
         self.own_account_numbers = [
             {
                 "id": account_id,
-                "numbers": clean_account_number_variants(account_number),
+                "numbers": account_number_variants(account_number),
             }
             for account_id, account_number in BankAccount.objects.values_list(
                 "id", "account_number"
@@ -1289,7 +1359,7 @@ class CategorizationService:
         current_account_number = transaction_data.get("bank_account_account_number")
         if current_account and getattr(current_account, "account_number", None):
             current_account_number = current_account.account_number
-        current_account_numbers = clean_account_number_variants(current_account_number)
+        current_account_numbers = account_number_variants(current_account_number)
 
         account_numbers = set()
         for account in self.own_account_numbers:
@@ -1301,15 +1371,16 @@ class CategorizationService:
         if not account_numbers:
             return False
 
-        counterparty_accounts = clean_account_number_variants(
+        counterparty_accounts = account_number_variants(
             transaction_data.get("counterparty_account_number")
         )
         if counterparty_accounts.intersection(account_numbers):
             return True
 
-        normalized_text = clean_account_number(categorization_text)
+        # build_categorization_text joins the fields with " | "; match each on its own.
         return any(
-            account_number in normalized_text for account_number in account_numbers
+            text_account_variants(field_text) & account_numbers
+            for field_text in str(categorization_text or "").split(" | ")
         )
 
 
@@ -1355,13 +1426,19 @@ class CSVRowExtractor:
             raise ValueError(f"Could not parse date '{value}'") from exc
 
     def parse_money(self, value):
-        raw = str(value or "").replace("\xa0", " ").strip()
+        raw = normalize_minus_signs(str(value or "").replace("\xa0", " ").strip())
         if not raw:
             return Decimal("0.00")
 
         is_negative = raw.startswith("(") and raw.endswith(")")
-        raw = raw.strip("()")
+        raw = raw.strip("()").strip()
+        # Some exports put the sign last ("123,45-").
+        if raw.endswith("-") and not raw.startswith("-"):
+            is_negative = True
+            raw = raw[:-1]
         raw = re.sub(r"[^\d,.\-]", "", raw)
+        if not re.search(r"\d", raw):
+            raise ValueError(f"Could not parse amount '{value}'")
 
         if self.csv_mapping.thousands_separator:
             raw = raw.replace(self.csv_mapping.thousands_separator, "")
@@ -1373,9 +1450,6 @@ class CSVRowExtractor:
         else:
             raw = raw.replace(",", "")
 
-        if not raw or raw == "-":
-            return Decimal("0.00")
-
         try:
             amount = Decimal(raw).quantize(Decimal("0.01"))
         except InvalidOperation as exc:
@@ -1385,15 +1459,15 @@ class CSVRowExtractor:
 
     def extract(self, row):
         amount = self.get_value(row, "amount", None)
-        if amount in (None, ""):
+        if is_blank_amount(amount):
             debit = self.get_value(row, "debit_amount", "")
             credit = self.get_value(row, "credit_amount", "")
-            if debit:
+            if not is_blank_amount(debit):
                 amount = -abs(self.parse_money(debit))
-            elif credit:
+            elif not is_blank_amount(credit):
                 amount = abs(self.parse_money(credit))
             else:
-                amount = Decimal("0.00")
+                raise ValueError("Amount is missing")
         else:
             amount = self.parse_money(amount)
 
@@ -1480,18 +1554,33 @@ class CSVImportService:
                 created_transaction = self._import_row(row, csv_import, seen_keys)
             except IntegrityError:
                 report["skipped"]["duplicates"].append(
-                    {"line": line_number, "reason": "Duplicate original id", "row": row}
+                    {
+                        "line": line_number,
+                        "reason": "Duplicate original id",
+                        "description": self._row_description(row),
+                        "row": row,
+                    }
                 )
                 continue
             except Exception as exc:
                 report["skipped"]["errors"].append(
-                    {"line": line_number, "error": str(exc), "row": row}
+                    {
+                        "line": line_number,
+                        "error": str(exc),
+                        "description": self._row_description(row),
+                        "row": row,
+                    }
                 )
                 continue
 
             if created_transaction is None:
                 report["skipped"]["duplicates"].append(
-                    {"line": line_number, "reason": "Possible duplicate", "row": row}
+                    {
+                        "line": line_number,
+                        "reason": "Possible duplicate",
+                        "description": self._row_description(row),
+                        "row": row,
+                    }
                 )
                 continue
 
@@ -1501,6 +1590,7 @@ class CSVImportService:
                     {
                         "line": line_number,
                         "reason": "Duplicate transaction",
+                        "description": self._row_description(row),
                         "row": row,
                         "duplicate_transaction": self._duplicate_ref(duplicate),
                     }
@@ -1633,6 +1723,13 @@ class CSVImportService:
         position = seen_keys[key] - 1
         matches = existing.order_by("created_at", "id")[position : position + 1]
         return matches[0] if matches else None
+
+    def _row_description(self, row):
+        # Shown in the import report so users can recognize skipped rows.
+        try:
+            return self.extractor.get_value(row, "description")
+        except Exception:
+            return ""
 
     def _duplicate_ref(self, transaction_obj):
         if not transaction_obj:
@@ -1846,22 +1943,13 @@ def internal_transfer_transaction_summary(transaction_obj):
 def transaction_mentions_account(transaction_obj, account):
     if not transaction_obj or not account or not account.account_number:
         return False
-    variants = {
-        variant
-        for variant in clean_account_number_variants(account.account_number)
-        if variant
-    }
+    variants = account_number_variants(account.account_number)
     if not variants:
         return False
-    for field_name in INTERNAL_TRANSFER_TEXT_FIELDS:
-        normalized_value = clean_account_number(
-            getattr(transaction_obj, field_name, "")
-        )
-        if normalized_value and any(
-            variant in normalized_value for variant in variants
-        ):
-            return True
-    return False
+    return any(
+        text_account_variants(getattr(transaction_obj, field_name, "")) & variants
+        for field_name in INTERNAL_TRANSFER_TEXT_FIELDS
+    )
 
 
 def shared_transfer_symbols(outgoing_transaction, incoming_transaction):
@@ -2088,6 +2176,110 @@ def serialize_internal_transfer_match(match):
     }
 
 
+def internal_transfer_previous_values(
+    transactions, applied_subcategory, sets_subcategory
+):
+    return {
+        "sets_subcategory": sets_subcategory,
+        "applied_subcategory_id": (
+            str(applied_subcategory.id) if applied_subcategory else None
+        ),
+        "transactions": {
+            str(transaction_obj.id): {
+                "is_ignored": transaction_obj.is_ignored,
+                "is_categorization_locked": transaction_obj.is_categorization_locked,
+                "subcategory_id": (
+                    str(transaction_obj.subcategory_id)
+                    if transaction_obj.subcategory_id
+                    else None
+                ),
+            }
+            for transaction_obj in transactions
+        },
+    }
+
+
+@transaction.atomic
+def unmatch_internal_transfer(match):
+    """Delete a transfer match and undo what applying it changed.
+
+    A value is restored only while it still holds what the match set, so edits
+    made after matching are kept. Matches from before previous values were
+    recorded can't be restored exactly; both rows are unlocked, un-ignored and
+    run through the keyword rules again.
+    """
+    previous = match.previous_values or {}
+    stored = previous.get("transactions") or {}
+    legs = [match.outgoing_transaction, match.incoming_transaction]
+    leg_ids = [leg.id for leg in legs]
+    match.delete()
+
+    if not stored:
+        Transaction.objects.filter(id__in=leg_ids).update(
+            is_ignored=False,
+            is_categorization_locked=False,
+            updated_at=timezone.now(),
+        )
+        recategorize_transactions(Transaction.objects.filter(id__in=leg_ids))
+        return {"restored": False}
+
+    applied_subcategory_id = previous.get("applied_subcategory_id")
+    for leg in legs:
+        values = stored.get(str(leg.id))
+        if values is None:
+            continue
+        updates = {}
+        if leg.is_ignored:
+            updates["is_ignored"] = values["is_ignored"]
+        if leg.is_categorization_locked:
+            updates["is_categorization_locked"] = values["is_categorization_locked"]
+        current_subcategory_id = str(leg.subcategory_id) if leg.subcategory_id else None
+        if (
+            previous.get("sets_subcategory")
+            and current_subcategory_id == applied_subcategory_id
+        ):
+            subcategory_id = values["subcategory_id"]
+            if (
+                subcategory_id
+                and not Subcategory.objects.filter(id=subcategory_id).exists()
+            ):
+                subcategory_id = None
+            updates["subcategory_id"] = subcategory_id
+        if updates:
+            Transaction.objects.filter(id=leg.id).update(
+                **updates, updated_at=timezone.now()
+            )
+    return {"restored": True}
+
+
+def serialize_matched_internal_transfer(match):
+    return {
+        **serialize_internal_transfer_match(match),
+        "restorable": bool((match.previous_values or {}).get("transactions")),
+    }
+
+
+def matched_internal_transfers(queryset, limit=200):
+    """Matches with at least one transaction in the queryset, newest transfer first."""
+    ids = queryset.order_by().values("id")
+    matches = (
+        InternalTransferMatch.objects.filter(
+            Q(outgoing_transaction_id__in=ids) | Q(incoming_transaction_id__in=ids)
+        )
+        .select_related(
+            "outgoing_transaction__bank_account",
+            "incoming_transaction__bank_account",
+        )
+        .order_by("-outgoing_transaction__transaction_date", "-created_at")
+    )
+    return {
+        "count": matches.count(),
+        "matches": [
+            serialize_matched_internal_transfer(match) for match in matches[:limit]
+        ],
+    }
+
+
 @transaction.atomic
 def apply_internal_transfer_candidates(
     queryset,
@@ -2130,6 +2322,7 @@ def apply_internal_transfer_candidates(
             skipped += 1
             continue
 
+        sets_subcategory = bool(subcategory_provided or apply_subcategory)
         try:
             with transaction.atomic():
                 match = InternalTransferMatch.objects.create(
@@ -2138,6 +2331,11 @@ def apply_internal_transfer_candidates(
                     confidence_score=record["confidence_score"],
                     match_reasons=record["match_reasons"],
                     date_delta_days=record["date_delta_days"],
+                    previous_values=internal_transfer_previous_values(
+                        (outgoing_transaction, incoming_transaction),
+                        apply_subcategory if sets_subcategory else None,
+                        sets_subcategory,
+                    ),
                 )
         except IntegrityError:
             skipped += 1
@@ -2148,7 +2346,7 @@ def apply_internal_transfer_candidates(
             "is_categorization_locked": True,
             "updated_at": timezone.now(),
         }
-        if subcategory_provided or apply_subcategory:
+        if sets_subcategory:
             update_values["subcategory"] = apply_subcategory
         Transaction.objects.filter(id__in=transaction_ids).update(**update_values)
         used_transaction_ids.update(transaction_ids)
@@ -2212,11 +2410,16 @@ def recategorize_transactions(queryset, include_locked=False):
     ):
         matched_transfer_ids.update((outgoing_id, incoming_id))
 
-    for transaction_obj in queryset.select_related(
-        "bank_account",
-        "bank_account__default_csv_mapping",
-        "import_batch__csv_mapping",
-    ).prefetch_related("tags"):
+    # The import's report holds every imported row (megabytes); only its mapping is needed.
+    for transaction_obj in (
+        queryset.select_related(
+            "bank_account",
+            "bank_account__default_csv_mapping",
+            "import_batch__csv_mapping",
+        )
+        .defer("import_batch__report")
+        .prefetch_related("tags")
+    ):
         stats["processed"] += 1
         if transaction_obj.id in matched_transfer_ids or (
             transaction_obj.is_categorization_locked and not include_locked
@@ -2391,6 +2594,10 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     summary = {
         "default_currency": default_currency,
         "missing_conversions": annotated.filter(_summary_amount__isnull=True).count(),
+        # Counted here, not from the table page, which is capped at 10 000 rows.
+        "uncategorized_count": base_queryset.filter(
+            subcategory__isnull=True, is_ignored=False
+        ).count(),
         "monthly": [],
         "income_categories": [],
         "expense_categories": [],

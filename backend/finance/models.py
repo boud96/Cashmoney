@@ -2,6 +2,7 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
+from django.db.backends.signals import connection_created
 from django.db.models import Q
 
 from .constants import (
@@ -11,6 +12,7 @@ from .constants import (
     ImportFileFormat,
     WantNeedInvestment,
 )
+from .search import SearchFold, register_sqlite_search
 
 
 HEX_COLOR_VALIDATOR = RegexValidator(
@@ -104,6 +106,7 @@ class FinanceSettings(TimestampedModel):
 
 class CSVMapping(TimestampedModel):
     name = models.CharField(max_length=128, unique=True)
+    is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
     file_format = models.CharField(
         max_length=16,
@@ -162,6 +165,7 @@ class CSVMapping(TimestampedModel):
 
 class BankAccount(TimestampedModel):
     name = models.CharField(max_length=128)
+    is_sample = models.BooleanField(default=False)
     account_number = models.CharField(max_length=128, blank=True, default="")
     bank_name = models.CharField(max_length=128, blank=True)
     currency = models.CharField(max_length=3, default="CZK")
@@ -190,6 +194,7 @@ class BankAccount(TimestampedModel):
 
 class Category(TimestampedModel):
     name = models.CharField(max_length=128, unique=True)
+    is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
     color = models.CharField(
         max_length=7,
@@ -215,6 +220,7 @@ class Subcategory(TimestampedModel):
         Category, on_delete=models.CASCADE, related_name="subcategories"
     )
     name = models.CharField(max_length=128)
+    is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
     color = models.CharField(
         max_length=7,
@@ -242,6 +248,7 @@ class Subcategory(TimestampedModel):
 
 class Tag(TimestampedModel):
     name = models.CharField(max_length=128, unique=True)
+    is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
     color = models.CharField(
         max_length=7,
@@ -284,6 +291,7 @@ class CSVImport(TimestampedModel):
     ]
 
     source_filename = models.CharField(max_length=255, blank=True)
+    is_sample = models.BooleanField(default=False)
     bank_account = models.ForeignKey(
         BankAccount, on_delete=models.SET_NULL, null=True, blank=True
     )
@@ -476,6 +484,10 @@ class InternalTransferMatch(TimestampedModel):
     confidence_score = models.PositiveIntegerField(default=0)
     match_reasons = models.JSONField(default=empty_list, blank=True)
     date_delta_days = models.PositiveIntegerField(default=0)
+    # What applying the match changed, so an unmatch can restore it: the applied
+    # subcategory and each transaction's earlier ignored/locked/subcategory values.
+    # Empty for matches made before this was recorded.
+    previous_values = models.JSONField(default=empty_dict, blank=True)
 
     class Meta:
         ordering = ["-created_at"]
@@ -516,6 +528,7 @@ class InternalTransferMatch(TimestampedModel):
 
 class Keyword(TimestampedModel):
     name = models.CharField(max_length=128)
+    is_sample = models.BooleanField(default=False)
     include_terms = models.JSONField(default=empty_list, blank=True)
     exclude_terms = models.JSONField(default=empty_list, blank=True)
     subcategory = models.ForeignKey(
@@ -538,3 +551,12 @@ class Keyword(TimestampedModel):
 
     def __str__(self):
         return self.name
+
+
+# Accent- and case-insensitive transaction search (see search.py). Registered with
+# the models, which every entry point loads, including the packaged app.
+models.CharField.register_lookup(SearchFold)
+models.TextField.register_lookup(SearchFold)
+connection_created.connect(
+    register_sqlite_search, dispatch_uid="finance.register_sqlite_search"
+)

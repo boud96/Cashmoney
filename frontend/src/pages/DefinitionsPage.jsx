@@ -618,10 +618,25 @@ function KeywordDefinitionGrid({ confirmAction, endpoint, items, notify, onDelet
 function DeleteButton({ confirmAction, endpoint, name, notify, onDeleted, reloadAll }) {
   const [deleting, setDeleting] = useState(false);
   async function remove() {
+    let impact;
+    setDeleting(true);
+    try {
+      impact = await apiGet(`${endpoint}delete-impact/`);
+    } catch (error) {
+      notify?.(error.message);
+      return;
+    } finally {
+      setDeleting(false);
+    }
+    if (impact.blocked) {
+      notify?.(impact.blocked);
+      return;
+    }
+    const effects = impact.effects || [];
     const confirmed = await confirmAction({
       confirmLabel: "Delete",
       danger: true,
-      message: `Delete ${name}?`,
+      message: effects.length ? `Delete ${name}?\n\n${effects.join("\n")}` : `Delete ${name}?`,
       title: "Delete Record",
     });
     if (!confirmed) {

@@ -26,6 +26,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.csrf import csrf_failure as django_csrf_failure
 
 from .constants import Direction, ImportFileFormat, WantNeedInvestment
+from .search import SEARCH_FIELDS, fold_search_text
 from .models import (
     BankAccount,
     CSVImport,
@@ -41,12 +42,7 @@ from .models import (
     Tag,
     Transaction,
 )
-from .sample_data import (
-    SAMPLE_IMPORT_SOURCE,
-    SAMPLE_PREFIX,
-    delete_sample_data,
-    seed_sample_data,
-)
+from .sample_data import delete_sample_data, seed_sample_data
 from .serializers import (
     serialize_bank_account,
     serialize_category,
@@ -72,11 +68,13 @@ from .services import (
     detect_csv_columns,
     exchange_rate_status,
     fallback_currency_options,
+    matched_internal_transfers,
     normalize_currency_code,
     recategorize_transactions,
     recalculate_transaction_conversions,
     serialize_categorization_result,
     sync_missing_exchange_rates,
+    unmatch_internal_transfer,
 )
 
 
@@ -284,6 +282,144 @@ def set_tags(instance, tag_ids):
     instance.tags.set(tags)
 
 
+def counted(count, noun, plural=None):
+    return f"{count:,} {noun if count == 1 else plural or noun + 's'}"
+
+
+def its(count):
+    return "its" if count == 1 else "their"
+
+
+def account_delete_blocker(account):
+    count = account.transactions.count()
+    if not count:
+        return ""
+    return (
+        f"{account.name} still has {counted(count, 'transaction')}. "
+        "Delete or move them before deleting the account."
+    )
+
+
+def transaction_delete_effects(transactions):
+    """Side effects of deleting a set of transactions, as sentences."""
+    ids = transactions.order_by().values("id")
+    effects = []
+    locked = Transaction.objects.filter(id__in=ids, is_categorization_locked=True)
+    locked_count = locked.count()
+    if locked_count:
+        effects.append(
+            f"{counted(locked_count, 'of them is', 'of them are')} locked, "
+            "so manual edits are lost too."
+        )
+    orphaned = (
+        InternalTransferMatch.objects.filter(outgoing_transaction_id__in=ids)
+        .exclude(incoming_transaction_id__in=ids)
+        .count()
+        + InternalTransferMatch.objects.filter(incoming_transaction_id__in=ids)
+        .exclude(outgoing_transaction_id__in=ids)
+        .count()
+    )
+    if orphaned:
+        effects.append(
+            f"{counted(orphaned, 'matched transfer')} will lose one half; the other "
+            "half stays ignored and locked."
+        )
+    return effects
+
+
+def delete_transactions(transactions):
+    _total, deleted = Transaction.objects.filter(
+        id__in=transactions.order_by().values("id")
+    ).delete()
+    return deleted.get(Transaction._meta.label, 0)
+
+
+def delete_impact(instance):
+    """What deleting a definition changes, as sentences, and why it is blocked."""
+    effects = []
+    blocked = ""
+    transfer_subcategory_id = FinanceSettings.load().internal_transfer_subcategory_id
+    if isinstance(instance, Transaction):
+        if instance.is_categorization_locked:
+            effects.append("It is locked, so your manual edits are lost too.")
+        if InternalTransferMatch.objects.filter(
+            Q(outgoing_transaction=instance) | Q(incoming_transaction=instance)
+        ).exists():
+            effects.append(
+                "It is half of a matched transfer; the other half stays ignored and "
+                "locked."
+            )
+    elif isinstance(instance, CSVImport):
+        transactions = Transaction.objects.filter(import_batch=instance)
+        count = transactions.count()
+        effects.append(
+            f"{counted(count, 'transaction')} created by this import will be deleted."
+            if count
+            else "None of its transactions are left; only the import record is removed."
+        )
+        effects.extend(transaction_delete_effects(transactions))
+    elif isinstance(instance, BankAccount):
+        blocked = account_delete_blocker(instance)
+        imports = CSVImport.objects.filter(bank_account=instance).count()
+        if imports:
+            effects.append(
+                f"{counted(imports, 'import')} will lose {its(imports)} account."
+            )
+    elif isinstance(instance, CSVMapping):
+        accounts = list(instance.bank_accounts.values_list("name", flat=True))
+        if accounts:
+            effects.append(
+                f"{', '.join(accounts)} will have no default mapping, so importing "
+                "and recategorizing stop working until you pick another."
+            )
+        imported = Transaction.objects.filter(
+            import_batch__csv_mapping=instance
+        ).count()
+        if imported:
+            effects.append(
+                f"{counted(imported, 'transaction')} imported with it will be "
+                "recategorized with their account's default mapping, or skipped "
+                "if the account has none."
+            )
+    elif isinstance(instance, (Category, Subcategory)):
+        if isinstance(instance, Category):
+            subcategories = Subcategory.objects.filter(category=instance)
+            if subcategories:
+                effects.append(
+                    f"{counted(len(subcategories), 'subcategory', 'subcategories')} "
+                    "will be deleted too."
+                )
+        else:
+            subcategories = Subcategory.objects.filter(id=instance.id)
+        transactions = Transaction.objects.filter(subcategory__in=subcategories)
+        count = transactions.count()
+        if count:
+            locked = transactions.filter(is_categorization_locked=True).count()
+            locked_note = (
+                f", including {counted(locked, 'locked one')}" if locked else ""
+            )
+            effects.append(
+                f"{counted(count, 'transaction')} will become uncategorized{locked_note}."
+            )
+        keywords = Keyword.objects.filter(subcategory__in=subcategories).count()
+        if keywords:
+            effects.append(
+                f"{counted(keywords, 'keyword')} will lose {its(keywords)} subcategory."
+            )
+        if subcategories.filter(id=transfer_subcategory_id).exists():
+            effects.append("Internal transfers will no longer get a subcategory.")
+    elif isinstance(instance, Tag):
+        tagged = Transaction.objects.filter(tags=instance).count()
+        if tagged:
+            effects.append(
+                f"The tag will be removed from {counted(tagged, 'transaction')}."
+            )
+        keywords = instance.keywords.count()
+        if keywords:
+            effects.append(f"{counted(keywords, 'keyword')} will stop adding it.")
+    return {"blocked": blocked, "effects": effects}
+
+
 def id_list(value):
     if not value:
         return []
@@ -386,6 +522,13 @@ class JsonView(View):
 
     def options(self, request, *args, **kwargs):
         return json_response({})
+
+
+class DeleteImpactView(JsonView):
+    model = None
+
+    def get(self, request, pk):
+        return json_response(delete_impact(get_object_or_404(self.model, id=pk)))
 
 
 class HealthView(JsonView):
@@ -537,7 +680,11 @@ class BankAccountDetailView(JsonView):
         return json_response(serialize_bank_account(account))
 
     def delete(self, request, pk):
-        get_object_or_404(BankAccount, id=pk).delete()
+        account = get_object_or_404(BankAccount, id=pk)
+        blocked = account_delete_blocker(account)
+        if blocked:
+            raise APIValidationError(blocked, {"field": "transactions"})
+        account.delete()
         return json_response({"deleted": True})
 
 
@@ -1000,17 +1147,12 @@ def filtered_transactions(request):
         if include_unassigned_tags:
             tag_query |= Q(tags__isnull=True)
         queryset = queryset.filter(tag_query)
-    if params.get("q"):
-        query = params["q"]
-        queryset = queryset.filter(
-            Q(description__icontains=query)
-            | Q(counterparty_name__icontains=query)
-            | Q(counterparty_account_number__icontains=query)
-            | Q(transaction_type__icontains=query)
-            | Q(counterparty_note__icontains=query)
-            | Q(my_note__icontains=query)
-            | Q(other_note__icontains=query)
-        )
+    folded_query = fold_search_text(params.get("q"))
+    if folded_query:
+        search = Q()
+        for field_name in SEARCH_FIELDS:
+            search |= Q(**{f"{field_name}__searchfold__contains": folded_query})
+        queryset = queryset.filter(search)
 
     return queryset.distinct()
 
@@ -1126,6 +1268,7 @@ class UncategorizedSuggestionView(JsonView):
                 "subcategory",
                 "subcategory__category",
             )
+            .defer("import_batch__report")
             .prefetch_related("tags")
         )
         return json_response(
@@ -1185,6 +1328,22 @@ class InternalTransferApplyView(JsonView):
                 subcategory_provided=subcategory_provided,
             )
         )
+
+
+class InternalTransferMatchCollectionView(JsonView):
+    def get(self, request):
+        return json_response(matched_internal_transfers(filtered_transactions(request)))
+
+
+class InternalTransferMatchDetailView(JsonView):
+    def delete(self, request, pk):
+        match = get_object_or_404(
+            InternalTransferMatch.objects.select_related(
+                "outgoing_transaction", "incoming_transaction"
+            ),
+            id=pk,
+        )
+        return json_response({"unmatched": True, **unmatch_internal_transfer(match)})
 
 
 class TransactionFilterMetadataView(JsonView):
@@ -1302,7 +1461,7 @@ class TransactionRawDataView(JsonView):
         transaction = get_object_or_404(
             Transaction.objects.select_related(
                 "bank_account__default_csv_mapping", "import_batch__csv_mapping"
-            ),
+            ).defer("import_batch__report"),
             id=pk,
         )
         return json_response(
@@ -1325,6 +1484,34 @@ class RecategorizeTransactionsView(JsonView):
         return json_response(
             recategorize_transactions(queryset, include_locked=include_locked)
         )
+
+
+class BulkDeleteTransactionsView(JsonView):
+    def get(self, request):
+        queryset = filtered_transactions(request)
+        return json_response(
+            {
+                "count": queryset.count(),
+                "effects": transaction_delete_effects(queryset),
+            }
+        )
+
+    def post(self, request):
+        data = parse_json_body(request)
+        expected_count = clean_int(
+            require_field(data, "expected_count"), "expected_count", minimum=0
+        )
+        queryset = filtered_transactions(request)
+        count = queryset.count()
+        # The dialog showed expected_count rows; refuse if the filters now match
+        # something else, so a delete never removes more than the user saw.
+        if count != expected_count:
+            raise APIValidationError(
+                f"The current filters match {counted(count, 'transaction')}, not "
+                f"{expected_count:,}. Nothing was deleted; check the filters and try again.",
+                {"field": "expected_count", "count": count},
+            )
+        return json_response({"deleted": delete_transactions(queryset)})
 
 
 def legacy_bulk_assign_payload(data):
@@ -1581,6 +1768,16 @@ class ImportTransactionsView(JsonView):
         )
 
 
+class ImportDetailView(JsonView):
+    def delete(self, request, pk):
+        csv_import = get_object_or_404(CSVImport, id=pk)
+        deleted = delete_transactions(
+            Transaction.objects.filter(import_batch=csv_import)
+        )
+        csv_import.delete()
+        return json_response({"deleted": True, "transactions": deleted})
+
+
 class KeywordPreviewView(JsonView):
     def post(self, request):
         data = parse_json_body(request)
@@ -1631,27 +1828,15 @@ def maintenance_counts():
         "imports": CSVImport.objects.count(),
         "exchange_rates": ExchangeRate.objects.count(),
         "sample_transactions": Transaction.objects.filter(
-            import_batch__source_filename=SAMPLE_IMPORT_SOURCE
+            import_batch__is_sample=True
         ).count(),
-        "sample_imports": CSVImport.objects.filter(
-            source_filename=SAMPLE_IMPORT_SOURCE
-        ).count(),
-        "sample_bank_accounts": BankAccount.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "sample_csv_mappings": CSVMapping.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "sample_categories": Category.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "sample_subcategories": Subcategory.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "sample_tags": Tag.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-        "sample_keywords": Keyword.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
+        "sample_imports": CSVImport.objects.filter(is_sample=True).count(),
+        "sample_bank_accounts": BankAccount.objects.filter(is_sample=True).count(),
+        "sample_csv_mappings": CSVMapping.objects.filter(is_sample=True).count(),
+        "sample_categories": Category.objects.filter(is_sample=True).count(),
+        "sample_subcategories": Subcategory.objects.filter(is_sample=True).count(),
+        "sample_tags": Tag.objects.filter(is_sample=True).count(),
+        "sample_keywords": Keyword.objects.filter(is_sample=True).count(),
         "bank_accounts": BankAccount.objects.count(),
         "csv_mappings": CSVMapping.objects.count(),
         "categories": Category.objects.count(),
@@ -1722,10 +1907,12 @@ class MaintenanceSummaryView(JsonView):
 class MaintenanceSampleDataView(JsonView):
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_SAMPLE_DATA)
+        result = delete_sample_data()
         return json_response(
             {
                 "deleted": True,
-                "counts": delete_sample_data(),
+                "counts": result["counts"],
+                "kept": result["kept"],
                 "summary": maintenance_counts(),
             }
         )
@@ -1808,28 +1995,29 @@ class MaintenanceAdminUserView(JsonView):
         )
 
 
+def delete_with_safety_backup(delete_function):
+    backup_path = create_safety_backup("pre-delete")
+    return json_response(
+        {
+            "deleted": True,
+            "counts": delete_function(),
+            "summary": maintenance_counts(),
+            "safety_backup": backup_path.name,
+            "backups": saved_backup_payload(),
+        }
+    )
+
+
 class MaintenanceTransactionsView(JsonView):
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_ALL_TRANSACTIONS)
-        return json_response(
-            {
-                "deleted": True,
-                "counts": delete_all_transactions(),
-                "summary": maintenance_counts(),
-            }
-        )
+        return delete_with_safety_backup(delete_all_transactions)
 
 
 class MaintenanceFinanceDataView(JsonView):
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_ALL_FINANCE_DATA)
-        return json_response(
-            {
-                "deleted": True,
-                "counts": delete_all_finance_data(),
-                "summary": maintenance_counts(),
-            }
-        )
+        return delete_with_safety_backup(delete_all_finance_data)
 
 
 class MaintenanceDatabaseBackupView(JsonView):
@@ -1858,6 +2046,8 @@ def backup_directory():
 def backup_kind(filename):
     if filename.startswith("pre-restore-"):
         return "Pre-restore"
+    if filename.startswith("pre-delete-"):
+        return "Pre-delete"
     if filename.startswith("cashmoney-backup-"):
         return "Manual"
     return "Backup"
@@ -1935,12 +2125,16 @@ def validate_sqlite_backup(backup_path):
         )
 
 
-def create_pre_restore_backup():
+def create_safety_backup(prefix):
     connection.ensure_connection()
     timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
     backup_dir = backup_directory()
     backup_dir.mkdir(parents=True, exist_ok=True)
-    backup_path = backup_dir / f"pre-restore-{timestamp}.sqlite3"
+    backup_path = backup_dir / f"{prefix}-{timestamp}.sqlite3"
+    suffix = 2
+    while backup_path.exists():
+        backup_path = backup_dir / f"{prefix}-{timestamp}-{suffix}.sqlite3"
+        suffix += 1
     backup_path.write_bytes(connection.connection.serialize())
     return backup_path
 
@@ -1951,7 +2145,7 @@ def migrate_restored_database():
 
 def restore_sqlite_database_from_path(backup_path):
     validate_sqlite_backup(backup_path)
-    pre_restore_path = create_pre_restore_backup()
+    pre_restore_path = create_safety_backup("pre-restore")
 
     source = None
     try:
