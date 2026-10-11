@@ -1,4 +1,5 @@
 export const UNASSIGNED = "__unassigned__";
+export const ANY_TAG = "__any__"; // the tag filter's "Tagged": rows with at least one tag
 export const NO_SELECTION = "__none__";
 export const CHECKLIST_FILTER_KEYS = [
   "bank_account",
@@ -194,7 +195,7 @@ export function syncChecklistFilters(filters, previousRefs, nextRefs) {
     const nextIds = nextRefs[refKey].map((item) => item.id);
     const nextIdSet = new Set(nextIds);
     const selection = filters[filterKey] || [];
-    const kept = selection.filter((value) => value === UNASSIGNED || nextIdSet.has(value));
+    const kept = selection.filter((value) => value === UNASSIGNED || value === ANY_TAG || nextIdSet.has(value));
     const added = OPTIONAL_CHECKLIST_FILTER_KEYS.includes(filterKey)
       ? []
       : nextIds.filter((id) => !previousIds.has(id));
@@ -208,8 +209,8 @@ export function syncChecklistFilters(filters, previousRefs, nextRefs) {
 
 export function normalizeTagSelection(selection, tags) {
   const values = selection || [];
-  const coversAllTags = values.includes(UNASSIGNED) && tags.every((tag) => values.includes(tag.id));
-  return coversAllTags ? [] : values;
+  const coversAllTags = values.includes(ANY_TAG) || tags.every((tag) => values.includes(tag.id));
+  return values.includes(UNASSIGNED) && coversAllTags ? [] : values;
 }
 
 // The number of filters a saved preset applies; an old preset with "Untagged" plus

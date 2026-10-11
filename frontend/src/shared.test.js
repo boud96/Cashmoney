@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ANY_TAG,
   NO_SELECTION,
   UNASSIGNED,
   buildFilterParams,
@@ -100,6 +101,20 @@ describe("filters", () => {
     const tags = [{ id: "t1" }, { id: "t2" }];
     expect(normalizeTagSelection([UNASSIGNED, "t1", "t2"], tags)).toEqual([]);
     expect(normalizeTagSelection([UNASSIGNED, "t1"], tags)).toEqual([UNASSIGNED, "t1"]);
+  });
+
+  it("treats Untagged plus Tagged as no tag filter, and Tagged alone as a filter", () => {
+    const tags = [{ id: "t1" }, { id: "t2" }];
+    expect(normalizeTagSelection([UNASSIGNED, ANY_TAG], tags)).toEqual([]);
+    expect(normalizeTagSelection([ANY_TAG], tags)).toEqual([ANY_TAG]);
+    expect(buildFilterParams({ tag: [ANY_TAG] })).toEqual({ tag: ANY_TAG });
+  });
+
+  it("keeps Tagged when the tag list changes", () => {
+    const before = { accounts: [], categories: [], subcategories: [], tags: [{ id: "t1" }] };
+    const after = { ...before, tags: [{ id: "t2" }] };
+    const synced = syncChecklistFilters({ bank_account: [], category: [], subcategory: [], tag: [ANY_TAG, "t1"] }, before, after);
+    expect(synced.tag).toEqual([ANY_TAG]);
   });
 
   it("counts a saved preset as it applies", () => {

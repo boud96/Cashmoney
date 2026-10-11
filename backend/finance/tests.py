@@ -1708,6 +1708,12 @@ class APITests(FinanceTestCase):
             "/api/transactions/",
             {"tag": f"{self.tag.id},__unassigned__", "limit": "10"},
         )
+        tagged_response = self.client.get(
+            "/api/transactions/", {"tag": "__any__", "limit": "10"}
+        )
+        tagged_or_untagged_response = self.client.get(
+            "/api/transactions/", {"tag": "__any__,__unassigned__", "limit": "10"}
+        )
         income_response = self.client.get(
             "/api/transactions/",
             {"direction": "income", "limit": "10"},
@@ -1722,6 +1728,8 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(json_body(account_response)["count"], 5)
         self.assertEqual(json_body(category_response)["count"], 4)
+        self.assertEqual(json_body(tagged_response)["count"], 2)
+        self.assertEqual(json_body(tagged_or_untagged_response)["count"], 5)
         self.assertEqual(json_body(subcategory_response)["count"], 3)
         self.assertEqual(json_body(wni_response)["count"], 3)
         self.assertEqual(json_body(tag_response)["count"], 4)
@@ -2961,16 +2969,18 @@ class APITests(FinanceTestCase):
         )
         transaction_obj.tags.add(self.tag, second_tag)
 
-        response = self.client.get(
-            "/api/dashboard/summary/",
-            {"tag": f"{self.tag.id},{second_tag.id}"},
-        )
-        payload = json_body(response)
+        for tag_filter in [f"{self.tag.id},{second_tag.id}", "__any__"]:
+            response = self.client.get("/api/dashboard/summary/", {"tag": tag_filter})
+            payload = json_body(response)
+            transactions = json_body(
+                self.client.get("/api/transactions/", {"tag": tag_filter})
+            )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(payload["monthly"][0]["expense"], "12.50")
-        self.assertEqual(payload["expense_categories"][0]["amount"], "12.50")
-        self.assertEqual(payload["want_need_investment"][0]["amount"], "12.50")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(payload["monthly"][0]["expense"], "12.50")
+            self.assertEqual(payload["expense_categories"][0]["amount"], "12.50")
+            self.assertEqual(payload["want_need_investment"][0]["amount"], "12.50")
+            self.assertEqual(transactions["count"], 1)
 
     def test_dashboard_checkbox_none_marker_returns_no_transactions(self):
         Transaction.objects.create(

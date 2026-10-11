@@ -85,6 +85,7 @@ from .services import (
 
 
 UNASSIGNED_FILTER_VALUE = "__unassigned__"
+ANY_TAG_FILTER_VALUE = "__any__"  # the tag filter's "Tagged": at least one tag
 NONE_FILTER_VALUE = "__none__"
 CONFIRM_DELETE_SAMPLE_DATA = "DELETE SAMPLE DATA"
 CONFIRM_DELETE_ALL_TRANSACTIONS = "DELETE ALL TRANSACTIONS"
@@ -1233,7 +1234,9 @@ def filtered_transactions(request):
     tag_values, include_unassigned_tags = split_unassigned_filter(params, "tag")
     if tag_values or include_unassigned_tags:
         tag_query = Q()
-        if tag_values:
+        if ANY_TAG_FILTER_VALUE in tag_values:
+            tag_query |= Q(tags__isnull=False)  # covers any selected tags too
+        elif tag_values:
             tag_query |= Q(tags__id__in=tag_values)
         if include_unassigned_tags:
             tag_query |= Q(tags__isnull=True)

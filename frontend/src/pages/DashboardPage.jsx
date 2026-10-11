@@ -6,6 +6,7 @@ import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-communi
 import { apiDelete, apiGet, apiPost } from "../api.js";
 import { HelpTooltip, LoadingButton, ModalShell, Spinner } from "../components.jsx";
 import {
+  ANY_TAG,
   UNASSIGNED,
   baseLayout,
   buildMetrics,
@@ -831,7 +832,7 @@ export default function DashboardPage({
                   name="tag"
                   onChange={onFilterChange}
                   optional
-                  options={[[UNASSIGNED, "Untagged"], ...refs.tags.map((item) => [item.id, item.name])]}
+                  options={[[UNASSIGNED, "Untagged"], [ANY_TAG, "Tagged"], ...refs.tags.map((item) => [item.id, item.name])]}
                   value={filters.tag}
                 />
               </div>

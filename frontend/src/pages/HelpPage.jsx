@@ -125,7 +125,7 @@ export default function HelpPage() {
             <li><strong>Date range:</strong> From and To use the same YYYY-MM-DD format as the table. The relative range controls can quickly set a recent period.</li>
             <li><strong>Saved filters:</strong> save the current filter state under a name and load it later.</li>
             <li><strong>Checklist filters:</strong> empty means show nothing. On startup, all checklist options are selected.</li>
-            <li><strong>Tag:</strong> starts empty, which means any tag. Select tags to show only transactions with at least one of them, or Untagged for transactions without tags.</li>
+            <li><strong>Tag:</strong> starts empty, which means any tag. Select tags to show only transactions with at least one of them. Tagged shows every transaction that has a tag, and Untagged every one without.</li>
             <li><strong>Category/Subcategory/WNI:</strong> subcategory options narrow automatically when categories are selected.</li>
             <li><strong>Direction:</strong> Incomes are positive transactions and Expenses are negative transactions.</li>
             <li><strong>Ignored / Locked:</strong> control whether those rows appear in the filtered data.</li>
