@@ -206,7 +206,7 @@ export default function HelpPage() {
           <ul>
             <li><strong>Database Snapshot:</strong> shows current counts for finance objects and sample data.</li>
             <li><strong>Export database backup:</strong> downloads a SQLite backup of the current local database.</li>
-            <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically.</li>
+            <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically. A backup made by a newer version of Cashmoney is refused; update the app first.</li>
             <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
             <li><strong>Admin:</strong> create or reset a local Django admin user, then open Django admin for power users.</li>
             <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Before deleting all transactions or all finance data, a safety backup is saved automatically and listed under saved backups.</li>

@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.error import URLError
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
@@ -3967,6 +3968,46 @@ class MaintenanceRestoreTests(TransactionTestCase):
         self.assertFalse(
             Transaction.objects.filter(description="Current transaction").exists()
         )
+
+    def test_database_restore_refuses_a_backup_from_a_newer_version(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Still here",
+            amount=Decimal("-12.50"),
+        )
+        connection.ensure_connection()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            newer_path = Path(temp_dir) / "newer.sqlite3"
+            newer_path.write_bytes(connection.connection.serialize())
+            newer = sqlite3.connect(str(newer_path))
+            newer.execute(
+                "INSERT INTO django_migrations (app, name, applied) "
+                "VALUES ('finance', '0099_from_a_newer_version', '2027-01-01')"
+            )
+            newer.commit()
+            newer.close()
+            backup_bytes = newer_path.read_bytes()
+
+        response = self.client.post(
+            "/api/maintenance/database-restore/",
+            {
+                "confirmation": "RESTORE DATABASE",
+                "backup_file": SimpleUploadedFile(
+                    "newer.sqlite3", backup_bytes, content_type="application/x-sqlite3"
+                ),
+            },
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("newer version of Cashmoney", payload["error"])
+        self.assertEqual(
+            payload["details"]["unknown_migrations"],
+            ["finance.0099_from_a_newer_version"],
+        )
+        self.assertTrue(Transaction.objects.filter(description="Still here").exists())
+        self.assertFalse((Path(settings.DATA_DIR) / "backups").exists())
 
     def test_database_restore_migrates_backup_without_internal_transfer_table(self):
         restored_transaction = Transaction.objects.create(

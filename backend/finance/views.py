@@ -17,6 +17,7 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.management import call_command
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, connection, transaction
+from django.db.migrations.loader import MigrationLoader
 from django.db.models import Q
 from django.http import Http404
 from django.http import FileResponse
@@ -2191,6 +2192,39 @@ def validate_sqlite_backup(backup_path):
             "Backup database does not match the Cashmoney schema",
             {"missing_tables": missing},
         )
+    newer = migrations_unknown_here(backup_path)
+    if newer:
+        raise APIValidationError(
+            "This backup was made by a newer version of Cashmoney. Update the app, "
+            "then restore it.",
+            {"unknown_migrations": newer},
+        )
+
+
+def migrations_unknown_here(backup_path):
+    """Migrations applied in the backup that this version doesn't have.
+
+    Restoring such a backup would leave a schema the code doesn't know: migrate has
+    nothing to do, so nothing would complain until something broke later.
+    """
+    candidate = sqlite3.connect(
+        f"{Path(backup_path).resolve().as_uri()}?mode=ro", uri=True
+    )
+    try:
+        applied = candidate.execute(
+            "SELECT app, name FROM django_migrations"
+        ).fetchall()
+    except sqlite3.DatabaseError:
+        return []  # no migration table: the schema check above decides
+    finally:
+        candidate.close()
+    known = set(MigrationLoader(None, ignore_no_migrations=True).disk_migrations)
+    known_apps = {app for app, _name in known}
+    return sorted(
+        f"{app}.{name}"
+        for app, name in applied
+        if app in known_apps and (app, name) not in known
+    )
 
 
 def create_safety_backup(prefix):
