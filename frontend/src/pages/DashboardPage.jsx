@@ -23,7 +23,6 @@ import {
   formatDateInput,
   formatDateTime,
   formatMoneyValue,
-  formatNumber,
   getStoredFilterPresets,
   normalizeName,
   normalizeTagSelection,

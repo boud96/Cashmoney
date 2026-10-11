@@ -45,6 +45,21 @@ jobs:
             frontend/package-lock.json
             desktop/package-lock.json
 
+      - name: Install dependencies
+        shell: cmd
+        run: setup_dev.bat
+
+      - name: Test backend
+        working-directory: backend
+        run: ..\.venv\Scripts\python.exe manage.py test finance
+
+      - name: Lint and test frontend
+        working-directory: frontend
+        run: |
+          npm run lint
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm test
+
       - name: Build packaged app
         shell: cmd
         run: build_packaged_app.bat

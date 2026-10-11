@@ -30,9 +30,9 @@ Backend (run from `backend\`):
 ..\.venv\Scripts\python.exe manage.py seed_sample_data --if-empty --skip-admin
 ```
 
-All backend tests are in `backend/finance/tests.py`. The classes are `ModelTests`, `SampleDataCommandTests`, `CSVImportServiceTests`, `CategorizationTests`, `APITests` and `MaintenanceRestoreTests`.
+All backend tests are in `backend/finance/tests.py`. The main classes are `ModelTests`, `SampleDataCommandTests`, `CSVImportServiceTests`, `CategorizationTests`, `APITests` and `MaintenanceRestoreTests`; smaller ones cover the camt.053 parser, migrations and the secret key.
 
-Lint/format: ruff via `.pre-commit-config.yaml` (`ruff --fix`, `ruff-format`). Ruff is not in `requirements.txt`. The frontend has no lint or test scripts. Verify frontend changes with a build (it already warns about a large chunk, so that warning is not a new problem).
+Lint/format: ruff via `.pre-commit-config.yaml` (`ruff --fix`, `ruff-format`). Ruff is not in `requirements.txt`. The frontend has `npm run lint` (ESLint; it catches undefined names, which the build doesn't, plus the hooks rules; the existing `exhaustive-deps` warnings are known) and `npm test` (Vitest, `src/*.test.js`, currently `shared.js` helpers). Run both from `frontend/` and build. CI runs them and the backend tests before the build. A build alone doesn't prove a page renders, so check UI changes in a browser.
 
 There is no Vite dev-server proxy. `api.js` calls `/api` on the page's own origin, so the normal loop is: build the frontend, then load it from Django at `:8000`.
 
