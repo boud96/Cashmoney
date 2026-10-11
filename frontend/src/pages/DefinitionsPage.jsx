@@ -1,6 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
+import {
+  CellStyleModule,
+  ClientSideRowModelModule,
+  DateFilterModule,
+  ModuleRegistry,
+  NumberFilterModule,
+  TextFilterModule,
+  themeQuartz,
+  TooltipModule,
+} from "ag-grid-community";
 
 import { apiDelete, apiFetch, apiGet, apiPatch, apiPost, readJson } from "../api.js";
 import { CloseButton, HelpTooltip, LoadingButton, ModalEscape, Select } from "../components.jsx";
@@ -34,7 +43,17 @@ import {
   wniOptions,
 } from "../shared.js";
 
-ModuleRegistry.registerModules([AllCommunityModule]);
+// Only the grid features this page uses (CR-30). A missing module can fail silently,
+// so after changing a grid, register ValidationModule while checking it: it names
+// every option whose module is missing.
+ModuleRegistry.registerModules([
+  ClientSideRowModelModule,
+  CellStyleModule,  // cellClass
+  TooltipModule,  // tooltipField
+  TextFilterModule,  // filter: true picks the filter by data type
+  NumberFilterModule,
+  DateFilterModule,
+]);
 
 const definitionGridTheme = themeQuartz
   .withParams({
