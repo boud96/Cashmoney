@@ -2346,11 +2346,16 @@ def recategorize_transactions(queryset, include_locked=False):
     ):
         matched_transfer_ids.update((outgoing_id, incoming_id))
 
-    for transaction_obj in queryset.select_related(
-        "bank_account",
-        "bank_account__default_csv_mapping",
-        "import_batch__csv_mapping",
-    ).prefetch_related("tags"):
+    # The import's report holds every imported row (megabytes); only its mapping is needed.
+    for transaction_obj in (
+        queryset.select_related(
+            "bank_account",
+            "bank_account__default_csv_mapping",
+            "import_batch__csv_mapping",
+        )
+        .defer("import_batch__report")
+        .prefetch_related("tags")
+    ):
         stats["processed"] += 1
         if transaction_obj.id in matched_transfer_ids or (
             transaction_obj.is_categorization_locked and not include_locked

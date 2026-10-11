@@ -1273,6 +1273,7 @@ class UncategorizedSuggestionView(JsonView):
                 "subcategory",
                 "subcategory__category",
             )
+            .defer("import_batch__report")
             .prefetch_related("tags")
         )
         return json_response(
@@ -1465,7 +1466,7 @@ class TransactionRawDataView(JsonView):
         transaction = get_object_or_404(
             Transaction.objects.select_related(
                 "bank_account__default_csv_mapping", "import_batch__csv_mapping"
-            ),
+            ).defer("import_batch__report"),
             id=pk,
         )
         return json_response(
