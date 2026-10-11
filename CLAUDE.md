@@ -25,12 +25,12 @@ Backend (run from `backend\`):
 ```powershell
 ..\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
 ..\.venv\Scripts\python.exe manage.py test finance                                   # all tests
-..\.venv\Scripts\python.exe manage.py test finance.tests.APITests                    # one class
-..\.venv\Scripts\python.exe manage.py test finance.tests.APITests.test_some_method   # one test
+..\.venv\Scripts\python.exe manage.py test finance.tests.test_transactions           # one module
+..\.venv\Scripts\python.exe manage.py test finance.tests.test_transactions.TransactionAPITests.test_some_method   # one test
 ..\.venv\Scripts\python.exe manage.py seed_sample_data --if-empty --skip-admin
 ```
 
-All backend tests are in `backend/finance/tests.py`. The main classes are `ModelTests`, `SampleDataCommandTests`, `CSVImportServiceTests`, `CategorizationTests`, `APITests` and `MaintenanceRestoreTests`; smaller ones cover the camt.053 parser, migrations and the secret key.
+Backend tests are in the `backend/finance/tests/` package, one module per area: `test_transactions`, `test_definitions`, `test_imports`, `test_camt053`, `test_categorization`, `test_dashboard`, `test_exchange_rates`, `test_maintenance`, `test_api_requests` (errors, CSRF, origins, limits, CSP, health), and smaller ones for models, sample data, settings and migrations. `base.py` has `FinanceTestCase` (sample definitions plus `post_json`/`patch_json`/`delete_json` and transfer helpers) and `json_body`; most test classes build on it.
 
 Lint/format: ruff via `.pre-commit-config.yaml` (`ruff-check --fix`, `ruff-format`; hook revisions are frozen to commit SHAs). `ruff.toml` keeps the rule set at E4/E7/E9/F, because newer ruff enables far more rules by default; add rules deliberately. Ruff is not in `requirements.txt`. The frontend has `npm run lint` (ESLint; it catches undefined names, which the build doesn't, plus the hooks rules; the existing `exhaustive-deps` warnings are known) and `npm test` (Vitest, `src/*.test.js`, currently `shared.js` helpers). Run both from `frontend/` and build. `npm run lint` also covers `frontend/scripts/`. `desktop/` has `npm test` (`node --test`, for `backend-support.js`). CI runs all of them and the backend tests before the build, and after the packaged build runs `frontend/scripts/ui-smoke.mjs`: headless Chrome against the PyInstaller backend, every page, no console errors. Locally, still check UI changes in a browser (`.claude/tools/ui-check/`).
 
