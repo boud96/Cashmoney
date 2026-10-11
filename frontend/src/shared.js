@@ -490,7 +490,8 @@ export function completeMonthlyRows(rows) {
 export function buildSidebarAsciiFrame(frame, size) {
   const width = size.columns;
   const height = size.rows;
-  const rows = Array.from({ length: height }, () => Array.from({ length: width }, () => " "));
+  // Every cell is set below, so the rows don't need filling first.
+  const rows = Array.from({ length: height }, () => new Array(width));
   const background = "   .   +   _   ";
   const ribbon = "CA$HMONEY";
 
@@ -508,19 +509,20 @@ export function buildSidebarAsciiFrame(frame, size) {
 
   const time = frame * 0.12;
   for (let y = 0; y < height; y += 1) {
+    // The ribbons' positions depend only on the row: worked out once per row, not per cell.
     const rowDrift = Math.sin(y * 0.18 + time * 0.9) * 4 + Math.sin(y * 0.07 - time * 0.55) * 7;
+    const primaryCenter =
+      width / 2 +
+      Math.sin(y * 0.21 + time) * width * 0.22 +
+      Math.sin(y * 0.055 - time * 0.7) * width * 0.08;
+    const secondaryCenter =
+      width / 2 +
+      Math.sin(y * 0.17 - time * 0.85 + Math.PI) * width * 0.2 +
+      Math.sin(y * 0.075 + time * 0.5) * width * 0.07;
+    const tertiaryCenter =
+      width / 2 +
+      Math.sin(y * 0.13 + time * 0.7 + Math.PI / 2) * width * 0.15;
     for (let x = 0; x < width; x += 1) {
-      const primaryCenter =
-        width / 2 +
-        Math.sin(y * 0.21 + time) * width * 0.22 +
-        Math.sin(y * 0.055 - time * 0.7) * width * 0.08;
-      const secondaryCenter =
-        width / 2 +
-        Math.sin(y * 0.17 - time * 0.85 + Math.PI) * width * 0.2 +
-        Math.sin(y * 0.075 + time * 0.5) * width * 0.07;
-      const tertiaryCenter =
-        width / 2 +
-        Math.sin(y * 0.13 + time * 0.7 + Math.PI / 2) * width * 0.15;
       const distance = Math.min(
         Math.abs(x - primaryCenter),
         Math.abs(x - secondaryCenter),
