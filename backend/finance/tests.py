@@ -1340,13 +1340,13 @@ class APITests(FinanceTestCase):
     def test_trusted_origin_receives_cors_headers(self):
         response = self.client.get(
             "/api/health/",
-            HTTP_ORIGIN="http://127.0.0.1:5173",
+            HTTP_ORIGIN="http://127.0.0.1:8765",
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response["Access-Control-Allow-Origin"],
-            "http://127.0.0.1:5173",
+            "http://127.0.0.1:8765",
         )
         self.assertEqual(response["Access-Control-Allow-Credentials"], "true")
 
@@ -1372,26 +1372,28 @@ class APITests(FinanceTestCase):
         self.assertNotIn("proof", without_token)
 
     def test_untrusted_unsafe_preflight_is_rejected(self):
-        response = self.client.options(
-            "/api/bank-accounts/",
-            HTTP_ORIGIN="https://example.com",
-            HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
-        )
+        # :5173 was the Vite dev server's port, which the app no longer uses (BP#16).
+        for origin in ("https://example.com", "http://127.0.0.1:5173"):
+            response = self.client.options(
+                "/api/bank-accounts/",
+                HTTP_ORIGIN=origin,
+                HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
+            )
 
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(json_body(response)["error"], "Origin is not allowed")
+            self.assertEqual(response.status_code, 403, origin)
+            self.assertEqual(json_body(response)["error"], "Origin is not allowed")
 
     def test_trusted_unsafe_preflight_is_allowed(self):
         response = self.client.options(
             "/api/bank-accounts/",
-            HTTP_ORIGIN="http://127.0.0.1:5173",
+            HTTP_ORIGIN="http://127.0.0.1:8765",
             HTTP_ACCESS_CONTROL_REQUEST_METHOD="POST",
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response["Access-Control-Allow-Origin"],
-            "http://127.0.0.1:5173",
+            "http://127.0.0.1:8765",
         )
 
     def test_multipart_mutation_requires_csrf_token(self):

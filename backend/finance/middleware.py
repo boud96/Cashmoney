@@ -1,9 +1,10 @@
 class LocalApiCorsMiddleware:
-    """Allow the future Electron renderer or local frontend dev server to call the API."""
+    """Let the app's own origins call the API: runserver (:8000) and the desktop app (:8765).
+
+    Unsafe requests from any other origin are refused.
+    """
 
     allowed_origins = {
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
         "http://127.0.0.1:8000",
         "http://localhost:8000",
         "http://127.0.0.1:8765",
