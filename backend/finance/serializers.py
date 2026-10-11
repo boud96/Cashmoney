@@ -1,12 +1,28 @@
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from .models import Transaction
 
+CENT = Decimal("0.01")
+
 
 def money(value):
-    if isinstance(value, Decimal):
-        return float(value)
-    return value
+    """Money for the API: a decimal string with two places, like "-12.50".
+
+    Floats can't hold most decimal amounts exactly, so money never goes out as one.
+    Values with more places (amounts split between owners, summary totals) are
+    rounded half up to cents.
+    """
+    if value is None:
+        return None
+    amount = Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
+    return str(amount if amount else abs(amount))  # never "-0.00"
+
+
+def decimal_string(value):
+    """A decimal that isn't money (an exchange rate), exact and without trailing zeros."""
+    if value is None:
+        return None
+    return format(Decimal(value).normalize(), "f")
 
 
 def iso(value):
@@ -202,7 +218,7 @@ def serialize_transaction(
         "currency": transaction.currency,
         "converted_amount": money(converted_amount),
         "converted_currency": display_currency,
-        "conversion_rate": money(transaction.conversion_rate),
+        "conversion_rate": decimal_string(transaction.conversion_rate),
         "conversion_rate_date": iso(transaction.conversion_rate_date),
         "conversion_status": transaction.conversion_status,
         "direction": transaction.direction,

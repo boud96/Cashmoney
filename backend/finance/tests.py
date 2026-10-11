@@ -1857,7 +1857,7 @@ class APITests(FinanceTestCase):
             payload["updated_transactions"][0]["description"],
             "McDonalds Prague",
         )
-        self.assertEqual(payload["updated_transactions"][0]["amount"], -12.5)
+        self.assertEqual(payload["updated_transactions"][0]["amount"], "-12.50")
 
     def test_keyword_preview_and_recategorize_explain_conflicts(self):
         transport = Category.objects.create(name="Transport")
@@ -2855,7 +2855,7 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["expense_categories"][0]["name"], "Food")
-        self.assertEqual(payload["expense_categories"][0]["amount"], 12.5)
+        self.assertEqual(payload["expense_categories"][0]["amount"], "12.50")
         self.assertEqual(payload["expense_categories"][0]["color"], self.category.color)
         self.assertEqual(
             payload["expense_categories"][0]["children"][0]["color"],
@@ -2882,9 +2882,9 @@ class APITests(FinanceTestCase):
         payload = json_body(response)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(payload["monthly"][0]["expense"], 12.5)
-        self.assertEqual(payload["expense_categories"][0]["amount"], 12.5)
-        self.assertEqual(payload["want_need_investment"][0]["amount"], 12.5)
+        self.assertEqual(payload["monthly"][0]["expense"], "12.50")
+        self.assertEqual(payload["expense_categories"][0]["amount"], "12.50")
+        self.assertEqual(payload["want_need_investment"][0]["amount"], "12.50")
 
     def test_dashboard_checkbox_none_marker_returns_no_transactions(self):
         Transaction.objects.create(
@@ -2936,10 +2936,10 @@ class APITests(FinanceTestCase):
         transactions = json_body(transactions_response)
         self.assertEqual(summary_response.status_code, 200)
         self.assertEqual(transactions_response.status_code, 200)
-        self.assertEqual(summary["monthly"][0]["expense"], 45.0)
-        self.assertEqual(summary["expense_categories"][0]["amount"], 45.0)
-        self.assertEqual(summary["want_need_investment"][0]["amount"], 45.0)
-        self.assertEqual(transactions["results"][0]["amount"], -45.0)
+        self.assertEqual(summary["monthly"][0]["expense"], "45.00")
+        self.assertEqual(summary["expense_categories"][0]["amount"], "45.00")
+        self.assertEqual(summary["want_need_investment"][0]["amount"], "45.00")
+        self.assertEqual(transactions["results"][0]["amount"], "-45.00")
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
 
     def test_dashboard_split_by_owners_keeps_the_cents_of_whole_amounts(self):
@@ -2958,9 +2958,39 @@ class APITests(FinanceTestCase):
         )
 
         # SQLite stores -5.00 as the integer -5, and integer division gave 2.
-        self.assertEqual(summary["monthly"][0]["expense"], 2.5)
-        self.assertEqual(summary["expense_categories"][0]["amount"], 2.5)
-        self.assertEqual(summary["want_need_investment"][0]["amount"], 2.5)
+        self.assertEqual(summary["monthly"][0]["expense"], "2.50")
+        self.assertEqual(summary["expense_categories"][0]["amount"], "2.50")
+        self.assertEqual(summary["want_need_investment"][0]["amount"], "2.50")
+
+    def test_money_is_sent_as_two_place_decimal_strings(self):
+        self.account.owners = 3
+        self.account.save(update_fields=["owners"])
+        coffee = Subcategory.objects.create(name="Coffee", category=self.category)
+        for subcategory in (self.subcategory, coffee):
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                description=f"Split {subcategory.name}",
+                amount=Decimal("-10.00"),
+                subcategory=subcategory,
+            )
+
+        summary = json_body(
+            self.client.get("/api/dashboard/summary/", {"split_by_owners": "true"})
+        )
+        rows = json_body(
+            self.client.get("/api/transactions/", {"split_by_owners": "true"})
+        )["results"]
+
+        self.assertEqual([row["amount"] for row in rows], ["-3.33", "-3.33"])
+        food = summary["expense_categories"][0]
+        self.assertEqual(
+            [child["amount"] for child in food["children"]], ["3.33", "3.33"]
+        )
+        # 20 / 3 rounds to 6.67, but the sunburst needs the sum of the children.
+        self.assertEqual(food["amount"], "6.66")
+        self.assertEqual(summary["monthly"][0]["expense"], "6.67")
+        self.assertEqual(summary["monthly"][0]["income"], "0.00")
 
     def test_transaction_patch_respects_split_by_owners_response_amount(self):
         self.account.owners = 2
@@ -2982,7 +3012,7 @@ class APITests(FinanceTestCase):
 
         payload = json_body(response)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(payload["amount"], -45.0)
+        self.assertEqual(payload["amount"], "-45.00")
         self.assertEqual(payload["want_need_investment"], WantNeedInvestment.NEED)
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
 
@@ -3024,12 +3054,13 @@ class APITests(FinanceTestCase):
         self.assertEqual(transaction_obj.conversion_rate, Decimal("20.0000000000"))
         self.assertEqual(transaction_obj.conversion_rate_date, date(2024, 1, 1))
         self.assertEqual(summary["default_currency"], "CZK")
-        self.assertEqual(summary["monthly"][0]["expense"], 200.0)
-        self.assertEqual(summary["expense_categories"][0]["amount"], 200.0)
+        self.assertEqual(summary["monthly"][0]["expense"], "200.00")
+        self.assertEqual(summary["expense_categories"][0]["amount"], "200.00")
         self.assertEqual(summary["missing_conversions"], 0)
-        self.assertEqual(transactions["results"][0]["amount"], -10.0)
+        self.assertEqual(transactions["results"][0]["amount"], "-10.00")
         self.assertEqual(transactions["results"][0]["currency"], "USD")
-        self.assertEqual(transactions["results"][0]["converted_amount"], -200.0)
+        self.assertEqual(transactions["results"][0]["converted_amount"], "-200.00")
+        self.assertEqual(transactions["results"][0]["conversion_rate"], "20")
         self.assertEqual(transactions["results"][0]["converted_currency"], "CZK")
 
     def test_dashboard_summary_reports_missing_exchange_rates(self):

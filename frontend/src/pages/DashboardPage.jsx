@@ -13,6 +13,7 @@ import {
   buildMetrics,
   cloneFilters,
   colorPillStyle,
+  compareAmounts,
   completeMonthlyRows,
   countActiveFilters,
   cssVar,
@@ -1837,6 +1838,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
     { field: "description", headerName: "Description", flex: 2, minWidth: 260, wrapText: true, autoHeight: true },
     {
       cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
+      comparator: compareAmounts,
       field: "converted_amount",
       headerName: "Amount",
       valueFormatter: (params) => (
@@ -2191,7 +2193,9 @@ function SunburstChart({ hideAmounts, rows }) {
 }
 
 function WniChart({ hideAmounts, rows }) {
-  const cleanRows = rows.filter((row) => row.amount > 0);
+  const cleanRows = rows
+    .map((row) => ({ ...row, amount: Number(row.amount || 0) }))
+    .filter((row) => row.amount > 0);
   if (!cleanRows.length) return <EmptyChart />;
   return (
     <Plot

@@ -1742,7 +1742,7 @@ class CSVImportService:
             "id": str(transaction_obj.id),
             "transaction_date": transaction_obj.transaction_date.isoformat(),
             "description": transaction_obj.description,
-            "amount": float(transaction_obj.amount),
+            "amount": money(transaction_obj.amount),
         }
 
     def _serialize_parsed_data(self, data):
@@ -1751,7 +1751,7 @@ class CSVImportService:
             if hasattr(value, "isoformat"):
                 serialized[key] = value.isoformat()
             elif isinstance(value, Decimal):
-                serialized[key] = float(value)
+                serialized[key] = money(value)
             else:
                 serialized[key] = value
         return serialized
@@ -1881,7 +1881,7 @@ def build_uncategorized_suggestions(queryset, default_currency, limit=8):
             {
                 "id": group_key,
                 "reason": reason,
-                "score": money(score),
+                "score": float(score),  # a ranking, not money
                 "transaction_count": transaction_count,
                 "total_amount": money(total_amount),
                 "absolute_total_amount": money(absolute_total_amount),
@@ -2384,7 +2384,7 @@ def recategorize_transactions(queryset, include_locked=False):
                 if data is not None
                 else transaction_obj.description
             ),
-            "amount": float(transaction_obj.amount),
+            "amount": money(transaction_obj.amount),
             "bank_account": model_ref(transaction_obj.bank_account),
         }
 
@@ -2653,8 +2653,8 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
         summary["monthly"].append(
             {
                 "month": month.strftime("%Y-%m"),
-                "income": float(row["income"] or Decimal("0")),
-                "expense": float(row["expense"] or Decimal("0")),
+                "income": money(row["income"] or Decimal("0")),
+                "expense": money(row["expense"] or Decimal("0")),
             }
         )
 
@@ -2728,7 +2728,7 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     summary["income_categories"] = _category_tree(income_categories)
     summary["expense_categories"] = _category_tree(expense_categories)
     summary["want_need_investment"] = [
-        {"name": row["wni_name"], "amount": float(row["amount"] or Decimal("0"))}
+        {"name": row["wni_name"], "amount": money(row["amount"] or Decimal("0"))}
         for row in wni_rows
     ]
     return summary
@@ -2741,15 +2741,20 @@ def _category_tree(grouped_amounts):
         children = [
             {
                 "name": subcategory_name,
-                "amount": float(subcategory_data["amount"]),
+                "amount": money(subcategory_data["amount"]),
                 "color": subcategory_data["color"],
             }
             for subcategory_name, subcategory_data in sorted(subcategories.items())
         ]
+        # The category is the sum of its rounded subcategories: the sunburst chart
+        # (branchvalues "total") drops a category that is a cent short of them.
+        category_amount = sum(
+            (Decimal(child["amount"]) for child in children), Decimal("0")
+        )
         tree.append(
             {
                 "name": category_name,
-                "amount": float(category_data["amount"]),
+                "amount": money(category_amount),
                 "color": category_data["color"],
                 "children": children,
             }

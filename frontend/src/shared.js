@@ -371,13 +371,13 @@ export function sunburstData(rows) {
     ids.push(categoryId);
     labels.push(category.name);
     parents.push("");
-    values.push(category.amount);
+    values.push(Number(category.amount || 0));
     colors.push(normalizeHexColor(category.color) || cssVar("--muted", "#667481"));
     (category.children || []).forEach((child) => {
       ids.push(`${categoryId}:${child.name}`);
       labels.push(child.name);
       parents.push(categoryId);
-      values.push(child.amount);
+      values.push(Number(child.amount || 0));
       colors.push(normalizeHexColor(child.color) || normalizeHexColor(category.color) || cssVar("--surface-2", "#eef3f6"));
     });
   });
@@ -643,6 +643,17 @@ export function money(value) {
 
 export function amountNumber(value) {
   return formatNumber(value, { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+}
+
+// The API sends money as decimal strings ("-12.50"), which would sort as text.
+// Grid comparator: numeric order, missing values first.
+export function compareAmounts(left, right) {
+  const leftMissing = left === null || left === undefined || left === "";
+  const rightMissing = right === null || right === undefined || right === "";
+  if (leftMissing || rightMissing) {
+    return Number(rightMissing) - Number(leftMissing);
+  }
+  return Number(left) - Number(right);
 }
 
 export function formatMoneyValue(value, hideAmounts = false) {
