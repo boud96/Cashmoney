@@ -609,6 +609,55 @@ class CSVImportServiceTests(FinanceTestCase):
         self.assertEqual(errors[5], "Amount is missing")
         self.assertIn("n/a", errors[6])
 
+    def test_amounts_must_match_the_mappings_decimal_separator(self):
+        comma_mapping = CSVMapping.objects.create(
+            name="Comma decimals",
+            delimiter=";",
+            date_format="%Y-%m-%d",
+            decimal_separator=",",
+            column_map=self.mapping.column_map,
+        )
+
+        _csv_import, comma_report = CSVImportService(
+            comma_mapping, self.account
+        ).import_file(
+            self.csv_file(
+                "ID;Date;Description;Amount\n"
+                "c-1;2026-01-02;Grouped;-1.234,50\n"
+                "c-2;2026-01-02;Plain;12,50\n"
+                "c-3;2026-01-02;Dot decimal;12.50\n"
+                "c-4;2026-01-02;Bad grouping;1.23,00\n"
+            )
+        )
+        _csv_import, dot_report = CSVImportService(
+            self.mapping, self.account
+        ).import_file(
+            self.csv_file(
+                "ID,Date,Description,Amount\n"
+                'd-1,2026-01-03,Grouped,"1,234.50"\n'
+                'd-2,2026-01-03,Comma decimal,"12,50"\n'
+                "d-3,2026-01-03,Plain,-7.5\n"
+            )
+        )
+
+        self.assertEqual(
+            dict(Transaction.objects.values_list("original_id", "amount")),
+            {
+                "c-1": Decimal("-1234.50"),
+                "c-2": Decimal("12.50"),
+                "d-1": Decimal("1234.50"),
+                "d-3": Decimal("-7.50"),
+            },
+        )
+        comma_errors = [entry["error"] for entry in comma_report["skipped"]["errors"]]
+        dot_errors = [entry["error"] for entry in dot_report["skipped"]["errors"]]
+        self.assertEqual(len(comma_errors), 2)
+        self.assertIn("'12.50' doesn't match", comma_errors[0])
+        self.assertIn("decimal separator (',')", comma_errors[0])
+        self.assertIn("'1.23,00'", comma_errors[1])
+        self.assertEqual(len(dot_errors), 1)
+        self.assertIn("'12,50' doesn't match", dot_errors[0])
+
     def test_dash_placeholder_in_debit_column_does_not_hide_the_credit(self):
         mapping = CSVMapping.objects.create(
             name="Split amounts",

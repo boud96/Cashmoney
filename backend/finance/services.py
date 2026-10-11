@@ -1454,19 +1454,31 @@ class CSVRowExtractor:
         if raw.endswith("-") and not raw.startswith("-"):
             is_negative = True
             raw = raw[:-1]
-        raw = re.sub(r"[^\d,.\-]", "", raw)
+        raw = re.sub(r"[^\d,.\-]", "", raw)  # drops spaces, currency signs and the like
         if not re.search(r"\d", raw):
             raise ValueError(f"Could not parse amount '{value}'")
 
-        if self.csv_mapping.thousands_separator:
-            raw = raw.replace(self.csv_mapping.thousands_separator, "")
-        raw = raw.replace(" ", "")
-
-        if self.csv_mapping.decimal_separator == ",":
-            raw = raw.replace(".", "")
-            raw = raw.replace(",", ".")
-        else:
-            raw = raw.replace(",", "")
+        # The mark that isn't the decimal separator may only group thousands. Without
+        # this check, "12.50" with "," decimals silently became 1250.00 (and "12,50"
+        # with "." decimals too).
+        decimal_mark = "," if self.csv_mapping.decimal_separator == "," else "."
+        group_mark = "." if decimal_mark == "," else ","
+        integer_part, has_decimal, fraction = raw.partition(decimal_mark)
+        groups = integer_part.lstrip("-").split(group_mark)
+        if group_mark in fraction or (
+            len(groups) > 1
+            and not (
+                1 <= len(groups[0]) <= 3
+                and all(len(group) == 3 for group in groups[1:])
+            )
+        ):
+            raise ValueError(
+                f"Amount '{value}' doesn't match the import mapping's decimal "
+                f"separator ('{decimal_mark}')"
+            )
+        raw = integer_part.replace(group_mark, "")
+        if has_decimal:
+            raw = f"{raw}.{fraction}"
 
         try:
             amount = Decimal(raw).quantize(Decimal("0.01"))
