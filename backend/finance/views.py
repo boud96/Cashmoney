@@ -1,6 +1,9 @@
 import codecs
+import hashlib
+import hmac
 import json
 import logging
+import os
 import re
 import sqlite3
 import tempfile
@@ -629,7 +632,16 @@ class DeleteImpactView(JsonView):
 
 class HealthView(JsonView):
     def get(self, request):
-        return json_response({"status": "ok"})
+        payload = {"status": "ok"}
+        # The desktop app starts its backend with a per-launch token and asks for this
+        # proof, so it never uses some other program answering on the port (CR-45).
+        token = os.environ.get("CASHMONEY_INSTANCE_TOKEN", "")
+        nonce = request.GET.get("nonce", "")
+        if token and nonce:
+            payload["proof"] = hmac.new(
+                token.encode(), nonce.encode(), hashlib.sha256
+            ).hexdigest()
+        return json_response(payload)
 
 
 class FinanceSettingsView(JsonView):

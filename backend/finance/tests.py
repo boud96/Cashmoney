@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -1348,6 +1350,18 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("Access-Control-Allow-Origin", response)
+
+    def test_health_proves_the_desktop_apps_launch_token(self):
+        nonce = "4f1c2a"
+        with patch.dict(os.environ, {"CASHMONEY_INSTANCE_TOKEN": "launch-token"}):
+            proven = json_body(self.client.get("/api/health/", {"nonce": nonce}))
+            no_nonce = json_body(self.client.get("/api/health/"))
+        without_token = json_body(self.client.get("/api/health/", {"nonce": nonce}))
+
+        expected = hmac.new(b"launch-token", nonce.encode(), hashlib.sha256)
+        self.assertEqual(proven["proof"], expected.hexdigest())
+        self.assertNotIn("proof", no_nonce)
+        self.assertNotIn("proof", without_token)
 
     def test_untrusted_unsafe_preflight_is_rejected(self):
         response = self.client.options(

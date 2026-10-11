@@ -4,7 +4,24 @@ const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
 
-const { rotateIfLarge } = require("./backend-support.js");
+const { healthProof, newSecret, provesInstance, rotateIfLarge } = require("./backend-support.js");
+
+test("only a backend that knows the launch token proves it", () => {
+  const token = newSecret();
+  const nonce = newSecret(16);
+
+  assert.equal(provesInstance({ status: "ok", proof: healthProof(token, nonce) }, token, nonce), true);
+  assert.equal(provesInstance({ status: "ok", proof: healthProof(newSecret(), nonce) }, token, nonce), false);
+  assert.equal(provesInstance({ status: "ok", proof: healthProof(token, newSecret(16)) }, token, nonce), false);
+  assert.equal(provesInstance({ status: "ok" }, token, nonce), false);
+  assert.equal(provesInstance({ status: "ok", proof: "not hex" }, token, nonce), false);
+  assert.equal(provesInstance(null, token, nonce), false);
+});
+
+test("the proof matches what the backend computes", () => {
+  // Python: hmac.new(b"launch-token", b"4f1c2a", hashlib.sha256).hexdigest()
+  assert.equal(healthProof("launch-token", "4f1c2a"), "6098a720f231dd394d5437e211808e19a364ef7be85a36d178a69b83e1171101");
+});
 
 test("a log past the limit starts fresh and keeps one old copy", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cashmoney-logs-"));
