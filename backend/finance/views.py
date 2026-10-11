@@ -1506,16 +1506,20 @@ class TransactionDetailView(JsonView):
             default_currency=settings_obj.default_currency,
         )
         transaction.refresh_from_db()
-        return json_response(
-            serialize_transaction(
-                transaction,
-                split_by_owners=parse_bool(
-                    request.GET.get("split_by_owners"), default=False
-                ),
-                default_currency=settings_obj.default_currency,
-                include_raw_data=False,
-            )
+        payload = serialize_transaction(
+            transaction,
+            split_by_owners=parse_bool(
+                request.GET.get("split_by_owners"), default=False
+            ),
+            default_currency=settings_obj.default_currency,
+            include_raw_data=False,
         )
+        # Whether the edited row still fits the dashboard filters sent with the edit,
+        # decided by the list's own filter code; the dashboard highlights it if not.
+        payload["matches_filters"] = (
+            filtered_transactions(request).filter(id=transaction.id).exists()
+        )
+        return json_response(payload)
 
     def delete(self, request, pk):
         get_object_or_404(Transaction, id=pk).delete()

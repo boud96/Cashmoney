@@ -1,7 +1,7 @@
 """Transaction text search that ignores case, accents, spaces and punctuation.
 
-fold_search_text mirrors normalizeName in frontend/src/shared.js, so the backend
-filter and the dashboard's in-place "still matches the filters" check agree.
+fold_search_text folds text the same way as normalizeName in
+frontend/src/shared.js, which the filter panels use to search their options.
 """
 
 import re

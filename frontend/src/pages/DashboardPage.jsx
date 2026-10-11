@@ -1020,7 +1020,7 @@ export default function DashboardPage({
             Older matching transactions are omitted from the table. Stats and charts still use the full filtered set.
           </div>
         ) : null}
-        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
@@ -1659,7 +1659,7 @@ function InfoIcon() {
 
 const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filters, so this row is kept visible temporarily.";
 
-function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
+function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
   const [rawDataLoadingId, setRawDataLoadingId] = useState("");
   const [filterRetainedCells, setFilterRetainedCells] = useState({});
@@ -1705,7 +1705,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
   const saveTransaction = useCallback(async (row, patch) => {
     const updated = await updateTransaction(row, patch);
     const changedFields = changedTransactionCellFields(patch);
-    const isRetainedByEdit = changedFields.length > 0 && !transactionMatchesCurrentFilters(updated, filters);
+    const isRetainedByEdit = changedFields.length > 0 && updated.matches_filters === false;
     setFilterRetainedCells((current) => {
       const next = { ...current };
       if (!isRetainedByEdit) {
@@ -1719,7 +1719,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
       return next;
     });
     return updated;
-  }, [filters, updateTransaction]);
+  }, [updateTransaction]);
 
   useEffect(() => {
     if (!rawDataPopover) {
@@ -2087,80 +2087,6 @@ function changedTransactionCellFields(patch) {
     fields.push("is_categorization_locked");
   }
   return fields;
-}
-
-function transactionMatchesCurrentFilters(row, filters = {}) {
-  if (!row) {
-    return false;
-  }
-  if (!filters.include_ignored && row.is_ignored) {
-    return false;
-  }
-  if (!filters.include_locked && row.is_categorization_locked) {
-    return false;
-  }
-  if (filters.date_from && (!row.transaction_date || row.transaction_date < filters.date_from)) {
-    return false;
-  }
-  if (filters.date_to && (!row.transaction_date || row.transaction_date > filters.date_to)) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.direction, row.direction || "")) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.bank_account, row.bank_account?.id || "")) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.category, row.category?.id || UNASSIGNED)) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.subcategory, row.subcategory?.id || UNASSIGNED)) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.want_need_investment, row.want_need_investment || UNASSIGNED)) {
-    return false;
-  }
-  if (!tagSelectionMatches(filters.tag, row.tags || [])) {
-    return false;
-  }
-  if (!transactionSearchMatches(row, filters.q)) {
-    return false;
-  }
-  return true;
-}
-
-function checklistSelectionMatches(selection, value) {
-  if (!Array.isArray(selection)) {
-    return true;
-  }
-  return selection.length > 0 && selection.includes(value);
-}
-
-function tagSelectionMatches(selection, tags) {
-  if (!Array.isArray(selection) || !selection.length) {
-    return true;
-  }
-  if (!tags.length) {
-    return selection.includes(UNASSIGNED);
-  }
-  return tags.some((tag) => selection.includes(tag.id));
-}
-
-function transactionSearchMatches(row, query) {
-  const normalizedQuery = normalizeName(query);
-  if (!normalizedQuery) {
-    return true;
-  }
-  const searchableText = [
-    row.description,
-    row.counterparty_name,
-    row.counterparty_account_number,
-    row.transaction_type,
-    row.counterparty_note,
-    row.my_note,
-    row.other_note,
-  ].map((value) => normalizeName(value)).join(" ");
-  return searchableText.includes(normalizedQuery);
 }
 
 function joinClassNames(...classNames) {

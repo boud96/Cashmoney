@@ -1073,6 +1073,37 @@ class APITests(FinanceTestCase):
         self.assertNotIn("report", imports[0])
         self.assertEqual(imports[0]["created_count"], 1)
 
+    def test_row_edit_reports_whether_the_row_still_matches_the_filters(self):
+        other = Subcategory.objects.create(name="Groceries", category=self.category)
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            my_note="dentist visit",
+            amount=Decimal("-120.00"),
+            subcategory=self.subcategory,
+        )
+        url = f"/api/transactions/{transaction_obj.id}/"
+        # Edits lock the row, so the scope includes locked rows.
+        scope = f"?subcategory={self.subcategory.id}&include_locked=true"
+
+        moved = json_body(
+            self.patch_json(url + scope, {"subcategory_id": str(other.id)})
+        )
+        back = json_body(
+            self.patch_json(url + scope, {"subcategory_id": str(self.subcategory.id)})
+        )
+        # Matches only through a note field, which the table never receives.
+        searched = json_body(
+            self.patch_json(
+                url + "?q=dentist&include_locked=true", {"want_need_investment": "need"}
+            )
+        )
+
+        self.assertFalse(moved["matches_filters"])
+        self.assertTrue(back["matches_filters"])
+        self.assertTrue(searched["matches_filters"])
+
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)
 
