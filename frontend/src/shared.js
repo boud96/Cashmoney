@@ -487,69 +487,6 @@ export function completeMonthlyRows(rows) {
   return completed;
 }
 
-export function buildSidebarAsciiFrame(frame, size) {
-  const width = size.columns;
-  const height = size.rows;
-  // Every cell is set below, so the rows don't need filling first.
-  const rows = Array.from({ length: height }, () => new Array(width));
-  const background = "   .   +   _   ";
-  const ribbon = "CA$HMONEY";
-
-  function write(row, col, text) {
-    if (row < 0 || row >= height) {
-      return;
-    }
-    String(text).split("").forEach((char, index) => {
-      const x = col + index;
-      if (x >= 0 && x < width) {
-        rows[row][x] = char;
-      }
-    });
-  }
-
-  const time = frame * 0.12;
-  for (let y = 0; y < height; y += 1) {
-    // The ribbons' positions depend only on the row: worked out once per row, not per cell.
-    const rowDrift = Math.sin(y * 0.18 + time * 0.9) * 4 + Math.sin(y * 0.07 - time * 0.55) * 7;
-    const primaryCenter =
-      width / 2 +
-      Math.sin(y * 0.21 + time) * width * 0.22 +
-      Math.sin(y * 0.055 - time * 0.7) * width * 0.08;
-    const secondaryCenter =
-      width / 2 +
-      Math.sin(y * 0.17 - time * 0.85 + Math.PI) * width * 0.2 +
-      Math.sin(y * 0.075 + time * 0.5) * width * 0.07;
-    const tertiaryCenter =
-      width / 2 +
-      Math.sin(y * 0.13 + time * 0.7 + Math.PI / 2) * width * 0.15;
-    for (let x = 0; x < width; x += 1) {
-      const distance = Math.min(
-        Math.abs(x - primaryCenter),
-        Math.abs(x - secondaryCenter),
-        Math.abs(x - tertiaryCenter),
-      );
-
-      if (distance < 0.9) {
-        rows[y][x] = ribbon[Math.abs(Math.floor(x + y + time * 3)) % ribbon.length];
-      } else if (distance < 2.5) {
-        rows[y][x] = "+";
-      } else if (distance < 4.5) {
-        rows[y][x] = ".";
-      } else {
-        const charIndex = Math.abs(Math.floor(x + y * 0.7 + rowDrift + time * 2)) % background.length;
-        rows[y][x] = background[charIndex];
-      }
-    }
-  }
-
-  const label = "Cashmoney";
-  const labelRow = 7;
-  const labelCol = Math.max(0, Math.floor((width - label.length) / 2));
-  write(labelRow, labelCol, label);
-
-  return rows.map((row) => row.join("")).join("\n");
-}
-
 export function findDuplicate(items, field, value, editingId = null) {
   const normalizedValue = normalizeComparable(value);
   if (!normalizedValue) {
