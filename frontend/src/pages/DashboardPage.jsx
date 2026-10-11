@@ -1,7 +1,5 @@
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import createPlotlyComponent from "react-plotly.js/factory";
-import Plotly from "plotly.js-dist-min";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
@@ -40,7 +38,8 @@ import {
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const Plot = createPlotlyComponent(Plotly);
+// Plotly loads as its own chunk (see PlotlyChart.jsx); ChartPanel shows a placeholder meanwhile.
+const Plot = lazy(() => import("../PlotlyChart.jsx"));
 const transactionGridTheme = themeQuartz
   .withParams({
     accentColor: "var(--action)",
@@ -139,6 +138,14 @@ export default function DashboardPage({
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
+  // Charts mount after the first table load, so the rows render before Plotly's
+  // chunk (about half a second of script work) is evaluated.
+  const [chartsReady, setChartsReady] = useState(false);
+  useEffect(() => {
+    if (!chartsReady && summary && !transactionsBusy) {
+      setChartsReady(true);
+    }
+  }, [chartsReady, summary, transactionsBusy]);
   const [bulkAssignEditorOpen, setBulkAssignEditorOpen] = useState(false);
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
@@ -1001,11 +1008,11 @@ export default function DashboardPage({
       ) : null}
 
       <div className="dashboard-charts">
-        <ChartPanel className="chart-panel-wide" title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
-        <ChartPanel title="Income Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.income_categories || []} /></ChartPanel>
-        <ChartPanel title="Expense Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
-        <ChartPanel title="Want / Need / Investment"><WniChart hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} /></ChartPanel>
-        <ChartPanel title="Top Expense Subcategories"><TopExpenseChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
+        <ChartPanel className="chart-panel-wide" ready={chartsReady} title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
+        <ChartPanel ready={chartsReady} title="Income Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.income_categories || []} /></ChartPanel>
+        <ChartPanel ready={chartsReady} title="Expense Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
+        <ChartPanel ready={chartsReady} title="Want / Need / Investment"><WniChart hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} /></ChartPanel>
+        <ChartPanel ready={chartsReady} title="Top Expense Subcategories"><TopExpenseChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
       </div>
 
       <section className="panel transaction-panel">
@@ -2097,8 +2104,14 @@ function joinClassNames(...classNames) {
 }
 
 
-function ChartPanel({ children, className = "", title }) {
-  return <section className={`panel chart-panel ${className}`}><div className="panel-header"><h2>{title}</h2></div>{children}</section>;
+function ChartPanel({ children, className = "", ready = true, title }) {
+  const loading = <div className="chart-empty">Loading chart…</div>;
+  return (
+    <section className={`panel chart-panel ${className}`}>
+      <div className="panel-header"><h2>{title}</h2></div>
+      {ready ? <Suspense fallback={loading}>{children}</Suspense> : loading}
+    </section>
+  );
 }
 
 function MonthlyChart({ hideAmounts, rows }) {
