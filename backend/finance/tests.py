@@ -2942,6 +2942,26 @@ class APITests(FinanceTestCase):
         self.assertEqual(transactions["results"][0]["amount"], -45.0)
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
 
+    def test_dashboard_split_by_owners_keeps_the_cents_of_whole_amounts(self):
+        self.account.owners = 2
+        self.account.save(update_fields=["owners"])
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Whole amount",
+            amount=Decimal("-5.00"),
+            subcategory=self.subcategory,
+        )
+
+        summary = json_body(
+            self.client.get("/api/dashboard/summary/", {"split_by_owners": "true"})
+        )
+
+        # SQLite stores -5.00 as the integer -5, and integer division gave 2.
+        self.assertEqual(summary["monthly"][0]["expense"], 2.5)
+        self.assertEqual(summary["expense_categories"][0]["amount"], 2.5)
+        self.assertEqual(summary["want_need_investment"][0]["amount"], 2.5)
+
     def test_transaction_patch_respects_split_by_owners_response_amount(self):
         self.account.owners = 2
         self.account.save(update_fields=["owners"])

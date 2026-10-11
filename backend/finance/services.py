@@ -17,6 +17,7 @@ from django.db.models import (
     DecimalField,
     ExpressionWrapper,
     F,
+    FloatField,
     Max,
     Min,
     Q,
@@ -24,7 +25,7 @@ from django.db.models import (
     Value,
     When,
 )
-from django.db.models.functions import Coalesce, TruncMonth
+from django.db.models.functions import Cast, Coalesce, TruncMonth
 from django.utils import timezone
 
 from .constants import DEFAULT_CATEGORIZATION_FIELDS, ImportFileFormat
@@ -2580,8 +2581,11 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
         output_field=amount_field,
     )
     if split_by_owners:
+        # Divide as reals: SQLite stores whole amounts (-10.00) as integers, and
+        # integer division drops the cents (-10 / 3 = -3).
         amount = ExpressionWrapper(
-            converted_amount / Coalesce(F("bank_account__owners"), Value(1)),
+            converted_amount
+            / Cast(Coalesce(F("bank_account__owners"), Value(1)), FloatField()),
             output_field=amount_field,
         )
     else:
