@@ -1913,7 +1913,7 @@ def build_uncategorized_suggestions(queryset, default_currency, limit=8):
         key=lambda item: (
             item["score"],
             item["transaction_count"],
-            item["absolute_total_amount"],
+            Decimal(item["absolute_total_amount"]),  # a decimal string since 63de6dd
         ),
         reverse=True,
     )
