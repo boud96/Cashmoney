@@ -3265,6 +3265,10 @@ select option {
   justify-content: center;
 }
 
+button.is-loading[aria-disabled="true"] {
+  cursor: progress;
+}
+
 .import-action-row button:disabled:not(.is-loading) {
   cursor: default;
 }
