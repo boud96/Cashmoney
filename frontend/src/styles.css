@@ -349,6 +349,11 @@ h2 {
   background: rgba(0, 0, 0, 0.54);
 }
 
+/* A dialog takes focus itself when it opens (ModalShell); no outline around all of it. */
+.modal-backdrop [role="dialog"][tabindex="-1"]:focus {
+  outline: none;
+}
+
 .accent-modal {
   width: min(320px, 100%);
   border: 1px solid var(--border);
