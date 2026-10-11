@@ -1489,11 +1489,13 @@ class TransactionDetailView(JsonView):
             transaction.subcategory = optional_object(
                 Subcategory, data["subcategory_id"], "subcategory_id"
             )
+        # An explicit lock value wins; otherwise categorization edits lock the row
+        # (the same rule as bulk assign).
         if "is_categorization_locked" in data:
             transaction.is_categorization_locked = parse_bool(
                 data["is_categorization_locked"]
             )
-        if should_lock_categorization:
+        elif should_lock_categorization:
             transaction.is_categorization_locked = True
         transaction.save()
         if "tag_ids" in data:

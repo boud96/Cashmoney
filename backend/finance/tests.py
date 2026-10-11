@@ -995,6 +995,30 @@ class APITests(FinanceTestCase):
         self.assertIn("Something went wrong", json_body(response)["error"])
         self.assertIn("boom", "\n".join(logs.output))
 
+    def test_explicit_lock_value_wins_in_row_edits(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            amount=Decimal("-120.00"),
+        )
+        url = f"/api/transactions/{transaction_obj.id}/"
+
+        self.patch_json(
+            url,
+            {
+                "subcategory_id": str(self.subcategory.id),
+                "is_categorization_locked": False,
+            },
+        )
+        transaction_obj.refresh_from_db()
+        self.assertEqual(transaction_obj.subcategory, self.subcategory)
+        self.assertFalse(transaction_obj.is_categorization_locked)
+
+        self.patch_json(url, {"subcategory_id": str(self.subcategory.id)})
+        transaction_obj.refresh_from_db()
+        self.assertTrue(transaction_obj.is_categorization_locked)
+
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)
 
