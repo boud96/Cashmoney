@@ -2188,7 +2188,7 @@ def internal_transfer_candidate_records(
             )
             records.append(
                 {
-                    "id": (f"{outgoing_transaction.id}:" f"{incoming_transaction.id}"),
+                    "id": (f"{outgoing_transaction.id}:{incoming_transaction.id}"),
                     "outgoing": outgoing_transaction,
                     "incoming": incoming_transaction,
                     "amount": abs(outgoing_transaction.amount),

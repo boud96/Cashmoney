@@ -1401,8 +1401,7 @@ class APITests(FinanceTestCase):
             data={
                 "bank_account_id": str(self.account.id),
                 "csv_file": self.csv_file(
-                    "ID,Date,Description,Amount,Currency\n"
-                    "1,2026-01-01,Lunch,-10.00,CZK"
+                    "ID,Date,Description,Amount,Currency\n1,2026-01-01,Lunch,-10.00,CZK"
                 ),
             },
         )
@@ -1627,7 +1626,7 @@ class APITests(FinanceTestCase):
             {
                 "default_currency": "CZK",
                 "csv_file": self.csv_file(
-                    "ID;Datum;Popis;Castka\n" "api-1;02.01.2026;McDonalds;-12,50\n"
+                    "ID;Datum;Popis;Castka\napi-1;02.01.2026;McDonalds;-12,50\n"
                 ),
             },
         )
@@ -1679,7 +1678,7 @@ class APITests(FinanceTestCase):
             "/api/csv-mappings/detect-columns/",
             {
                 "csv_file": self.csv_file(
-                    "ID,Date,Description,Amount\n" "api-1,2026-01-02,Salary,1234.56\n"
+                    "ID,Date,Description,Amount\napi-1,2026-01-02,Salary,1234.56\n"
                 ),
             },
         )
@@ -3973,8 +3972,9 @@ class APITests(FinanceTestCase):
         )
         connection.ensure_connection()
 
-        with tempfile.TemporaryDirectory() as temp_dir, self.settings(
-            DATA_DIR=Path(temp_dir)
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            self.settings(DATA_DIR=Path(temp_dir)),
         ):
             backup_dir = Path(temp_dir) / "backups"
             backup_dir.mkdir()
@@ -3993,8 +3993,7 @@ class APITests(FinanceTestCase):
             self.assertEqual(list_payload["backups"][0]["label"], "Pre-restore")
 
             export_response = self.client.get(
-                "/api/maintenance/backups/"
-                "pre-restore-20260102-030405.sqlite3/export/"
+                "/api/maintenance/backups/pre-restore-20260102-030405.sqlite3/export/"
             )
 
             self.assertEqual(export_response.status_code, 200)
@@ -4022,8 +4021,9 @@ class APITests(FinanceTestCase):
 
     def test_uploads_over_the_size_limit_are_refused(self):
         body = "ID,Date,Description,Amount\napi-1,2026-01-02,McDonalds,-12.50\n"
-        with patch("finance.views.MAX_IMPORT_FILE_BYTES", 20), patch(
-            "finance.views.MAX_BACKUP_FILE_BYTES", 5
+        with (
+            patch("finance.views.MAX_IMPORT_FILE_BYTES", 20),
+            patch("finance.views.MAX_BACKUP_FILE_BYTES", 5),
         ):
             responses = [
                 self.client.post(
@@ -4278,8 +4278,9 @@ class MaintenanceRestoreTests(TransactionTestCase):
             amount=Decimal("-8.00"),
         )
 
-        with tempfile.TemporaryDirectory() as temp_dir, self.settings(
-            DATA_DIR=Path(temp_dir)
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            self.settings(DATA_DIR=Path(temp_dir)),
         ):
             backup_dir = Path(temp_dir) / "backups"
             backup_dir.mkdir()

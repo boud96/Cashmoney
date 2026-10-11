@@ -1,0 +1,5 @@
+# The rules this codebase is checked against: E4, E7, E9 and F, which were ruff's
+# defaults until its default set grew. Opt into more rules deliberately, fixing what
+# they find in the same change.
+[lint]
+select = ["E4", "E7", "E9", "F"]
