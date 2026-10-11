@@ -3366,6 +3366,33 @@ class APITests(FinanceTestCase):
         self.assertEqual(payload["want_need_investment"], WantNeedInvestment.NEED)
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
 
+    def test_transaction_patch_validates_the_amount(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            amount=Decimal("-90.00"),
+        )
+        url = f"/api/transactions/{transaction_obj.id}/"
+
+        rejected = {
+            value: self.patch_json(url, {"amount": value})
+            for value in ["", None, "NaN", "Infinity", "abc", "12.345", "1e15"]
+        }
+        accepted = self.patch_json(url, {"amount": "15.5"})
+        transaction_obj.refresh_from_db()
+
+        for value, response in rejected.items():
+            self.assertEqual(response.status_code, 400, value)
+        self.assertEqual(json_body(rejected[""])["error"], "Amount must be a number")
+        self.assertEqual(
+            json_body(rejected["12.345"])["error"],
+            "Amount can have at most 2 decimal places",
+        )
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(transaction_obj.amount, Decimal("15.50"))
+        self.assertEqual(transaction_obj.direction, Direction.INCOME)
+
     def test_dashboard_summary_uses_converted_default_currency_amounts(self):
         settings_obj = FinanceSettings.load()
         settings_obj.default_currency = "CZK"
