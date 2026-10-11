@@ -544,7 +544,12 @@ def cache_exchange_rate_rows(rows):
     return ExchangeRate.objects.count() - before
 
 
-def build_rate_lookup(currencies, end_date):
+def build_rate_lookup(currencies, end_date, start_date=None):
+    """Cached rates for the currencies up to end_date, as sorted dates and rates.
+
+    With start_date, rates older than each currency's last one on or before it are left
+    out: no date from start_date on can use them (CR-37).
+    """
     quote_currencies = [
         currency for currency in currencies if currency != CANONICAL_RATE_BASE_CURRENCY
     ]
@@ -552,15 +557,23 @@ def build_rate_lookup(currencies, end_date):
     if not quote_currencies or not end_date:
         return lookup
 
-    rates = (
-        ExchangeRate.objects.filter(
-            source=FRANKFURTER_SOURCE,
-            base_currency=CANONICAL_RATE_BASE_CURRENCY,
-            quote_currency__in=quote_currencies,
-            date__lte=end_date,
+    rates = ExchangeRate.objects.filter(
+        source=FRANKFURTER_SOURCE,
+        base_currency=CANONICAL_RATE_BASE_CURRENCY,
+        quote_currency__in=quote_currencies,
+        date__lte=end_date,
+    )
+    if start_date:
+        floors = (
+            rates.filter(date__lte=start_date)
+            .values("quote_currency")
+            .annotate(floor=Max("date"))
+            .values_list("floor", flat=True)
         )
-        .order_by("quote_currency", "date")
-        .values_list("quote_currency", "date", "rate")
+        if floors:
+            rates = rates.filter(date__gte=min(floors))
+    rates = rates.order_by("quote_currency", "date").values_list(
+        "quote_currency", "date", "rate"
     )
     for quote_currency, rate_date, rate in rates:
         bucket = lookup.setdefault(quote_currency, {"dates": [], "rates": []})
@@ -640,7 +653,14 @@ def recalculate_transaction_conversions(queryset=None, default_currency=None):
         }
 
     currencies = transaction_currencies(queryset, default_currency)
-    lookup = build_rate_lookup(currencies, end_date)
+    if currencies == [default_currency]:
+        # Every row is in the default currency: native conversions need no rates. A row
+        # edit runs this for one row, and loading every cached rate was most of its cost.
+        lookup = {}
+    else:
+        lookup = build_rate_lookup(
+            currencies, end_date, start_date=date_range["start_date"]
+        )
     processed = 0
     missing_rates = 0
     changed = []

@@ -64,6 +64,7 @@ from .services import (
     ExchangeRateProviderError,
     FrankfurterExchangeRateProvider,
     available_currency_options,
+    build_rate_lookup,
     clear_currency_list_cache,
     recalculate_transaction_conversions,
     sync_missing_exchange_rates,
@@ -3459,6 +3460,59 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["monthly"], [])
         self.assertEqual(payload["missing_conversions"], 1)
+
+    def test_a_row_recalculation_loads_only_the_rates_it_can_use(self):
+        # Every row edit recalculates its row (CR-37). Rates older than the last one on or
+        # before the row's date can't apply, and a row in the default currency needs none.
+        for day, czk, usd in [
+            ("2024-01-01", "25.0", "1.20"),
+            ("2024-01-05", "25.5", "1.25"),
+            ("2024-01-10", "26.0", "1.30"),
+            ("2024-01-20", "27.0", "1.40"),
+        ]:
+            for quote, rate in (("CZK", czk), ("USD", usd)):
+                ExchangeRate.objects.create(
+                    date=day,
+                    base_currency="EUR",
+                    quote_currency=quote,
+                    rate=Decimal(rate),
+                )
+        foreign = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2024-01-12",
+            description="Foreign lunch",
+            amount=Decimal("-13.00"),
+            currency="USD",
+        )
+        native = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2024-01-12",
+            description="Lunch",
+            amount=Decimal("-100.00"),
+            currency="CZK",
+        )
+
+        lookup = build_rate_lookup(
+            ["CZK", "USD"], date(2024, 1, 12), start_date=date(2024, 1, 7)
+        )
+        with patch(
+            "finance.services.build_rate_lookup", wraps=build_rate_lookup
+        ) as build:
+            for row in (native, foreign):
+                recalculate_transaction_conversions(
+                    Transaction.objects.filter(id=row.id), default_currency="CZK"
+                )
+        native.refresh_from_db()
+        foreign.refresh_from_db()
+
+        self.assertEqual(lookup["USD"]["dates"], [date(2024, 1, 5), date(2024, 1, 10)])
+        self.assertEqual(build.call_count, 1)  # for the USD row only
+        self.assertEqual(native.conversion_status, Transaction.CONVERSION_STATUS_NATIVE)
+        self.assertEqual(native.converted_amount, Decimal("-100.00"))
+        # 26.0 / 1.30 = 20 CZK per USD, from the 10 January rates.
+        self.assertEqual(foreign.conversion_rate, Decimal("20.0000000000"))
+        self.assertEqual(foreign.converted_amount, Decimal("-260.00"))
+        self.assertEqual(foreign.conversion_rate_date, date(2024, 1, 10))
 
     def test_exchange_rate_sync_caches_flat_provider_rows_and_recalculates(self):
         settings_obj = FinanceSettings.load()
