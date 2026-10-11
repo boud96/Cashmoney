@@ -1500,21 +1500,20 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(json_body(response)["error"], "CSV file is empty")
 
-    def test_transaction_create_update_filters_and_pagination(self):
-        response = self.post_json(
-            "/api/transactions/",
-            {
-                "bank_account_id": str(self.account.id),
-                "transaction_date": "2026-01-02",
-                "description": "McDonalds Prague",
-                "amount": "-12.50",
-                "subcategory_id": str(self.subcategory.id),
-                "tag_ids": [str(self.tag.id)],
-                "want_need_investment": WantNeedInvestment.WANT,
-            },
+    def test_transaction_update_filters_and_pagination(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="McDonalds Prague",
+            amount=Decimal("-12.50"),
+            subcategory=self.subcategory,
+            want_need_investment=WantNeedInvestment.WANT,
         )
-        self.assertEqual(response.status_code, 201)
-        transaction_id = json_body(response)["id"]
+        transaction_obj.tags.add(self.tag)
+        transaction_id = str(transaction_obj.id)
+        # Transactions come from imports; the unused create endpoint, which skipped
+        # import dedupe and categorization, is gone.
+        self.assertEqual(self.post_json("/api/transactions/", {}).status_code, 405)
 
         patch = self.patch_json(
             f"/api/transactions/{transaction_id}/",
@@ -2107,13 +2106,13 @@ class APITests(FinanceTestCase):
         self.assertFalse(outside_filter.is_ignored)
         self.assertFalse(outside_filter.is_categorization_locked)
 
+        # The old single-assignment payload is no longer understood.
         legacy_response = self.post_json(
             "/api/transactions/bulk-assign/?date_from=2026-01-01&include_ignored=true",
             {"assignment_type": "tag", "tag_id": str(assigned_tag.id)},
         )
 
-        self.assertEqual(legacy_response.status_code, 200)
-        self.assertEqual(json_body(legacy_response)["actions"][0]["field"], "tags")
+        self.assertEqual(legacy_response.status_code, 400)
 
     def test_internal_transfer_preview_and_apply_marks_confirmed_pairs(self):
         transfer_subcategory = Subcategory.objects.create(

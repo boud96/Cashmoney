@@ -1278,64 +1278,6 @@ class TransactionCollectionView(JsonView):
             }
         )
 
-    def post(self, request):
-        data = parse_json_body(request)
-        transaction_obj = Transaction.objects.create(
-            original_id=clean_text(data.get("original_id"), "original_id"),
-            bank_account=optional_object(
-                BankAccount, data.get("bank_account_id"), "bank_account_id"
-            ),
-            transaction_date=parse_date_value(
-                require_field(data, "transaction_date"), "transaction_date"
-            ),
-            posted_date=parse_date_value(data.get("posted_date"), "posted_date"),
-            description=clean_text(data.get("description"), "description"),
-            amount=parse_decimal(require_field(data, "amount")),
-            currency=clean_currency_code(data.get("currency", "CZK"), "currency"),
-            counterparty_account_number=clean_text(
-                data.get("counterparty_account_number"), "counterparty_account_number"
-            ),
-            counterparty_name=clean_text(
-                data.get("counterparty_name"), "counterparty_name"
-            ),
-            transaction_type=clean_text(
-                data.get("transaction_type"), "transaction_type"
-            ),
-            variable_symbol=clean_text(data.get("variable_symbol"), "variable_symbol"),
-            specific_symbol=clean_text(data.get("specific_symbol"), "specific_symbol"),
-            constant_symbol=clean_text(data.get("constant_symbol"), "constant_symbol"),
-            counterparty_note=clean_text(
-                data.get("counterparty_note"), "counterparty_note"
-            ),
-            my_note=clean_text(data.get("my_note"), "my_note"),
-            other_note=clean_text(data.get("other_note"), "other_note"),
-            subcategory=optional_object(
-                Subcategory, data.get("subcategory_id"), "subcategory_id"
-            ),
-            want_need_investment=clean_choice(
-                data.get("want_need_investment"),
-                "want_need_investment",
-                WantNeedInvestment.CHOICES,
-            ),
-            is_ignored=parse_bool(data.get("is_ignored"), default=False),
-            raw_data=clean_dict(data.get("raw_data"), "raw_data"),
-        )
-        if "tag_ids" in data:
-            set_tags(transaction_obj, data["tag_ids"])
-        settings_obj = FinanceSettings.load()
-        recalculate_transaction_conversions(
-            Transaction.objects.filter(id=transaction_obj.id),
-            default_currency=settings_obj.default_currency,
-        )
-        transaction_obj.refresh_from_db()
-        return json_response(
-            serialize_transaction(
-                transaction_obj,
-                default_currency=settings_obj.default_currency,
-            ),
-            status=201,
-        )
-
 
 class UncategorizedSuggestionView(JsonView):
     def get(self, request):
@@ -1610,30 +1552,6 @@ class BulkDeleteTransactionsView(JsonView):
         return json_response({"deleted": delete_transactions(queryset)})
 
 
-def legacy_bulk_assign_payload(data):
-    assignment_type = clean_text(
-        require_field(data, "assignment_type"), "assignment_type", required=True
-    )
-    if assignment_type == "subcategory":
-        return {"subcategory_id": require_field(data, "subcategory_id")}
-    if assignment_type == "tag":
-        return {
-            "tag_mode": "add",
-            "tag_ids": [require_field(data, "tag_id")],
-        }
-    if assignment_type == "want_need_investment":
-        return {
-            "want_need_investment": require_field(data, "want_need_investment"),
-        }
-    raise APIValidationError(
-        "Invalid assignment type",
-        {
-            "field": "assignment_type",
-            "allowed": ["subcategory", "tag", "want_need_investment"],
-        },
-    )
-
-
 class BulkAssignTransactionsView(JsonView):
     def post(self, request):
         data = parse_json_body(request)
@@ -1641,9 +1559,6 @@ class BulkAssignTransactionsView(JsonView):
         transaction_ids = list(queryset.values_list("id", flat=True))
         updated_count = len(transaction_ids)
         actions = []
-
-        if "assignment_type" in data:
-            data = legacy_bulk_assign_payload(data)
 
         update_values = {"updated_at": timezone.now()}
         should_lock_categorization = False
