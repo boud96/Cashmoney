@@ -45,7 +45,7 @@ from .serializers import (
     serialize_transaction,
     transaction_converted_amount,
 )
-from .statement_parsers import parse_camt053
+from .statement_parsers import CZECH_IBAN_RE, parse_camt053
 
 ENCODING_CANDIDATES = ["utf-8-sig", "utf-8", "cp1250", "windows-1250", "latin-1"]
 DELIMITER_CANDIDATES = [",", ";", "\t", "|"]
@@ -116,6 +116,57 @@ def clean_account_number_variants(value):
         account_without_bank_code = raw_value.rsplit("/", 1)[0]
         variants.add(clean_account_number(account_without_bank_code))
     return {variant for variant in variants if variant}
+
+
+LOCAL_ACCOUNT_NUMBER_RE = re.compile(r"(?:(\d+)-)?(\d+)(?:/(\d+))?")
+ACCOUNT_TOKEN_RE = re.compile(r"[0-9A-Za-z]+(?:[-/][0-9A-Za-z]+)*")
+SPACED_IBAN_RE = re.compile(r"\b(?:CZ|SK)\d{2}(?: ?\d{4}){5}\b", re.IGNORECASE)
+# Shorter numbers in free text (symbols, amounts, references) match accounts by chance.
+MIN_ACCOUNT_REFERENCE_LENGTH = 6
+
+
+def account_number_variants(value):
+    """Comparable forms of an account number, with and without the bank code.
+
+    Czech-style numbers (prefix-number/bank) and Czech/Slovak IBANs become digits
+    without separators or leading zeros, so "000000-1234567890/0800" and
+    "CZ65 0800 0000 0012 3456 7890" both match "1234567890/0800".
+    """
+    raw = re.sub(r"\s+", "", str(value or ""))
+    iban = CZECH_IBAN_RE.match(raw.upper())
+    if iban:
+        _country, bank_code, prefix, number = iban.groups()
+    else:
+        local = LOCAL_ACCOUNT_NUMBER_RE.fullmatch(raw)
+        if not local:
+            cleaned = clean_account_number(raw)
+            return {cleaned} if cleaned else set()
+        prefix, number, bank_code = local.groups()
+    account = (prefix or "").lstrip("0") + number.lstrip("0")
+    if not account:
+        return set()
+    return {account, account + bank_code} if bank_code else {account}
+
+
+def text_account_variants(text):
+    """Account-number forms of each account-like token in one field of text.
+
+    Tokens are compared whole, so digits from neighbouring fields or from a longer
+    reference number never combine into an account number.
+    """
+    field_text = SPACED_IBAN_RE.sub(
+        lambda match: match.group(0).replace(" ", ""), str(text or "")
+    )
+    variants = set()
+    for token in ACCOUNT_TOKEN_RE.findall(field_text):
+        if not any(char.isdigit() for char in token):
+            continue
+        variants.update(
+            variant
+            for variant in account_number_variants(token)
+            if len(variant) >= MIN_ACCOUNT_REFERENCE_LENGTH
+        )
+    return variants
 
 
 # Dashes that exports use as a minus sign: minus, figure dash, en dash, em dash,
@@ -1211,7 +1262,7 @@ class CategorizationService:
         self.own_account_numbers = [
             {
                 "id": account_id,
-                "numbers": clean_account_number_variants(account_number),
+                "numbers": account_number_variants(account_number),
             }
             for account_id, account_number in BankAccount.objects.values_list(
                 "id", "account_number"
@@ -1308,7 +1359,7 @@ class CategorizationService:
         current_account_number = transaction_data.get("bank_account_account_number")
         if current_account and getattr(current_account, "account_number", None):
             current_account_number = current_account.account_number
-        current_account_numbers = clean_account_number_variants(current_account_number)
+        current_account_numbers = account_number_variants(current_account_number)
 
         account_numbers = set()
         for account in self.own_account_numbers:
@@ -1320,15 +1371,16 @@ class CategorizationService:
         if not account_numbers:
             return False
 
-        counterparty_accounts = clean_account_number_variants(
+        counterparty_accounts = account_number_variants(
             transaction_data.get("counterparty_account_number")
         )
         if counterparty_accounts.intersection(account_numbers):
             return True
 
-        normalized_text = clean_account_number(categorization_text)
+        # build_categorization_text joins the fields with " | "; match each on its own.
         return any(
-            account_number in normalized_text for account_number in account_numbers
+            text_account_variants(field_text) & account_numbers
+            for field_text in str(categorization_text or "").split(" | ")
         )
 
 
@@ -1891,22 +1943,13 @@ def internal_transfer_transaction_summary(transaction_obj):
 def transaction_mentions_account(transaction_obj, account):
     if not transaction_obj or not account or not account.account_number:
         return False
-    variants = {
-        variant
-        for variant in clean_account_number_variants(account.account_number)
-        if variant
-    }
+    variants = account_number_variants(account.account_number)
     if not variants:
         return False
-    for field_name in INTERNAL_TRANSFER_TEXT_FIELDS:
-        normalized_value = clean_account_number(
-            getattr(transaction_obj, field_name, "")
-        )
-        if normalized_value and any(
-            variant in normalized_value for variant in variants
-        ):
-            return True
-    return False
+    return any(
+        text_account_variants(getattr(transaction_obj, field_name, "")) & variants
+        for field_name in INTERNAL_TRANSFER_TEXT_FIELDS
+    )
 
 
 def shared_transfer_symbols(outgoing_transaction, incoming_transaction):

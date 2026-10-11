@@ -40,6 +40,7 @@ from .services import (
     FrankfurterExchangeRateProvider,
     recalculate_transaction_conversions,
     sync_missing_exchange_rates,
+    transaction_mentions_account,
 )
 from .statement_parsers import parse_camt053
 
@@ -755,6 +756,42 @@ class CategorizationTests(FinanceTestCase):
 
 
 @override_settings(ALLOWED_HOSTS=["testserver", "127.0.0.1", "localhost"])
+class AccountReferenceTests(FinanceTestCase):
+    def setUp(self):
+        super().setUp()
+        self.savings = BankAccount.objects.create(
+            name="Savings", account_number="1234567890/0800"
+        )
+
+    def test_auto_ignore_needs_a_whole_account_number(self):
+        categorizer = CategorizationService()
+
+        def ignored(text, **data):
+            return categorizer.apply(
+                text, {"bank_account": self.account, **data}
+            ).is_ignored
+
+        # Digits glued from neighbouring fields or buried in longer numbers don't count.
+        self.assertFalse(ignored("VS 12345 | 67890"))
+        self.assertFalse(ignored("Ref 991234567890"))
+        self.assertFalse(ignored("Card 1234567890123456"))
+        # Written-out forms of the account do.
+        self.assertTrue(ignored("To 1234567890/0800"))
+        self.assertTrue(ignored("To 000000-1234567890/0800"))
+        self.assertTrue(ignored("To CZ65 0800 0000 0012 3456 7890"))
+        self.assertTrue(
+            ignored("Transfer", counterparty_account_number="0000001234567890/0800")
+        )
+
+    def test_transfer_scoring_needs_a_whole_account_number(self):
+        def mentions(description):
+            transaction_obj = Transaction(description=description)
+            return transaction_mentions_account(transaction_obj, self.savings)
+
+        self.assertFalse(mentions("Ref 991234567890"))
+        self.assertTrue(mentions("Transfer to 1234567890/0800"))
+
+
 class APITests(FinanceTestCase):
     def setUp(self):
         super().setUp()
