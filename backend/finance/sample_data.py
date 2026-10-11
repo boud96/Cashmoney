@@ -9,6 +9,7 @@ from .models import (
     CSVImport,
     CSVMapping,
     Category,
+    FinanceSettings,
     Keyword,
     Subcategory,
     Tag,
@@ -28,35 +29,81 @@ def sample_name(value):
 
 @transaction.atomic
 def delete_sample_data():
-    sample_imports = CSVImport.objects.filter(source_filename=SAMPLE_IMPORT_SOURCE)
-    counts = {
-        "transactions": Transaction.objects.filter(
-            import_batch__in=sample_imports
-        ).count(),
-        "imports": sample_imports.count(),
-        "keywords": Keyword.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-        "bank_accounts": BankAccount.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "csv_mappings": CSVMapping.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "tags": Tag.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-        "subcategories": Subcategory.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "categories": Category.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-    }
+    """Delete the first-launch sample data, keeping sample items the user adopted.
 
-    Transaction.objects.filter(import_batch__in=sample_imports).delete()
+    Sample objects are the ones the seeder flagged with is_sample. Sample
+    transactions and imports always go. A sample definition is kept when the user
+    renamed it or when their own data still uses it, so deleting it can't
+    uncategorize or orphan real transactions. Kept items lose the flag and count as
+    the user's own from then on.
+
+    Returns {"counts": {...deleted per type}, "kept": [{"type", "name", "reason"}]}.
+    """
+    counts = {}
+    kept = []
+
+    sample_imports = CSVImport.objects.filter(is_sample=True)
+    sample_transactions = Transaction.objects.filter(import_batch__in=sample_imports)
+    counts["transactions"] = sample_transactions.count()
+    sample_transactions.delete()
+    counts["imports"] = sample_imports.count()
     sample_imports.delete()
-    Keyword.objects.filter(name__startswith=SAMPLE_PREFIX).delete()
-    BankAccount.objects.filter(name__startswith=SAMPLE_PREFIX).delete()
-    CSVMapping.objects.filter(name__startswith=SAMPLE_PREFIX).delete()
-    Tag.objects.filter(name__startswith=SAMPLE_PREFIX).delete()
-    Subcategory.objects.filter(name__startswith=SAMPLE_PREFIX).delete()
-    Category.objects.filter(name__startswith=SAMPLE_PREFIX).delete()
-    return counts
+
+    def delete_unless_used(model, kind, count_key, reason_to_keep):
+        deleted = 0
+        for obj in model.objects.filter(is_sample=True).order_by("name"):
+            if not obj.name.startswith(SAMPLE_PREFIX):
+                reason = "you renamed it"
+            else:
+                reason = reason_to_keep(obj)
+            if reason:
+                # Adopted: from now on it's the user's own data, not sample data.
+                model.objects.filter(pk=obj.pk).update(is_sample=False)
+                kept.append({"type": kind, "name": obj.name, "reason": reason})
+            else:
+                obj.delete()
+                deleted += 1
+        counts[count_key] = deleted
+
+    def account_reason(account):
+        return "it has your transactions" if account.transactions.exists() else ""
+
+    def mapping_reason(mapping):
+        if BankAccount.objects.filter(default_csv_mapping=mapping).exists():
+            return "an account uses it as its default mapping"
+        if CSVImport.objects.filter(csv_mapping=mapping).exists():
+            return "your imports used it"
+        return ""
+
+    def tag_reason(tag):
+        if Transaction.objects.filter(tags=tag).exists():
+            return "your transactions have it"
+        if tag.keywords.exists():
+            return "your keywords add it"
+        return ""
+
+    transfer_subcategory_id = FinanceSettings.load().internal_transfer_subcategory_id
+
+    def subcategory_reason(subcategory):
+        if subcategory.transactions.exists():
+            return "your transactions use it"
+        if subcategory.keywords.exists():
+            return "your keywords use it"
+        if subcategory.id == transfer_subcategory_id:
+            return "it is the internal-transfer subcategory"
+        return ""
+
+    def category_reason(category):
+        return "it still has subcategories" if category.subcategories.exists() else ""
+
+    # Order matters: each step sees only what the earlier steps left behind.
+    delete_unless_used(Keyword, "keyword", "keywords", lambda keyword: "")
+    delete_unless_used(BankAccount, "bank account", "bank_accounts", account_reason)
+    delete_unless_used(CSVMapping, "mapping", "csv_mappings", mapping_reason)
+    delete_unless_used(Tag, "tag", "tags", tag_reason)
+    delete_unless_used(Subcategory, "subcategory", "subcategories", subcategory_reason)
+    delete_unless_used(Category, "category", "categories", category_reason)
+    return {"counts": counts, "kept": kept}
 
 
 @transaction.atomic
@@ -121,6 +168,7 @@ def create_csv_mappings():
     standard, _created = CSVMapping.objects.update_or_create(
         name=sample_name("Standard CSV Mapping"),
         defaults={
+            "is_sample": True,
             "description": SAMPLE_DESCRIPTION,
             "delimiter": ",",
             "quotechar": '"',
@@ -149,6 +197,7 @@ def create_csv_mappings():
     airbank, _created = CSVMapping.objects.update_or_create(
         name=sample_name("Airbank Style CSV Mapping"),
         defaults={
+            "is_sample": True,
             "description": SAMPLE_DESCRIPTION,
             "delimiter": ";",
             "quotechar": '"',
@@ -192,6 +241,7 @@ def create_bank_accounts(default_mapping):
         account, _created = BankAccount.objects.update_or_create(
             account_number=account_number,
             defaults={
+                "is_sample": True,
                 "name": sample_name(label),
                 "bank_name": bank_name,
                 "currency": "CZK",
@@ -215,7 +265,11 @@ def create_categories():
     for label, color in specs:
         category, _created = Category.objects.update_or_create(
             name=sample_name(label),
-            defaults={"description": SAMPLE_DESCRIPTION, "color": color},
+            defaults={
+                "is_sample": True,
+                "description": SAMPLE_DESCRIPTION,
+                "color": color,
+            },
         )
         categories[label] = category
     return categories
@@ -235,7 +289,7 @@ def create_subcategories(categories):
             subcategory, _created = Subcategory.objects.update_or_create(
                 category=categories[category_label],
                 name=sample_name(label),
-                defaults={"description": SAMPLE_DESCRIPTION},
+                defaults={"is_sample": True, "description": SAMPLE_DESCRIPTION},
             )
             subcategories[(category_label, label)] = subcategory
     return subcategories
@@ -253,7 +307,11 @@ def create_tags():
     for label, color in specs:
         tag, _created = Tag.objects.update_or_create(
             name=sample_name(label),
-            defaults={"description": SAMPLE_DESCRIPTION, "color": color},
+            defaults={
+                "is_sample": True,
+                "description": SAMPLE_DESCRIPTION,
+                "color": color,
+            },
         )
         tags[label] = tag
     return tags
@@ -355,6 +413,7 @@ def create_keywords(subcategories, tags):
         keyword, _created = Keyword.objects.update_or_create(
             name=sample_name(label),
             defaults={
+                "is_sample": True,
                 "include_terms": terms,
                 "exclude_terms": [],
                 "subcategory": subcategory,
@@ -368,7 +427,7 @@ def create_keywords(subcategories, tags):
 
 
 def create_sample_transactions(mapping, accounts):
-    if CSVImport.objects.filter(source_filename=SAMPLE_IMPORT_SOURCE).exists():
+    if CSVImport.objects.filter(is_sample=True).exists():
         return 0
 
     rows = [
@@ -643,4 +702,5 @@ def create_sample_transactions(mapping, accounts):
         BytesIO("\n".join(csv_lines).encode("utf-8")),
         SAMPLE_IMPORT_SOURCE,
     )
+    CSVImport.objects.filter(id=csv_import.id).update(is_sample=True)
     return csv_import.created_count

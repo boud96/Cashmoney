@@ -42,12 +42,7 @@ from .models import (
     Tag,
     Transaction,
 )
-from .sample_data import (
-    SAMPLE_IMPORT_SOURCE,
-    SAMPLE_PREFIX,
-    delete_sample_data,
-    seed_sample_data,
-)
+from .sample_data import delete_sample_data, seed_sample_data
 from .serializers import (
     serialize_bank_account,
     serialize_category,
@@ -1833,27 +1828,15 @@ def maintenance_counts():
         "imports": CSVImport.objects.count(),
         "exchange_rates": ExchangeRate.objects.count(),
         "sample_transactions": Transaction.objects.filter(
-            import_batch__source_filename=SAMPLE_IMPORT_SOURCE
+            import_batch__is_sample=True
         ).count(),
-        "sample_imports": CSVImport.objects.filter(
-            source_filename=SAMPLE_IMPORT_SOURCE
-        ).count(),
-        "sample_bank_accounts": BankAccount.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "sample_csv_mappings": CSVMapping.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "sample_categories": Category.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "sample_subcategories": Subcategory.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
-        "sample_tags": Tag.objects.filter(name__startswith=SAMPLE_PREFIX).count(),
-        "sample_keywords": Keyword.objects.filter(
-            name__startswith=SAMPLE_PREFIX
-        ).count(),
+        "sample_imports": CSVImport.objects.filter(is_sample=True).count(),
+        "sample_bank_accounts": BankAccount.objects.filter(is_sample=True).count(),
+        "sample_csv_mappings": CSVMapping.objects.filter(is_sample=True).count(),
+        "sample_categories": Category.objects.filter(is_sample=True).count(),
+        "sample_subcategories": Subcategory.objects.filter(is_sample=True).count(),
+        "sample_tags": Tag.objects.filter(is_sample=True).count(),
+        "sample_keywords": Keyword.objects.filter(is_sample=True).count(),
         "bank_accounts": BankAccount.objects.count(),
         "csv_mappings": CSVMapping.objects.count(),
         "categories": Category.objects.count(),
@@ -1924,10 +1907,12 @@ class MaintenanceSummaryView(JsonView):
 class MaintenanceSampleDataView(JsonView):
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_SAMPLE_DATA)
+        result = delete_sample_data()
         return json_response(
             {
                 "deleted": True,
-                "counts": delete_sample_data(),
+                "counts": result["counts"],
+                "kept": result["kept"],
                 "summary": maintenance_counts(),
             }
         )

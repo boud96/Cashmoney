@@ -106,6 +106,7 @@ class FinanceSettings(TimestampedModel):
 
 class CSVMapping(TimestampedModel):
     name = models.CharField(max_length=128, unique=True)
+    is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
     file_format = models.CharField(
         max_length=16,
@@ -164,6 +165,7 @@ class CSVMapping(TimestampedModel):
 
 class BankAccount(TimestampedModel):
     name = models.CharField(max_length=128)
+    is_sample = models.BooleanField(default=False)
     account_number = models.CharField(max_length=128, blank=True, default="")
     bank_name = models.CharField(max_length=128, blank=True)
     currency = models.CharField(max_length=3, default="CZK")
@@ -192,6 +194,7 @@ class BankAccount(TimestampedModel):
 
 class Category(TimestampedModel):
     name = models.CharField(max_length=128, unique=True)
+    is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
     color = models.CharField(
         max_length=7,
@@ -217,6 +220,7 @@ class Subcategory(TimestampedModel):
         Category, on_delete=models.CASCADE, related_name="subcategories"
     )
     name = models.CharField(max_length=128)
+    is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
     color = models.CharField(
         max_length=7,
@@ -244,6 +248,7 @@ class Subcategory(TimestampedModel):
 
 class Tag(TimestampedModel):
     name = models.CharField(max_length=128, unique=True)
+    is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
     color = models.CharField(
         max_length=7,
@@ -286,6 +291,7 @@ class CSVImport(TimestampedModel):
     ]
 
     source_filename = models.CharField(max_length=255, blank=True)
+    is_sample = models.BooleanField(default=False)
     bank_account = models.ForeignKey(
         BankAccount, on_delete=models.SET_NULL, null=True, blank=True
     )
@@ -522,6 +528,7 @@ class InternalTransferMatch(TimestampedModel):
 
 class Keyword(TimestampedModel):
     name = models.CharField(max_length=128)
+    is_sample = models.BooleanField(default=False)
     include_terms = models.JSONField(default=empty_list, blank=True)
     exclude_terms = models.JSONField(default=empty_list, blank=True)
     subcategory = models.ForeignKey(

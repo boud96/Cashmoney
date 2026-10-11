@@ -13,6 +13,7 @@ from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError, connection, transaction
+from django.db.migrations.executor import MigrationExecutor
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
@@ -32,7 +33,12 @@ from .models import (
     Transaction,
     TransactionTag,
 )
-from .sample_data import SAMPLE_IMPORT_SOURCE, SAMPLE_PREFIX, delete_sample_data
+from .sample_data import (
+    SAMPLE_IMPORT_SOURCE,
+    SAMPLE_PREFIX,
+    delete_sample_data,
+    sample_name,
+)
 from .services import (
     CSVImportService,
     CategorizationService,
@@ -393,6 +399,52 @@ class SampleDataCommandTests(TestCase):
         self.assertEqual(self.sample_counts()["transactions"], 0)
         self.assertTrue(Category.objects.filter(id=user_category.id).exists())
         self.assertTrue(Transaction.objects.filter(id=user_transaction.id).exists())
+
+    def test_delete_sample_data_keeps_sample_items_the_user_adopted(self):
+        self.seed("--skip-admin")
+        main = BankAccount.objects.get(name=sample_name("Main Checking"))
+        groceries = Subcategory.objects.get(name=sample_name("Groceries"))
+        recurring = Tag.objects.get(name=sample_name("Recurring"))
+        home = Category.objects.get(name=sample_name("Home"))
+        own = Transaction.objects.create(
+            bank_account=main,
+            transaction_date="2026-05-01",
+            description="Real groceries",
+            amount=Decimal("-300.00"),
+            subcategory=groceries,
+        )
+        own.tags.add(recurring)
+        bakery = Subcategory.objects.create(name="Bakery", category=home)
+        Tag.objects.filter(name=sample_name("Vacation")).update(name="Holidays")
+        lookalike = Category.objects.create(name=sample_name("Mine"))
+
+        result = delete_sample_data()
+
+        kept = {(item["type"], item["name"]): item["reason"] for item in result["kept"]}
+        self.assertEqual(
+            kept,
+            {
+                ("bank account", main.name): "it has your transactions",
+                (
+                    "mapping",
+                    sample_name("Standard CSV Mapping"),
+                ): "an account uses it as its default mapping",
+                ("tag", "Holidays"): "you renamed it",
+                ("tag", recurring.name): "your transactions have it",
+                ("subcategory", groceries.name): "your transactions use it",
+                ("category", sample_name("Food")): "it still has subcategories",
+                ("category", home.name): "it still has subcategories",
+            },
+        )
+        self.assertEqual(list(Transaction.objects.all()), [own])
+        self.assertEqual(result["counts"]["bank_accounts"], 2)
+        self.assertFalse(Keyword.objects.exists())
+        self.assertTrue(Subcategory.objects.filter(id=bakery.id).exists())
+        # Kept items become the user's own, so nothing is left flagged.
+        for model in (BankAccount, CSVMapping, Category, Subcategory, Tag, Keyword):
+            self.assertFalse(model.objects.filter(is_sample=True).exists(), model)
+        # Only flagged objects count as samples, whatever their name.
+        self.assertTrue(Category.objects.filter(id=lookalike.id).exists())
 
 
 class CSVImportServiceTests(FinanceTestCase):
@@ -3710,3 +3762,35 @@ class Camt053ImportAPITests(FinanceTestCase):
         self.assertEqual(card.raw_data["transaction_type"], "30000201000")
         foreign = Transaction.objects.get(original_id="F1")
         self.assertEqual(foreign.raw_data["instructed_currency"], "USD")
+
+
+class SampleFlagMigrationTests(TransactionTestCase):
+    before = [("finance", "0012_internaltransfermatch_previous_values")]
+    after = [("finance", "0013_sample_flags")]
+
+    def tearDown(self):
+        # Leave the schema at the latest migration for the other tests.
+        MigrationExecutor(connection).migrate(self.after)
+
+    def test_existing_sample_data_is_flagged(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.before)
+        old_apps = executor.loader.project_state(self.before).apps
+        old_category = old_apps.get_model("finance", "Category")
+        old_category.objects.create(name="Sample - Food", description="Sample data")
+        old_category.objects.create(name="Sample - Mine", description="My own")
+        old_import = old_apps.get_model("finance", "CSVImport")
+        old_import.objects.create(source_filename="Sample - initial demo data")
+        old_import.objects.create(source_filename="statement.csv")
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.after)
+
+        self.assertEqual(
+            dict(Category.objects.values_list("name", "is_sample")),
+            {"Sample - Food": True, "Sample - Mine": False},
+        )
+        self.assertEqual(
+            dict(CSVImport.objects.values_list("source_filename", "is_sample")),
+            {"Sample - initial demo data": True, "statement.csv": False},
+        )

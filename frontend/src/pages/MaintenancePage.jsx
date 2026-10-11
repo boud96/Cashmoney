@@ -4,6 +4,19 @@ import { apiDelete, apiFetch, apiGet, apiPost } from "../api.js";
 import { LoadingButton, Metric } from "../components.jsx";
 import { formatBytes, formatCount, formatDateTime } from "../shared.js";
 
+function maintenanceDeleteMessage(title, payload) {
+  if (payload?.safety_backup) {
+    return `${title} completed. Safety backup saved as ${payload.safety_backup}`;
+  }
+  const kept = payload?.kept || [];
+  if (!kept.length) {
+    return `${title} completed`;
+  }
+  const names = kept.slice(0, 3).map((item) => item.name).join(", ");
+  const more = kept.length > 3 ? ` and ${formatCount(kept.length - 3)} more` : "";
+  return `${title} completed. Kept ${formatCount(kept.length)} sample ${kept.length === 1 ? "item" : "items"} you renamed or still use, now treated as your own: ${names}${more}.`;
+}
+
 export default function MaintenancePage({ confirmAction, notify, reloadAll, reloadDashboard, reloadMaintenance, summary }) {
   const [deleting, setDeleting] = useState("");
   const [restoreFile, setRestoreFile] = useState(null);
@@ -66,7 +79,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
   const transactionObjectCount = Number(counts.transactions || 0) + Number(counts.internal_transfer_matches || 0) + Number(counts.imports || 0);
   const sampleDataAction = {
     count: sampleObjectCount,
-    description: "Remove only objects created by the first-launch demo dataset.",
+    description: "Remove the first-launch demo dataset. Sample items you renamed or still use are kept.",
     endpoint: "/maintenance/sample-data/",
     phrase: "DELETE SAMPLE DATA",
     title: "Delete sample data",
@@ -124,11 +137,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
       if (payload?.backups) {
         setBackups(payload.backups);
       }
-      notify(
-        payload?.safety_backup
-          ? `${action.title} completed. Safety backup saved as ${payload.safety_backup}`
-          : `${action.title} completed`
-      );
+      notify(maintenanceDeleteMessage(action.title, payload));
       await Promise.all([reloadMaintenance(), reloadAll(), reloadDashboard()]);
     } catch (error) {
       notify(error.message);
