@@ -111,10 +111,11 @@ REQUIRED_BACKUP_TABLES = {
 
 
 class APIValidationError(Exception):
-    def __init__(self, message, details=None):
+    def __init__(self, message, details=None, status=400):
         super().__init__(message)
         self.message = message
         self.details = details or {}
+        self.status = status
 
 
 def json_response(data, status=200):
@@ -585,7 +586,7 @@ class JsonView(View):
             return json_response({"error": "Invalid JSON body"}, status=400)
         except APIValidationError as exc:
             return json_response(
-                {"error": exc.message, "details": exc.details}, status=400
+                {"error": exc.message, "details": exc.details}, status=exc.status
             )
         except KeyError as exc:
             return json_response(
@@ -1970,10 +1971,21 @@ class MaintenanceRecreateSampleDataView(JsonView):
         )
 
 
+def admin_password_field(data, field_name):
+    value = data.get(field_name)
+    if not isinstance(value, str) or not value:
+        raise APIValidationError("Missing required field", {"field": field_name})
+    return value
+
+
 class MaintenanceAdminUserView(JsonView):
     def post(self, request):
         data = parse_json_body(request)
-        mode = clean_text(data.get("mode"), "mode") or "create"
+        mode = data.get("mode")
+        if mode not in ("create", "reset"):
+            raise APIValidationError(
+                "Unknown mode", {"field": "mode", "allowed": ["create", "reset"]}
+            )
         expected_confirmation = (
             CONFIRM_RESET_ADMIN_PASSWORD
             if mode == "reset"
@@ -1986,14 +1998,9 @@ class MaintenanceAdminUserView(JsonView):
             )
 
         username = clean_text(data.get("username"), "username", required=True)
-        password = clean_text(data.get("password"), "password", required=True)
-        password_confirmation = clean_text(
-            data.get("password_confirmation"),
-            "password_confirmation",
-            required=True,
-        )
-        email_provided = "email" in data
-        email = clean_text(data.get("email"), "email") if email_provided else ""
+        # Passwords are taken as typed: spaces at either end are part of them (CR-44).
+        password = admin_password_field(data, "password")
+        password_confirmation = admin_password_field(data, "password_confirmation")
         if password != password_confirmation:
             raise APIValidationError(
                 "Password confirmation does not match",
@@ -2002,7 +2009,15 @@ class MaintenanceAdminUserView(JsonView):
 
         User = get_user_model()
         user = User.objects.filter(username=username).first()
-        validation_user = user or User(username=username, email=email)
+        if mode == "create" and user is not None:
+            raise APIValidationError(
+                f"A user named {username} already exists.",
+                {"field": "username"},
+                status=409,
+            )
+        if mode == "reset" and user is None:
+            raise Http404(f"There is no user named {username}.")
+        validation_user = user or User(username=username)
         try:
             validate_password(password, validation_user)
         except ValidationError as exc:
@@ -2014,8 +2029,6 @@ class MaintenanceAdminUserView(JsonView):
         created = user is None
         if created:
             user = User(username=username)
-        if created or email_provided:
-            user.email = email
         user.is_active = True
         user.is_staff = True
         user.is_superuser = True

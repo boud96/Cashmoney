@@ -3539,6 +3539,63 @@ class APITests(FinanceTestCase):
         payload = json_body(response)
         self.assertEqual(payload["error"], "Password confirmation does not match")
 
+    def test_maintenance_admin_user_checks_the_mode_and_existing_users(self):
+        User = get_user_model()
+        User.objects.create_user(username="taken", password="Old-Password-7429!")
+        passwords = {
+            "password": "River-Account-7429!",
+            "password_confirmation": "River-Account-7429!",
+        }
+
+        def post(**fields):
+            return self.post_json(
+                "/api/maintenance/admin-user/", {**passwords, **fields}
+            )
+
+        no_mode = post(confirmation="CREATE ADMIN USER", username="new-admin")
+        create_taken = post(
+            mode="create", confirmation="CREATE ADMIN USER", username="taken"
+        )
+        reset_missing = post(
+            mode="reset", confirmation="RESET ADMIN PASSWORD", username="nobody"
+        )
+
+        self.assertEqual(no_mode.status_code, 400)
+        self.assertEqual(json_body(no_mode)["error"], "Unknown mode")
+        self.assertEqual(create_taken.status_code, 409)
+        self.assertEqual(
+            json_body(create_taken)["error"], "A user named taken already exists."
+        )
+        taken = User.objects.get(username="taken")
+        self.assertTrue(taken.check_password("Old-Password-7429!"))
+        self.assertFalse(taken.is_superuser)
+        self.assertEqual(reset_missing.status_code, 404)
+        self.assertEqual(
+            json_body(reset_missing)["error"], "There is no user named nobody."
+        )
+        self.assertFalse(
+            User.objects.filter(username__in=["new-admin", "nobody"]).exists()
+        )
+
+    def test_maintenance_admin_user_keeps_spaces_in_passwords(self):
+        password = "  River-Account-7429!  "
+
+        response = self.post_json(
+            "/api/maintenance/admin-user/",
+            {
+                "confirmation": "CREATE ADMIN USER",
+                "mode": "create",
+                "password": password,
+                "password_confirmation": password,
+                "username": "local-admin",
+            },
+        )
+        user = get_user_model().objects.get(username="local-admin")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(user.check_password(password))
+        self.assertFalse(user.check_password(password.strip()))
+
     def test_maintenance_delete_rejects_wrong_confirmation(self):
         response = self.delete_json(
             "/api/maintenance/transactions/",
