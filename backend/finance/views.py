@@ -618,7 +618,13 @@ class JsonView(View):
             )
         except Http404 as exc:
             return json_response({"error": str(exc), "details": {}}, status=404)
-        except (ObjectDoesNotExist, ValidationError) as exc:
+        except ValidationError as exc:
+            # From a model's own checks (CR-52): say what's wrong, not a dict repr.
+            details = exc.message_dict if hasattr(exc, "error_dict") else {}
+            return json_response(
+                {"error": " ".join(exc.messages), "details": details}, status=400
+            )
+        except ObjectDoesNotExist as exc:
             return json_response({"error": str(exc), "details": {}}, status=400)
         except (UnicodeError, ValueError) as exc:
             return json_response({"error": str(exc), "details": {}}, status=400)

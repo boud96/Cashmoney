@@ -3,11 +3,18 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
-from ..models import InternalTransferMatch, Transaction
-from .base import FinanceTestCase
+from ..models import (
+    BankAccount,
+    ExchangeRate,
+    FinanceSettings,
+    InternalTransferMatch,
+    Transaction,
+)
+from .base import FinanceTestCase, json_body
 
 
 class AdminTests(FinanceTestCase):
@@ -91,3 +98,108 @@ class AdminTests(FinanceTestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assert_unmatched(outgoing, incoming)
+
+    def test_models_refuse_bad_currency_codes_instead_of_cutting_them(self):
+        # CR-52: "EURO" was saved as "EUR". The admin and scripts reach the models
+        # directly, so they check too; lower case is still accepted.
+        with self.assertRaises(ValidationError):
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                amount=Decimal("-1.00"),
+                currency="EURO",
+            )
+        with self.assertRaises(ValidationError):
+            ExchangeRate.objects.create(
+                date="2026-01-02",
+                base_currency="EUR",
+                quote_currency="CZ1",
+                rate=Decimal("25"),
+            )
+        settings_obj = FinanceSettings.load()
+        settings_obj.default_currency = "EU"
+        with self.assertRaises(ValidationError):
+            settings_obj.save()
+        lower_case = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            amount=Decimal("-1.00"),
+            currency="eur",
+        )
+        alias = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            amount=Decimal("-1.00"),
+            currency="Kč",
+        )
+
+        self.assertEqual(lower_case.currency, "EUR")
+        self.assertEqual(alias.currency, "CZK")
+        self.assertEqual(Transaction.objects.count(), 2)
+        self.assertFalse(ExchangeRate.objects.exists())
+        self.assertEqual(FinanceSettings.load().default_currency, "CZK")
+
+    def test_the_admin_form_reports_a_bad_currency_and_no_owners(self):
+        response = self.client.post(
+            f"/admin/finance/bankaccount/{self.account.id}/change/",
+            {
+                "name": self.account.name,
+                "account_number": self.account.account_number,
+                "bank_name": "",
+                "currency": "EU",
+                "owners": "0",
+                "default_csv_mapping": "",
+            },
+        )
+        self.account.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)  # the form again, with errors
+        errors = response.context["adminform"].form.errors
+        self.assertIn("three-letter code", errors["currency"][0])
+        self.assertIn("at least one owner", errors["owners"][0])
+        self.assertEqual(self.account.owners, 1)
+        self.assertEqual(self.account.currency, "CZK")
+
+    def test_an_account_with_no_owners_still_counts_in_split_totals(self):
+        # Saved with owners = 0 through the admin before CR-52: the SQL owner split
+        # divided by zero, and the account's rows counted as missing exchange rates.
+        BankAccount.objects.filter(id=self.account.id).update(owners=0)
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            amount=Decimal("-40.00"),
+            subcategory=self.subcategory,
+        )
+
+        summary = json_body(
+            self.client.get("/api/dashboard/summary/", {"split_by_owners": "true"})
+        )
+
+        self.assertEqual(summary["missing_conversions"], 0)
+        self.assertEqual(summary["monthly"][0]["expense"], "40.00")
+
+    def test_rows_saved_with_old_currency_spellings_can_still_be_edited(self):
+        # Before v0.5.1, "Kč" was stored as "KČ". Saving such a row now repairs it
+        # instead of failing; anything else odd is a 400 that says why, not a 500.
+        legacy, odd = (
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                amount=Decimal("-1.00"),
+            )
+            for _ in range(2)
+        )
+        Transaction.objects.filter(id=legacy.id).update(currency="KČ")
+        Transaction.objects.filter(id=odd.id).update(currency="US$")
+
+        repaired = self.patch_json(f"/api/transactions/{legacy.id}/", {"my_note": "x"})
+        refused = self.patch_json(f"/api/transactions/{odd.id}/", {"my_note": "x"})
+        legacy.refresh_from_db()
+
+        self.assertEqual(repaired.status_code, 200)
+        self.assertEqual(legacy.currency, "CZK")
+        self.assertEqual(refused.status_code, 400)
+        self.assertEqual(
+            json_body(refused)["error"],
+            "Currency must be a three-letter code like CZK or EUR.",
+        )

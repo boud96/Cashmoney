@@ -27,10 +27,10 @@ from django.db.models import (
     Value,
     When,
 )
-from django.db.models.functions import Cast, Coalesce, TruncMonth
+from django.db.models.functions import Cast, Coalesce, Greatest, TruncMonth
 from django.utils import timezone
 
-from .constants import DEFAULT_CATEGORIZATION_FIELDS, ImportFileFormat
+from .constants import CURRENCY_ALIASES, DEFAULT_CATEGORIZATION_FIELDS, ImportFileFormat
 from .models import (
     BankAccount,
     CSVImport,
@@ -207,9 +207,6 @@ def coerce_list(value):
     if isinstance(value, str):
         return [value] if value else []
     return [value]
-
-
-CURRENCY_ALIASES = {"KČ": "CZK", "KC": "CZK", "€": "EUR"}
 
 
 def normalize_currency_code(value, default="CZK"):
@@ -2709,10 +2706,11 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     )
     if split_by_owners:
         # Divide as reals: SQLite stores whole amounts (-10.00) as integers, and
-        # integer division drops the cents (-10 / 3 = -3).
+        # integer division drops the cents (-10 / 3 = -3). At least one owner: an
+        # account saved with 0 (through the admin, before CR-52) divided by zero.
+        owners = Greatest(Coalesce(F("bank_account__owners"), Value(1)), Value(1))
         amount = ExpressionWrapper(
-            converted_amount
-            / Cast(Coalesce(F("bank_account__owners"), Value(1)), FloatField()),
+            converted_amount / Cast(owners, FloatField()),
             output_field=amount_field,
         )
     else:
