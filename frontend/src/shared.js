@@ -781,7 +781,10 @@ export function subtractRelativeDate(date, amount, unit) {
   if (unit === "weeks") {
     next.setDate(next.getDate() - amount * 7);
   } else if (unit === "months") {
-    next.setMonth(next.getMonth() - amount);
+    // Clamp to the target month's last day; setMonth would roll Mar 31 - 1 month into Mar 3.
+    const targetMonth = next.getMonth() - amount;
+    const lastDay = new Date(next.getFullYear(), targetMonth + 1, 0).getDate();
+    next.setFullYear(next.getFullYear(), targetMonth, Math.min(next.getDate(), lastDay));
   } else {
     next.setDate(next.getDate() - amount);
   }
