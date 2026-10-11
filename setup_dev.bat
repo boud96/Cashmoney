@@ -24,7 +24,7 @@ if exist "%FRONTEND%\package.json" (
     if not exist "%FRONTEND%\node_modules" (
         echo Installing frontend dependencies...
         pushd "%FRONTEND%"
-        call "%NPM%" install
+        call "%NPM%" ci
         if errorlevel 1 (
             popd
             exit /b 1
@@ -37,7 +37,7 @@ if exist "%DESKTOP%\package.json" (
     if not exist "%DESKTOP%\node_modules" (
         echo Installing desktop dependencies...
         pushd "%DESKTOP%"
-        call "%NPM%" install
+        call "%NPM%" ci
         if errorlevel 1 (
             popd
             exit /b 1
@@ -82,5 +82,7 @@ exit /b 0
 
 :download_node
 set "NODE_VERSION=24.14.0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $version='%NODE_VERSION%'; $root='%ROOT%'; $tools=Join-Path $root 'tools'; $target=Join-Path $tools 'node'; $zip=Join-Path $tools ('node-v' + $version + '-win-x64.zip'); $url='https://nodejs.org/dist/v' + $version + '/node-v' + $version + '-win-x64.zip'; New-Item -ItemType Directory -Force -Path $tools | Out-Null; if (!(Test-Path -LiteralPath $zip)) { Invoke-WebRequest -Uri $url -OutFile $zip }; $tmp=Join-Path $tools ('node-extract-' + [guid]::NewGuid().ToString()); Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force; $extracted=Get-ChildItem -LiteralPath $tmp -Directory | Select-Object -First 1; if ($null -eq $extracted) { throw 'Node archive did not contain a directory.' }; if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }; Move-Item -LiteralPath $extracted.FullName -Destination $target; Remove-Item -LiteralPath $tmp -Recurse -Force"
+rem SHA256 of node-v24.14.0-win-x64.zip from https://nodejs.org/dist/v24.14.0/SHASUMS256.txt
+set "NODE_SHA256=313fa40c0d7b18575821de8cb17483031fe07d95de5994f6f435f3b345f85c66"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $version='%NODE_VERSION%'; $root='%ROOT%'; $tools=Join-Path $root 'tools'; $target=Join-Path $tools 'node'; $zip=Join-Path $tools ('node-v' + $version + '-win-x64.zip'); $url='https://nodejs.org/dist/v' + $version + '/node-v' + $version + '-win-x64.zip'; New-Item -ItemType Directory -Force -Path $tools | Out-Null; if (!(Test-Path -LiteralPath $zip)) { Invoke-WebRequest -Uri $url -OutFile $zip }; $expected='%NODE_SHA256%'; $actual=(Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLower(); if ($actual -ne $expected) { Remove-Item -LiteralPath $zip -Force; throw ('Node.js archive checksum mismatch: expected ' + $expected + ', got ' + $actual) }; $tmp=Join-Path $tools ('node-extract-' + [guid]::NewGuid().ToString()); Expand-Archive -LiteralPath $zip -DestinationPath $tmp -Force; $extracted=Get-ChildItem -LiteralPath $tmp -Directory | Select-Object -First 1; if ($null -eq $extracted) { throw 'Node archive did not contain a directory.' }; if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }; Move-Item -LiteralPath $extracted.FullName -Destination $target; Remove-Item -LiteralPath $tmp -Recurse -Force"
 exit /b %ERRORLEVEL%

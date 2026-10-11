@@ -1,14 +1,14 @@
 const workflowSteps = [
-  "Define categories, subcategories, tags, and CSV mappings.",
-  "Assign a default CSV mapping to each bank account.",
+  "Define categories, subcategories, tags, and import mappings.",
+  "Assign a default import mapping to each bank account.",
   "Preview and import CSV statements.",
   "Review filters, stats, charts, and transactions on the Dashboard.",
   "Improve keyword rules, then recategorize the filtered transactions.",
 ];
 
 const conceptItems = [
-  ["Bank Account", "Groups imported transactions and decides which CSV mapping is used during import."],
-  ["CSV Mapping", "Describes how a bank export is parsed: dates, separators, columns, currency, and categorization fields."],
+  ["Bank Account", "Groups imported transactions and decides which import mapping is used during import."],
+  ["Import Mapping", "Describes how a bank file (CSV or camt.053 XML) is read: dates, separators, columns, currency, and categorization fields."],
   ["Default Currency", "The reporting currency used by dashboard totals, charts, and converted transaction amounts."],
   ["Category", "The top-level reporting bucket. It is derived from the assigned subcategory."],
   ["Subcategory", "The main assignable classification value for a transaction."],
@@ -19,8 +19,8 @@ const conceptItems = [
 ];
 
 const troubleshootingItems = [
-  ["Import button is disabled", "Choose a CSV file, select a bank account, make sure that account has a default CSV mapping, then run Preview Import first."],
-  ["CSV preview has errors", "Check the CSV mapping delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
+  ["Import button is disabled", "Choose a CSV file, select a bank account, make sure that account has a default import mapping, then run Preview Import first."],
+  ["CSV preview has errors", "Check the import mapping's delimiter, header row, encoding, date format, decimal separator, and required mapped columns."],
   ["No transactions are shown", "A checklist filter with no selected items means show nothing (except Tag, where it means any tag). Use Select all or load a saved filter."],
   ["A row did not recategorize", "It may be locked. Enable Include locked before recategorizing if you intentionally want to reset locked rows."],
   ["Internal transfers are not detected", "Use Find Transfers from Dashboard Actions, increase the date offset if bank posting dates differ, and check that both account statements have been imported."],
@@ -70,17 +70,17 @@ export default function HelpPage() {
           </p>
           <ul>
             <li><strong>App Settings:</strong> set the dashboard default currency, review FX cache status, and configure automatic internal-transfer handling.</li>
-            <li><strong>CSV Mappings:</strong> map CSV columns to transaction fields and choose categorization fields used by Keywords.</li>
-            <li><strong>Bank Accounts:</strong> store account details and set the default CSV mapping used by Import.</li>
+            <li><strong>Import Mappings:</strong> map file columns to transaction fields and choose categorization fields used by Keywords.</li>
+            <li><strong>Bank Accounts:</strong> store account details and set the default import mapping used by Import.</li>
             <li><strong>Categories and Subcategories:</strong> define the reporting hierarchy shown in filters, charts, and the table.</li>
             <li><strong>Tags:</strong> add cross-cutting labels such as projects, people, trips, or special cases.</li>
             <li><strong>Keywords:</strong> match transaction text and assign subcategory, WNI, tags, or ignored status.</li>
           </ul>
         </HelpCard>
 
-        <HelpCard title="CSV Mappings">
+        <HelpCard title="Import Mappings">
           <p>
-            A CSV Mapping should represent one bank-export format. Use Detect Columns with a sample
+            An import mapping should represent one bank-export format. Use Detect Columns with a sample
             CSV whenever possible, then inspect the parsed sample rows before saving.
           </p>
           <ul>
@@ -95,18 +95,20 @@ export default function HelpPage() {
         <HelpCard title="Import">
           <p>
             The Import page is preview-first. The selected bank account automatically supplies the
-            CSV mapping; there is no separate mapping picker in the import flow.
+            import mapping; there is no separate mapping picker in the import flow.
           </p>
           <ol>
             <li>Drop or browse for a CSV file or camt.053 XML statement.</li>
             <li>Select the bank account.</li>
-            <li>Confirm the shown default CSV mapping. If there is a warning, set the default mapping in Definitions first.</li>
+            <li>Confirm the shown default import mapping. If there is a warning, set the default mapping in Definitions first.</li>
             <li>Run Preview Import. The preview shows parsed date, amount, description, status, headers, and summary counts.</li>
             <li>Import Valid Rows after the preview looks right.</li>
           </ol>
           <p>
             Recent Imports shows the latest import batches. Import Report shows loaded, created,
-            duplicate, and error counts for the last import in the session.
+            duplicate, and error counts for the last import in the session, and lists the rows that
+            failed. Delete on a recent import removes it together with the transactions it created,
+            for example to import the file again with a corrected mapping.
           </p>
           <p>
             Exchange rates sync automatically after imported transactions are saved. If the provider
@@ -156,6 +158,7 @@ export default function HelpPage() {
             <li><strong>Tags:</strong> opens the tag editor for multi-tag changes.</li>
             <li><strong>Ignored:</strong> toggles whether the transaction is excluded from normal analysis.</li>
             <li><strong>Locked:</strong> manually protect or unlock categorization.</li>
+            <li><strong>Delete:</strong> the trash button at the end of a row deletes that transaction after a confirmation.</li>
           </ul>
           <p>
             Manual changes to subcategory, WNI, tags, ignored, or category-related fields lock the
@@ -174,7 +177,8 @@ export default function HelpPage() {
             <li><strong>Recategorize:</strong> reruns keyword matching for the filtered transactions.</li>
             <li><strong>Include locked:</strong> resets locked filtered transactions and lets recategorization overwrite them.</li>
             <li><strong>Bulk assign:</strong> updates subcategory, tags, WNI, ignored, or locked fields for all filtered transactions.</li>
-            <li><strong>Find Transfers:</strong> previews likely transfers between defined accounts by matching opposite same-currency amounts across nearby dates.</li>
+            <li><strong>Delete:</strong> deletes all filtered transactions after showing how many will go. It can't be undone; importing their files again brings them back.</li>
+            <li><strong>Find Transfers:</strong> previews likely transfers between defined accounts by matching opposite same-currency amounts across nearby dates. The Matched view lists applied transfers, and Unmatch restores what applying them changed.</li>
             <li><strong>Review uncategorized:</strong> reviews uncategorized transaction groups and creates keyword rules from suggested terms.</li>
           </ul>
         </HelpCard>
@@ -202,7 +206,7 @@ export default function HelpPage() {
             <li><strong>Restore database backup:</strong> replaces the current database and saves a pre-restore backup automatically.</li>
             <li><strong>Recreate sample data:</strong> resets only the demo sample dataset.</li>
             <li><strong>Admin:</strong> create or reset a local Django admin user, then open Django admin for power users.</li>
-            <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Export a backup first.</li>
+            <li><strong>Danger Zone:</strong> delete sample data, all transactions, or all finance data. Before deleting all transactions or all finance data, a safety backup is saved automatically and listed under saved backups.</li>
           </ul>
         </HelpCard>
 

@@ -17,6 +17,8 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
+from cashmoney_backend.secret_key import load_or_create_secret_key
+
 from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .models import (
     BankAccount,
@@ -124,6 +126,18 @@ class FinanceTestCase(TestCase):
         )
         keyword.tags.add(self.tag)
         return keyword
+
+
+class SecretKeyTests(TestCase):
+    def test_each_data_dir_gets_its_own_lasting_key(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            first = load_or_create_secret_key(temp_dir)
+            again = load_or_create_secret_key(temp_dir)
+            other = load_or_create_secret_key(Path(temp_dir) / "other-install")
+
+        self.assertEqual(first, again)
+        self.assertGreaterEqual(len(first), 50)
+        self.assertNotEqual(first, other)
 
 
 class ModelTests(FinanceTestCase):
@@ -609,6 +623,39 @@ class CSVImportServiceTests(FinanceTestCase):
             {"d-1": Decimal("50.00"), "d-2": Decimal("-30.00")},
         )
 
+    def test_import_reports_are_compact(self):
+        body = (
+            "ID,Date,Description,Amount\n"
+            "c-1,2026-01-02,Lunch,-120\n"
+            "c-2,2026-01-03,Dinner,-300\n"
+            "c-3,not-a-date,Broken,-1\n"
+        )
+        CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file("ID,Date,Description,Amount\nc-1,2026-01-02,Lunch,-120\n")
+        )
+
+        csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(body)
+        )
+
+        created = Transaction.objects.get(original_id="c-2")
+        self.assertEqual(
+            report["created"],
+            {
+                "count": 1,
+                "transaction_ids": [str(created.id)],
+                "category_overlap_count": 0,
+                "uncategorized_count": 1,
+            },
+        )
+        duplicate = report["skipped"]["duplicates"][0]
+        self.assertNotIn("row", duplicate)
+        self.assertEqual(duplicate["description"], "Lunch")
+        self.assertIn("duplicate_transaction", duplicate)
+        self.assertEqual(report["skipped"]["errors"][0]["row"]["ID"], "c-3")
+        csv_import.refresh_from_db()
+        self.assertEqual(csv_import.report, report)
+
     def test_identical_rows_without_ids_all_import_once(self):
         body = (
             "Date,Description,Amount\n"
@@ -948,6 +995,128 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(default_scope["uncategorized_count"], 1)
         self.assertEqual(with_ignored["uncategorized_count"], 1)
+
+    def test_unknown_encodings_are_rejected(self):
+        create = self.post_json(
+            "/api/csv-mappings/", {"name": "Odd bank", "encoding": "utf-9"}
+        )
+        patch_response = self.patch_json(
+            f"/api/csv-mappings/{self.mapping.id}/", {"encoding": "latin-99"}
+        )
+        CSVMapping.objects.filter(id=self.mapping.id).update(encoding="bogus")
+        preview = self.client.post(
+            "/api/imports/preview/",
+            {
+                "bank_account_id": str(self.account.id),
+                "csv_file": self.csv_file("ID,Date,Description,Amount\n"),
+            },
+        )
+
+        self.assertEqual(create.status_code, 400)
+        self.assertIn("Unknown encoding 'utf-9'", json_body(create)["error"])
+        self.assertEqual(patch_response.status_code, 400)
+        self.assertEqual(preview.status_code, 400)
+        self.assertIn("Unknown file encoding 'bogus'", json_body(preview)["error"])
+
+    def test_database_conflicts_get_readable_messages(self):
+        duplicate = self.post_json("/api/categories/", {"name": self.category.name})
+        missing_category = self.patch_json(
+            f"/api/subcategories/{self.subcategory.id}/", {"category_id": None}
+        )
+
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(
+            json_body(duplicate)["error"], "A category with this name already exists."
+        )
+        self.assertEqual(missing_category.status_code, 400)
+        self.assertEqual(json_body(missing_category)["error"], "Category is required.")
+
+    def test_unexpected_errors_return_json_and_are_logged(self):
+        with patch(
+            "finance.views.maintenance_counts", side_effect=RuntimeError("boom")
+        ):
+            with self.assertLogs("finance.views", level="ERROR") as logs:
+                response = self.client.get("/api/maintenance/summary/")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Something went wrong", json_body(response)["error"])
+        self.assertIn("boom", "\n".join(logs.output))
+
+    def test_explicit_lock_value_wins_in_row_edits(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            amount=Decimal("-120.00"),
+        )
+        url = f"/api/transactions/{transaction_obj.id}/"
+
+        self.patch_json(
+            url,
+            {
+                "subcategory_id": str(self.subcategory.id),
+                "is_categorization_locked": False,
+            },
+        )
+        transaction_obj.refresh_from_db()
+        self.assertEqual(transaction_obj.subcategory, self.subcategory)
+        self.assertFalse(transaction_obj.is_categorization_locked)
+
+        self.patch_json(url, {"subcategory_id": str(self.subcategory.id)})
+        transaction_obj.refresh_from_db()
+        self.assertTrue(transaction_obj.is_categorization_locked)
+
+    def test_transfer_apply_counts_pairs_that_are_no_longer_offered(self):
+        response = self.post_json(
+            "/api/transactions/internal-transfers/apply/",
+            {"candidate_ids": ["no-longer-there"]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json_body(response)["created"], 0)
+        self.assertEqual(json_body(response)["skipped"], 1)
+
+    def test_import_list_leaves_reports_out(self):
+        CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file("ID,Date,Description,Amount\nl-1,2026-01-02,Lunch,-120\n")
+        )
+
+        imports = json_body(self.client.get("/api/imports/"))
+
+        self.assertEqual(len(imports), 1)
+        self.assertNotIn("report", imports[0])
+        self.assertEqual(imports[0]["created_count"], 1)
+
+    def test_row_edit_reports_whether_the_row_still_matches_the_filters(self):
+        other = Subcategory.objects.create(name="Groceries", category=self.category)
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Lunch",
+            my_note="dentist visit",
+            amount=Decimal("-120.00"),
+            subcategory=self.subcategory,
+        )
+        url = f"/api/transactions/{transaction_obj.id}/"
+        # Edits lock the row, so the scope includes locked rows.
+        scope = f"?subcategory={self.subcategory.id}&include_locked=true"
+
+        moved = json_body(
+            self.patch_json(url + scope, {"subcategory_id": str(other.id)})
+        )
+        back = json_body(
+            self.patch_json(url + scope, {"subcategory_id": str(self.subcategory.id)})
+        )
+        # Matches only through a note field, which the table never receives.
+        searched = json_body(
+            self.patch_json(
+                url + "?q=dentist&include_locked=true", {"want_need_investment": "need"}
+            )
+        )
+
+        self.assertFalse(moved["matches_filters"])
+        self.assertTrue(back["matches_filters"])
+        self.assertTrue(searched["matches_filters"])
 
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)
@@ -1331,21 +1500,20 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(json_body(response)["error"], "CSV file is empty")
 
-    def test_transaction_create_update_filters_and_pagination(self):
-        response = self.post_json(
-            "/api/transactions/",
-            {
-                "bank_account_id": str(self.account.id),
-                "transaction_date": "2026-01-02",
-                "description": "McDonalds Prague",
-                "amount": "-12.50",
-                "subcategory_id": str(self.subcategory.id),
-                "tag_ids": [str(self.tag.id)],
-                "want_need_investment": WantNeedInvestment.WANT,
-            },
+    def test_transaction_update_filters_and_pagination(self):
+        transaction_obj = Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="McDonalds Prague",
+            amount=Decimal("-12.50"),
+            subcategory=self.subcategory,
+            want_need_investment=WantNeedInvestment.WANT,
         )
-        self.assertEqual(response.status_code, 201)
-        transaction_id = json_body(response)["id"]
+        transaction_obj.tags.add(self.tag)
+        transaction_id = str(transaction_obj.id)
+        # Transactions come from imports; the unused create endpoint, which skipped
+        # import dedupe and categorization, is gone.
+        self.assertEqual(self.post_json("/api/transactions/", {}).status_code, 405)
 
         patch = self.patch_json(
             f"/api/transactions/{transaction_id}/",
@@ -1688,7 +1856,7 @@ class APITests(FinanceTestCase):
             payload["updated_transactions"][0]["description"],
             "McDonalds Prague",
         )
-        self.assertEqual(payload["updated_transactions"][0]["amount"], -12.5)
+        self.assertEqual(payload["updated_transactions"][0]["amount"], "-12.50")
 
     def test_keyword_preview_and_recategorize_explain_conflicts(self):
         transport = Category.objects.create(name="Transport")
@@ -1740,6 +1908,26 @@ class APITests(FinanceTestCase):
             ),
             2,
         )
+
+    def test_recategorize_reports_counts_with_sample_rows(self):
+        for index in range(5):
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                description=f"Unknown shop {index}",
+                amount=Decimal("-1.00"),
+            )
+
+        with patch("finance.services.RECATEGORIZE_SAMPLE_SIZE", 2):
+            payload = json_body(self.post_json("/api/transactions/recategorize/", {}))
+
+        # The response used to list every processed row in each group.
+        self.assertEqual(payload["processed"], 5)
+        self.assertEqual(payload["uncategorized"], 5)
+        self.assertEqual(payload["unchanged"], 5)
+        for group in ("uncategorized", "unchanged"):
+            self.assertEqual(len(payload[f"{group}_transaction_ids"]), 2)
+            self.assertEqual(len(payload[f"{group}_transactions"]), 2)
 
     def test_recategorize_uses_current_filters_and_replaces_tags(self):
         stale_tag = Tag.objects.create(name="Old rule")
@@ -1824,6 +2012,42 @@ class APITests(FinanceTestCase):
         self.assertEqual(locked_transaction.subcategory, self.subcategory)
         self.assertFalse(locked_transaction.is_categorization_locked)
 
+    def test_bulk_assign_handles_more_rows_than_sqlite_parameters(self):
+        # SQLite allows 32,766 parameters per statement; every ID used to be one.
+        tag = Tag.objects.create(name="Reviewed")
+        Transaction.objects.bulk_create(
+            [
+                Transaction(
+                    bank_account=self.account,
+                    transaction_date=date(2026, 1, 2),
+                    description=f"Row {index}",
+                    amount=Decimal("-1.00"),
+                )
+                for index in range(32_800)
+            ],
+            batch_size=2000,
+        )
+
+        # Assigning a subcategory takes the rows out of the "uncategorized" filter;
+        # the tags must still reach all of them.
+        response = self.post_json(
+            "/api/transactions/bulk-assign/?category=__unassigned__",
+            {
+                "subcategory_id": str(self.subcategory.id),
+                "tag_mode": "add",
+                "tag_ids": [str(tag.id)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json_body(response)["updated"], 32_800)
+        self.assertEqual(
+            Transaction.objects.filter(subcategory=self.subcategory).count(), 32_800
+        )
+        self.assertEqual(
+            Transaction.tags.through.objects.filter(tag=tag).count(), 32_800
+        )
+
     def test_bulk_assign_transactions_updates_filtered_scope_and_locks(self):
         stale_tag = Tag.objects.create(name="Existing tag")
         assigned_tag = Tag.objects.create(name="Reviewed")
@@ -1882,13 +2106,13 @@ class APITests(FinanceTestCase):
         self.assertFalse(outside_filter.is_ignored)
         self.assertFalse(outside_filter.is_categorization_locked)
 
+        # The old single-assignment payload is no longer understood.
         legacy_response = self.post_json(
             "/api/transactions/bulk-assign/?date_from=2026-01-01&include_ignored=true",
             {"assignment_type": "tag", "tag_id": str(assigned_tag.id)},
         )
 
-        self.assertEqual(legacy_response.status_code, 200)
-        self.assertEqual(json_body(legacy_response)["actions"][0]["field"], "tags")
+        self.assertEqual(legacy_response.status_code, 400)
 
     def test_internal_transfer_preview_and_apply_marks_confirmed_pairs(self):
         transfer_subcategory = Subcategory.objects.create(
@@ -2686,7 +2910,7 @@ class APITests(FinanceTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(payload["expense_categories"][0]["name"], "Food")
-        self.assertEqual(payload["expense_categories"][0]["amount"], 12.5)
+        self.assertEqual(payload["expense_categories"][0]["amount"], "12.50")
         self.assertEqual(payload["expense_categories"][0]["color"], self.category.color)
         self.assertEqual(
             payload["expense_categories"][0]["children"][0]["color"],
@@ -2713,9 +2937,9 @@ class APITests(FinanceTestCase):
         payload = json_body(response)
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(payload["monthly"][0]["expense"], 12.5)
-        self.assertEqual(payload["expense_categories"][0]["amount"], 12.5)
-        self.assertEqual(payload["want_need_investment"][0]["amount"], 12.5)
+        self.assertEqual(payload["monthly"][0]["expense"], "12.50")
+        self.assertEqual(payload["expense_categories"][0]["amount"], "12.50")
+        self.assertEqual(payload["want_need_investment"][0]["amount"], "12.50")
 
     def test_dashboard_checkbox_none_marker_returns_no_transactions(self):
         Transaction.objects.create(
@@ -2767,11 +2991,61 @@ class APITests(FinanceTestCase):
         transactions = json_body(transactions_response)
         self.assertEqual(summary_response.status_code, 200)
         self.assertEqual(transactions_response.status_code, 200)
-        self.assertEqual(summary["monthly"][0]["expense"], 45.0)
-        self.assertEqual(summary["expense_categories"][0]["amount"], 45.0)
-        self.assertEqual(summary["want_need_investment"][0]["amount"], 45.0)
-        self.assertEqual(transactions["results"][0]["amount"], -45.0)
+        self.assertEqual(summary["monthly"][0]["expense"], "45.00")
+        self.assertEqual(summary["expense_categories"][0]["amount"], "45.00")
+        self.assertEqual(summary["want_need_investment"][0]["amount"], "45.00")
+        self.assertEqual(transactions["results"][0]["amount"], "-45.00")
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
+
+    def test_dashboard_split_by_owners_keeps_the_cents_of_whole_amounts(self):
+        self.account.owners = 2
+        self.account.save(update_fields=["owners"])
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Whole amount",
+            amount=Decimal("-5.00"),
+            subcategory=self.subcategory,
+        )
+
+        summary = json_body(
+            self.client.get("/api/dashboard/summary/", {"split_by_owners": "true"})
+        )
+
+        # SQLite stores -5.00 as the integer -5, and integer division gave 2.
+        self.assertEqual(summary["monthly"][0]["expense"], "2.50")
+        self.assertEqual(summary["expense_categories"][0]["amount"], "2.50")
+        self.assertEqual(summary["want_need_investment"][0]["amount"], "2.50")
+
+    def test_money_is_sent_as_two_place_decimal_strings(self):
+        self.account.owners = 3
+        self.account.save(update_fields=["owners"])
+        coffee = Subcategory.objects.create(name="Coffee", category=self.category)
+        for subcategory in (self.subcategory, coffee):
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                description=f"Split {subcategory.name}",
+                amount=Decimal("-10.00"),
+                subcategory=subcategory,
+            )
+
+        summary = json_body(
+            self.client.get("/api/dashboard/summary/", {"split_by_owners": "true"})
+        )
+        rows = json_body(
+            self.client.get("/api/transactions/", {"split_by_owners": "true"})
+        )["results"]
+
+        self.assertEqual([row["amount"] for row in rows], ["-3.33", "-3.33"])
+        food = summary["expense_categories"][0]
+        self.assertEqual(
+            [child["amount"] for child in food["children"]], ["3.33", "3.33"]
+        )
+        # 20 / 3 rounds to 6.67, but the sunburst needs the sum of the children.
+        self.assertEqual(food["amount"], "6.66")
+        self.assertEqual(summary["monthly"][0]["expense"], "6.67")
+        self.assertEqual(summary["monthly"][0]["income"], "0.00")
 
     def test_transaction_patch_respects_split_by_owners_response_amount(self):
         self.account.owners = 2
@@ -2793,7 +3067,7 @@ class APITests(FinanceTestCase):
 
         payload = json_body(response)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(payload["amount"], -45.0)
+        self.assertEqual(payload["amount"], "-45.00")
         self.assertEqual(payload["want_need_investment"], WantNeedInvestment.NEED)
         self.assertEqual(transaction_obj.amount, Decimal("-90.00"))
 
@@ -2835,12 +3109,13 @@ class APITests(FinanceTestCase):
         self.assertEqual(transaction_obj.conversion_rate, Decimal("20.0000000000"))
         self.assertEqual(transaction_obj.conversion_rate_date, date(2024, 1, 1))
         self.assertEqual(summary["default_currency"], "CZK")
-        self.assertEqual(summary["monthly"][0]["expense"], 200.0)
-        self.assertEqual(summary["expense_categories"][0]["amount"], 200.0)
+        self.assertEqual(summary["monthly"][0]["expense"], "200.00")
+        self.assertEqual(summary["expense_categories"][0]["amount"], "200.00")
         self.assertEqual(summary["missing_conversions"], 0)
-        self.assertEqual(transactions["results"][0]["amount"], -10.0)
+        self.assertEqual(transactions["results"][0]["amount"], "-10.00")
         self.assertEqual(transactions["results"][0]["currency"], "USD")
-        self.assertEqual(transactions["results"][0]["converted_amount"], -200.0)
+        self.assertEqual(transactions["results"][0]["converted_amount"], "-200.00")
+        self.assertEqual(transactions["results"][0]["conversion_rate"], "20")
         self.assertEqual(transactions["results"][0]["converted_currency"], "CZK")
 
     def test_dashboard_summary_reports_missing_exchange_rates(self):
@@ -3222,7 +3497,12 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-sqlite3")
         self.assertIn("cashmoney-backup-", response["Content-Disposition"])
-        self.assertTrue(response.content.startswith(b"SQLite format 3"))
+        temporary_path = response.temporary_path
+        self.assertTrue(temporary_path.exists())
+        # Reading the stream to the end closes the response, which deletes the file.
+        content = b"".join(response.streaming_content)
+        self.assertTrue(content.startswith(b"SQLite format 3"))
+        self.assertFalse(temporary_path.exists())
 
     def test_maintenance_saved_backups_can_be_listed_exported_and_deleted(self):
         Transaction.objects.create(
@@ -3263,7 +3543,11 @@ class APITests(FinanceTestCase):
                 "pre-restore-20260102-030405.sqlite3",
                 export_response["Content-Disposition"],
             )
-            self.assertTrue(export_response.content.startswith(b"SQLite format 3"))
+            self.assertTrue(
+                b"".join(export_response.streaming_content).startswith(
+                    b"SQLite format 3"
+                )
+            )
 
             delete_response = self.delete_json(
                 "/api/maintenance/backups/pre-restore-20260102-030405.sqlite3/",
@@ -3275,6 +3559,50 @@ class APITests(FinanceTestCase):
             self.assertTrue(delete_payload["deleted"])
             self.assertFalse(backup_path.exists())
             self.assertEqual(delete_payload["backups"], [])
+
+    def test_uploads_over_the_size_limit_are_refused(self):
+        body = "ID,Date,Description,Amount\napi-1,2026-01-02,McDonalds,-12.50\n"
+        with patch("finance.views.MAX_IMPORT_FILE_BYTES", 20), patch(
+            "finance.views.MAX_BACKUP_FILE_BYTES", 5
+        ):
+            responses = [
+                self.client.post(
+                    "/api/csv-mappings/detect-columns/",
+                    {"default_currency": "CZK", "csv_file": self.csv_file(body)},
+                ),
+                self.client.post(
+                    "/api/imports/preview/",
+                    {
+                        "bank_account_id": str(self.account.id),
+                        "csv_mapping_id": str(self.mapping.id),
+                        "csv_file": self.csv_file(body),
+                    },
+                ),
+                self.client.post(
+                    "/api/imports/",
+                    {
+                        "bank_account_id": str(self.account.id),
+                        "csv_mapping_id": str(self.mapping.id),
+                        "csv_file": self.csv_file(body),
+                    },
+                ),
+                self.client.post(
+                    "/api/maintenance/database-restore/",
+                    {
+                        "confirmation": "RESTORE DATABASE",
+                        "backup_file": SimpleUploadedFile(
+                            "backup.sqlite3",
+                            b"too big for the limit",
+                            content_type="application/x-sqlite3",
+                        ),
+                    },
+                ),
+            ]
+
+        for response in responses:
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("The file is too large", json_body(response)["error"])
+        self.assertFalse(Transaction.objects.exists())
 
     def test_maintenance_database_restore_rejects_invalid_upload(self):
         response = self.client.post(
@@ -3679,6 +4007,19 @@ class Camt053ParserTests(TestCase):
             parse_camt053(b"<Document><Other/></Document>")
         with self.assertRaisesMessage(ValueError, "Could not read XML"):
             parse_camt053(b"<Document>")
+        # A declaration after a long comment, or in UTF-16, is refused as well.
+        long_comment = b"<!--" + b"x" * 5000 + b"-->"
+        with self.assertRaisesMessage(ValueError, "DOCTYPE"):
+            parse_camt053(
+                b'<?xml version="1.0"?>'
+                + long_comment
+                + b'<!DOCTYPE x [<!ENTITY a "b">]><Document/>'
+            )
+        with self.assertRaisesMessage(ValueError, "DOCTYPE"):
+            parse_camt053(
+                '<?xml version="1.0" encoding="UTF-16"?>'
+                '<!DOCTYPE x [<!ENTITY a "b">]><Document/>'.encode("utf-16")
+            )
         with self.assertRaisesMessage(ValueError, "empty"):
             parse_camt053(b"  ")
 
@@ -3770,7 +4111,8 @@ class SampleFlagMigrationTests(TransactionTestCase):
 
     def tearDown(self):
         # Leave the schema at the latest migration for the other tests.
-        MigrationExecutor(connection).migrate(self.after)
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
 
     def test_existing_sample_data_is_flagged(self):
         executor = MigrationExecutor(connection)
@@ -3793,4 +4135,62 @@ class SampleFlagMigrationTests(TransactionTestCase):
         self.assertEqual(
             dict(CSVImport.objects.values_list("source_filename", "is_sample")),
             {"Sample - initial demo data": True, "statement.csv": False},
+        )
+
+
+class CompactImportReportMigrationTests(TransactionTestCase):
+    before = [("finance", "0013_sample_flags")]
+    after = [("finance", "0014_compact_import_reports")]
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def test_existing_reports_are_compacted(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.before)
+        old_import = executor.loader.project_state(self.before).apps.get_model(
+            "finance", "CSVImport"
+        )
+        legacy = old_import.objects.create(
+            source_filename="old.csv",
+            report={
+                "loaded": 3,
+                "created": {
+                    "count": 2,
+                    "transactions": [{"id": "a", "raw_data": {"x": 1}}, {"id": "b"}],
+                    "category_overlaps": [{"id": "a"}],
+                    "uncategorized": [{"id": "a"}, {"id": "b"}],
+                },
+                "skipped": {
+                    "duplicates": [
+                        {
+                            "line": 4,
+                            "row": {"x": 1},
+                            "duplicate_transaction": {"id": "z"},
+                        }
+                    ],
+                    "errors": [{"line": 5, "error": "bad", "row": {"x": 2}}],
+                },
+            },
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.after)
+
+        self.assertEqual(
+            CSVImport.objects.get(id=legacy.id).report,
+            {
+                "loaded": 3,
+                "created": {
+                    "count": 2,
+                    "transaction_ids": ["a", "b"],
+                    "category_overlap_count": 1,
+                    "uncategorized_count": 2,
+                },
+                "skipped": {
+                    "duplicates": [{"line": 4, "duplicate_transaction": {"id": "z"}}],
+                    "errors": [{"line": 5, "error": "bad", "row": {"x": 2}}],
+                },
+            },
         )

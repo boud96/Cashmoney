@@ -1,7 +1,5 @@
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import createPlotlyComponent from "react-plotly.js/factory";
-import Plotly from "plotly.js-dist-min";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
 
@@ -13,6 +11,7 @@ import {
   buildMetrics,
   cloneFilters,
   colorPillStyle,
+  compareAmounts,
   completeMonthlyRows,
   countActiveFilters,
   cssVar,
@@ -22,10 +21,10 @@ import {
   formatDateInput,
   formatDateTime,
   formatMoneyValue,
-  formatNumber,
   getStoredFilterPresets,
   normalizeName,
   normalizeTagSelection,
+  presetFilterCount,
   storeFilterPresets,
   subLabel,
   subtractRelativeDate,
@@ -39,7 +38,8 @@ import {
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
-const Plot = createPlotlyComponent(Plotly);
+// Plotly loads as its own chunk (see PlotlyChart.jsx); ChartPanel shows a placeholder meanwhile.
+const Plot = lazy(() => import("../PlotlyChart.jsx"));
 const transactionGridTheme = themeQuartz
   .withParams({
     accentColor: "var(--action)",
@@ -138,6 +138,14 @@ export default function DashboardPage({
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
+  // Charts mount after the first table load, so the rows render before Plotly's
+  // chunk (about half a second of script work) is evaluated.
+  const [chartsReady, setChartsReady] = useState(false);
+  useEffect(() => {
+    if (!chartsReady && summary && !transactionsBusy) {
+      setChartsReady(true);
+    }
+  }, [chartsReady, summary, transactionsBusy]);
   const [bulkAssignEditorOpen, setBulkAssignEditorOpen] = useState(false);
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
@@ -521,7 +529,11 @@ export default function DashboardPage({
         },
         transferFilterParams,
       );
-      notify(`${formatCount(result.created)} transfer pairs applied`);
+      notify(
+        result.skipped
+          ? `${formatCount(result.created)} transfer pairs applied, ${formatCount(result.skipped)} skipped because they were already matched or no longer qualify`
+          : `${formatCount(result.created)} transfer pairs applied`
+      );
       setSelectedTransferIds([]);
       await Promise.all([reloadDashboard(), loadTransferCandidates()]);
     } catch (error) {
@@ -733,6 +745,7 @@ export default function DashboardPage({
                 onNameChange={setSavedFilterName}
                 onSave={saveCurrentFilterPreset}
                 presets={savedFilters}
+                tags={refs.tags}
               />
             </div>
             <div className="filter-main-stack">
@@ -995,11 +1008,11 @@ export default function DashboardPage({
       ) : null}
 
       <div className="dashboard-charts">
-        <ChartPanel className="chart-panel-wide" title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
-        <ChartPanel title="Income Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.income_categories || []} /></ChartPanel>
-        <ChartPanel title="Expense Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
-        <ChartPanel title="Want / Need / Investment"><WniChart hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} /></ChartPanel>
-        <ChartPanel title="Top Expense Subcategories"><TopExpenseChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
+        <ChartPanel className="chart-panel-wide" ready={chartsReady} title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
+        <ChartPanel ready={chartsReady} title="Income Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.income_categories || []} /></ChartPanel>
+        <ChartPanel ready={chartsReady} title="Expense Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
+        <ChartPanel ready={chartsReady} title="Want / Need / Investment"><WniChart hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} /></ChartPanel>
+        <ChartPanel ready={chartsReady} title="Top Expense Subcategories"><TopExpenseChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
       </div>
 
       <section className="panel transaction-panel">
@@ -1016,7 +1029,7 @@ export default function DashboardPage({
             Older matching transactions are omitted from the table. Stats and charts still use the full filtered set.
           </div>
         ) : null}
-        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filters={filters} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filterParams={filterParams} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
       </section>
     </>
   );
@@ -1655,7 +1668,7 @@ function InfoIcon() {
 
 const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filters, so this row is kept visible temporarily.";
 
-function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filters, hideAmounts, notify, refs, rows, updateTransaction }) {
+function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filterParams, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
   const [rawDataLoadingId, setRawDataLoadingId] = useState("");
   const [filterRetainedCells, setFilterRetainedCells] = useState({});
@@ -1668,7 +1681,6 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
   const subcategoryLookup = useMemo(() => new Map(refs.subcategories.map((item) => [item.id, item])), [refs.subcategories]);
   const categoryLookup = useMemo(() => new Map(refs.categories.map((item) => [item.id, item])), [refs.categories]);
   const accountLookup = useMemo(() => new Map(refs.accounts.map((item) => [item.id, item.name])), [refs.accounts]);
-  const filterSignature = useMemo(() => JSON.stringify(filters), [filters]);
 
   const rowData = useMemo(() => rows.map((row) => ({
     ...row,
@@ -1677,9 +1689,10 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
     subcategory_id: row.subcategory?.id || "",
   })), [conflictIds, rows]);
 
+  // Rows kept visible after an edit took them out of the filters clear when the filters change.
   useEffect(() => {
     setFilterRetainedCells({});
-  }, [filterSignature]);
+  }, [filterParams]);
 
   const getRetainedCellMarker = useCallback((params) => {
     const field = params.colDef?.field;
@@ -1701,7 +1714,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
   const saveTransaction = useCallback(async (row, patch) => {
     const updated = await updateTransaction(row, patch);
     const changedFields = changedTransactionCellFields(patch);
-    const isRetainedByEdit = changedFields.length > 0 && !transactionMatchesCurrentFilters(updated, filters);
+    const isRetainedByEdit = changedFields.length > 0 && updated.matches_filters === false;
     setFilterRetainedCells((current) => {
       const next = { ...current };
       if (!isRetainedByEdit) {
@@ -1715,7 +1728,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
       return next;
     });
     return updated;
-  }, [filters, updateTransaction]);
+  }, [updateTransaction]);
 
   useEffect(() => {
     if (!rawDataPopover) {
@@ -1833,6 +1846,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
     { field: "description", headerName: "Description", flex: 2, minWidth: 260, wrapText: true, autoHeight: true },
     {
       cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
+      comparator: compareAmounts,
       field: "converted_amount",
       headerName: "Amount",
       valueFormatter: (params) => (
@@ -1910,7 +1924,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
           updateTransaction={saveTransaction}
         />
       ),
-      valueFormatter: (params) => (params.value || []).map((tag) => tag.name).join(", ") || "No tags",
+      valueFormatter: (params) => (params.value || []).map((tag) => tag.name).join(", ") || "Untagged",
       cellClass: retainedCellClass,
       tooltipValueGetter: retainedCellTooltip,
       sortable: false,
@@ -2085,87 +2099,19 @@ function changedTransactionCellFields(patch) {
   return fields;
 }
 
-function transactionMatchesCurrentFilters(row, filters = {}) {
-  if (!row) {
-    return false;
-  }
-  if (!filters.include_ignored && row.is_ignored) {
-    return false;
-  }
-  if (!filters.include_locked && row.is_categorization_locked) {
-    return false;
-  }
-  if (filters.date_from && (!row.transaction_date || row.transaction_date < filters.date_from)) {
-    return false;
-  }
-  if (filters.date_to && (!row.transaction_date || row.transaction_date > filters.date_to)) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.direction, row.direction || "")) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.bank_account, row.bank_account?.id || "")) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.category, row.category?.id || UNASSIGNED)) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.subcategory, row.subcategory?.id || UNASSIGNED)) {
-    return false;
-  }
-  if (!checklistSelectionMatches(filters.want_need_investment, row.want_need_investment || UNASSIGNED)) {
-    return false;
-  }
-  if (!tagSelectionMatches(filters.tag, row.tags || [])) {
-    return false;
-  }
-  if (!transactionSearchMatches(row, filters.q)) {
-    return false;
-  }
-  return true;
-}
-
-function checklistSelectionMatches(selection, value) {
-  if (!Array.isArray(selection)) {
-    return true;
-  }
-  return selection.length > 0 && selection.includes(value);
-}
-
-function tagSelectionMatches(selection, tags) {
-  if (!Array.isArray(selection) || !selection.length) {
-    return true;
-  }
-  if (!tags.length) {
-    return selection.includes(UNASSIGNED);
-  }
-  return tags.some((tag) => selection.includes(tag.id));
-}
-
-function transactionSearchMatches(row, query) {
-  const normalizedQuery = normalizeName(query);
-  if (!normalizedQuery) {
-    return true;
-  }
-  const searchableText = [
-    row.description,
-    row.counterparty_name,
-    row.counterparty_account_number,
-    row.transaction_type,
-    row.counterparty_note,
-    row.my_note,
-    row.other_note,
-  ].map((value) => normalizeName(value)).join(" ");
-  return searchableText.includes(normalizedQuery);
-}
-
 function joinClassNames(...classNames) {
   return classNames.filter(Boolean).join(" ");
 }
 
 
-function ChartPanel({ children, className = "", title }) {
-  return <section className={`panel chart-panel ${className}`}><div className="panel-header"><h2>{title}</h2></div>{children}</section>;
+function ChartPanel({ children, className = "", ready = true, title }) {
+  const loading = <div className="chart-empty">Loading chart…</div>;
+  return (
+    <section className={`panel chart-panel ${className}`}>
+      <div className="panel-header"><h2>{title}</h2></div>
+      {ready ? <Suspense fallback={loading}>{children}</Suspense> : loading}
+    </section>
+  );
 }
 
 function MonthlyChart({ hideAmounts, rows }) {
@@ -2261,7 +2207,9 @@ function SunburstChart({ hideAmounts, rows }) {
 }
 
 function WniChart({ hideAmounts, rows }) {
-  const cleanRows = rows.filter((row) => row.amount > 0);
+  const cleanRows = rows
+    .map((row) => ({ ...row, amount: Number(row.amount || 0) }))
+    .filter((row) => row.amount > 0);
   if (!cleanRows.length) return <EmptyChart />;
   return (
     <Plot
@@ -2340,7 +2288,7 @@ function RecategorizeStats({ result }) {
       value: result.uncategorized,
     },
     {
-      details: <ConflictDetailList details={conflictDetails} />,
+      details: <ConflictDetailList details={conflictDetails} total={result.conflicts} />,
       detailCount: conflictDetails.length,
       label: "Conflicts",
       value: result.conflicts,
@@ -2371,16 +2319,16 @@ function RecategorizeMetric({ metric }) {
   const count = Number(metric.value || 0);
   const ids = metric.ids || [];
   const transactions = metric.transactions || [];
-  const detailCount = metric.detailCount ?? (transactions.length || ids.length);
-  const hasDetails = Boolean(detailCount);
+  // The lists are samples (up to 40 rows); count is the whole group.
+  const hasDetails = Boolean(metric.detailCount ?? (transactions.length || ids.length));
   return (
     <div className={`metric recategorize-metric${hasDetails ? " metric-has-details" : ""}`}>
       <div className="metric-label">{metric.label}</div>
       <div className="metric-value">{formatCount(count)}</div>
       {hasDetails ? (
         <details className="metric-details">
-          <summary>{formatCount(detailCount)} details</summary>
-          {metric.details || (transactions.length ? <TransactionSummaryList transactions={transactions} /> : <TransactionIdList ids={ids} />)}
+          <summary>{formatCount(count)} details</summary>
+          {metric.details || (transactions.length ? <TransactionSummaryList total={count} transactions={transactions} /> : <TransactionIdList ids={ids} total={count} />)}
         </details>
       ) : (
         <div className="metric-empty-detail">No details</div>
@@ -2389,20 +2337,20 @@ function RecategorizeMetric({ metric }) {
   );
 }
 
-function TransactionIdList({ ids }) {
+function TransactionIdList({ ids, total = ids.length }) {
   const visibleIds = ids.slice(0, 40);
+  const hidden = Math.max(total, ids.length) - visibleIds.length;
   return (
     <div className="metric-id-list">
       {visibleIds.map((id) => <code key={id}>{id}</code>)}
-      {ids.length > visibleIds.length ? (
-        <span className="muted">+{formatCount(ids.length - visibleIds.length)} more</span>
-      ) : null}
+      {hidden > 0 ? <span className="muted">+{formatCount(hidden)} more</span> : null}
     </div>
   );
 }
 
-function TransactionSummaryList({ transactions }) {
+function TransactionSummaryList({ total = 0, transactions }) {
   const visibleTransactions = transactions.slice(0, 40);
+  const hidden = Math.max(total, transactions.length) - visibleTransactions.length;
   return (
     <div className="metric-transaction-list">
       {visibleTransactions.map((transaction) => (
@@ -2419,18 +2367,17 @@ function TransactionSummaryList({ transactions }) {
           ) : null}
         </div>
       ))}
-      {transactions.length > visibleTransactions.length ? (
-        <span className="muted">+{formatCount(transactions.length - visibleTransactions.length)} more</span>
-      ) : null}
+      {hidden > 0 ? <span className="muted">+{formatCount(hidden)} more</span> : null}
     </div>
   );
 }
 
-function ConflictDetailList({ details }) {
+function ConflictDetailList({ details, total = 0 }) {
   if (!details.length) {
     return null;
   }
   const visibleDetails = details.slice(0, 20);
+  const hidden = Math.max(total, details.length) - visibleDetails.length;
   return (
     <div className="conflict-detail-list">
       {visibleDetails.map((detail) => (
@@ -2446,9 +2393,7 @@ function ConflictDetailList({ details }) {
           <KeywordMatchList matches={detail.categorization.top_matched_keywords || []} />
         </article>
       ))}
-      {details.length > visibleDetails.length ? (
-        <div className="muted">+{formatCount(details.length - visibleDetails.length)} more conflicts</div>
-      ) : null}
+      {hidden > 0 ? <div className="muted">+{formatCount(hidden)} more conflicts</div> : null}
     </div>
   );
 }
@@ -2503,7 +2448,7 @@ function RelativeRangeForm({ setFilters }) {
   );
 }
 
-function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave, presets }) {
+function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave, presets, tags }) {
   return (
     <div className="filter-card saved-filters-card">
       <div className="filter-card-header">
@@ -2526,7 +2471,7 @@ function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave,
           <div className="saved-filter-row" key={preset.id}>
             <button className="saved-filter-load-button" disabled={busy} onClick={() => onLoad(preset)} type="button">
               <span>{preset.name}</span>
-              <small>{formatCount(countActiveFilters(preset.filters))} filters</small>
+              <small>{formatCount(presetFilterCount(preset.filters, tags))} filters</small>
             </button>
             <button aria-label={`Delete ${preset.name}`} className="icon-button" disabled={busy} onClick={() => onDelete(preset.id)} type="button">x</button>
           </div>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 
-import { apiDelete, apiFetch, apiGet, apiPost } from "../api.js";
+import { apiDelete, apiFetch, apiGet, apiPost, readJson } from "../api.js";
 import { LoadingButton, Metric } from "../components.jsx";
-import { formatBytes, formatCount, formatDateTime } from "../shared.js";
+import { MAX_BACKUP_FILE_BYTES, fileTooLargeMessage, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
 function maintenanceDeleteMessage(title, payload) {
   if (payload?.safety_backup) {
@@ -162,7 +162,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
   async function exportBackup() {
     setSafeBusy("backup");
     try {
-      const response = await fetch("/api/maintenance/database-backup/");
+      const response = await apiFetch("/api/maintenance/database-backup/");
       await downloadResponseAttachment(response, "cashmoney-backup.sqlite3", "Backup failed");
       notify("Database backup downloaded");
     } catch (error) {
@@ -175,7 +175,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
   async function exportSavedBackup(backup) {
     setBackupAction(`export:${backup.filename}`);
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `/api/maintenance/backups/${encodeURIComponent(backup.filename)}/export/`
       );
       await downloadResponseAttachment(response, backup.filename, "Backup export failed");
@@ -243,6 +243,11 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
     if (!restoreFile) {
       return;
     }
+    const tooLarge = fileTooLargeMessage(restoreFile, MAX_BACKUP_FILE_BYTES);
+    if (tooLarge) {
+      notify(tooLarge);
+      return;
+    }
     const confirmed = await confirmAction({
       confirmLabel: "Restore",
       danger: true,
@@ -261,10 +266,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
         method: "POST",
         body: formData,
       });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Restore failed");
-      }
+      const payload = await readJson(response, "Restore failed");
       setBackups(payload.backups || []);
       notify("Database restored");
       setRestoreFile(null);

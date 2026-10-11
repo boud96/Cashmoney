@@ -11,3 +11,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include("finance.urls")),
 ]
+
+# JSON errors for /api/ when DEBUG is off; Django's pages elsewhere.
+handler400 = "finance.views.handler400"
+handler500 = "finance.views.handler500"

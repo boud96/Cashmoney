@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { apiDelete, apiFetch, apiGet } from "../api.js";
+import { apiDelete, apiFetch, apiGet, readJson } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
-import { formatAmountValue, formatBytes, formatCount, formatDateTime } from "../shared.js";
+import { MAX_IMPORT_FILE_BYTES, fileTooLargeMessage, formatAmountValue, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
 export default function ImportPage({ confirmAction, hideAmounts = false, importReport, notify, refs, reloadAll, reloadDashboard, setImportReport }) {
   const [dragActive, setDragActive] = useState(false);
@@ -40,7 +40,14 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
   }, [loadRecentImports]);
 
   function setFile(file) {
-    setSelectedFile(file || null);
+    const tooLarge = fileTooLargeMessage(file, MAX_IMPORT_FILE_BYTES);
+    if (tooLarge) {
+      notify(tooLarge);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+    setSelectedFile(tooLarge ? null : file || null);
     setPreview(null);
     setImportReport(null);
   }
@@ -94,10 +101,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
       const formData = buildFormData();
       formData.append("sample_size", "100");
       const response = await apiFetch("/api/imports/preview/", { method: "POST", body: formData });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Preview failed");
-      }
+      const payload = await readJson(response, "Preview failed");
       setPreview(payload);
       notify("CSV preview ready");
     } catch (error) {
@@ -116,10 +120,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
     setImporting(true);
     try {
       const response = await apiFetch("/api/imports/", { method: "POST", body: buildFormData() });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Import failed");
-      }
+      const payload = await readJson(response, "Import failed");
       setImportReport(payload.report);
       setPreview(null);
       setSelectedFile(null);
@@ -223,12 +224,12 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
 
 function MappingStatus({ account, mapping }) {
   if (!account) {
-    return <div className="mapping-status">Choose a bank account to see the default CSV mapping.</div>;
+    return <div className="mapping-status">Choose a bank account to see its default import mapping.</div>;
   }
   if (!mapping) {
     return (
       <div className="mapping-status mapping-status-warning">
-        This bank account has no default CSV mapping. Set one in Definitions before importing.
+        This bank account has no default import mapping. Set one in Definitions before importing.
       </div>
     );
   }
@@ -257,6 +258,9 @@ function ImportPreview({ hideAmounts, preview }) {
         {headers.slice(0, 18).map((header) => <span className="pill" key={header}>{header}</span>)}
         {headers.length > 18 ? <span className="pill tag-more-pill">+{formatCount(headers.length - 18)}</span> : null}
       </div>
+      {preview.loaded > rows.length ? (
+        <div className="muted">Showing the first {formatCount(rows.length)} of {formatCount(preview.loaded)} rows. The counts above cover the whole file.</div>
+      ) : null}
       <div className="import-sample-list">
         {rows.map((row, index) => {
           const label = previewRowLabel(row);

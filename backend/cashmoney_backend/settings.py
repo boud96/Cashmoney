@@ -3,12 +3,18 @@
 import os
 from pathlib import Path
 
+from .secret_key import load_or_create_secret_key
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.environ.get("CASHMONEY_DATA_DIR", BASE_DIR))
 
-SECRET_KEY = "cashmoney-local-development-key"
-DEBUG = True
+# Each install gets its own key (DATA_DIR/secret_key.txt); CASHMONEY_SECRET_KEY overrides.
+SECRET_KEY = os.environ.get("CASHMONEY_SECRET_KEY") or load_or_create_secret_key(
+    DATA_DIR
+)
+# On for development; the packaged app sets CASHMONEY_DEBUG=0 (packaged_backend.py).
+DEBUG = os.environ.get("CASHMONEY_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 CSRF_TRUSTED_ORIGINS = [
@@ -34,6 +40,8 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "finance.middleware.LocalApiCorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    # Serves the React bundle and admin assets when DEBUG is off (the packaged app).
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -89,5 +97,9 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+# Serve straight from the app static folders (no collectstatic step); pick up rebuilt
+# frontend files without a restart in development.
+WHITENOISE_USE_FINDERS = True
+WHITENOISE_AUTOREFRESH = DEBUG
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -17,6 +17,7 @@ from django.db.models import (
     DecimalField,
     ExpressionWrapper,
     F,
+    FloatField,
     Max,
     Min,
     Q,
@@ -24,7 +25,7 @@ from django.db.models import (
     Value,
     When,
 )
-from django.db.models.functions import Coalesce, TruncMonth
+from django.db.models.functions import Cast, Coalesce, TruncMonth
 from django.utils import timezone
 
 from .constants import DEFAULT_CATEGORIZATION_FIELDS, ImportFileFormat
@@ -787,7 +788,13 @@ def read_csv_rows_with_headers(csv_mapping, file_obj):
     if isinstance(raw, str):
         text = raw
     else:
-        text = raw.decode(csv_mapping.encoding)
+        try:
+            text = raw.decode(csv_mapping.encoding)
+        except LookupError as exc:
+            raise ValueError(
+                f"Unknown file encoding '{csv_mapping.encoding}'. "
+                "Fix it in the mapping, e.g. utf-8 or cp1250."
+            ) from exc
     return read_csv_rows_from_text(csv_mapping, text)
 
 
@@ -1518,13 +1525,15 @@ class CSVImportService:
             csv_mapping=self.csv_mapping,
         )
 
+        # Kept small: it is stored with the import. Created rows are referenced by ID
+        # (they are in the transactions table), and duplicates without their raw row.
         report = {
             "loaded": 0,
             "created": {
                 "count": 0,
-                "transactions": [],
-                "category_overlaps": [],
-                "uncategorized": [],
+                "transaction_ids": [],
+                "category_overlap_count": 0,
+                "uncategorized_count": 0,
             },
             "skipped": {
                 "duplicates": [],
@@ -1558,7 +1567,6 @@ class CSVImportService:
                         "line": line_number,
                         "reason": "Duplicate original id",
                         "description": self._row_description(row),
-                        "row": row,
                     }
                 )
                 continue
@@ -1579,7 +1587,6 @@ class CSVImportService:
                         "line": line_number,
                         "reason": "Possible duplicate",
                         "description": self._row_description(row),
-                        "row": row,
                     }
                 )
                 continue
@@ -1591,22 +1598,19 @@ class CSVImportService:
                         "line": line_number,
                         "reason": "Duplicate transaction",
                         "description": self._row_description(row),
-                        "row": row,
                         "duplicate_transaction": self._duplicate_ref(duplicate),
                     }
                 )
                 continue
 
             transaction_obj, categorization = created_transaction
-            serialized = serialize_transaction(transaction_obj)
-            report["created"]["transactions"].append(serialized)
-
+            report["created"]["transaction_ids"].append(str(transaction_obj.id))
             if categorization.is_category_overlap:
-                report["created"]["category_overlaps"].append(serialized)
+                report["created"]["category_overlap_count"] += 1
             if categorization.is_uncategorized:
-                report["created"]["uncategorized"].append(serialized)
+                report["created"]["uncategorized_count"] += 1
 
-        report["created"]["count"] = len(report["created"]["transactions"])
+        report["created"]["count"] = len(report["created"]["transaction_ids"])
         csv_import.loaded_count = report["loaded"]
         csv_import.created_count = report["created"]["count"]
         csv_import.skipped_count = len(report["skipped"]["duplicates"])
@@ -1738,7 +1742,7 @@ class CSVImportService:
             "id": str(transaction_obj.id),
             "transaction_date": transaction_obj.transaction_date.isoformat(),
             "description": transaction_obj.description,
-            "amount": float(transaction_obj.amount),
+            "amount": money(transaction_obj.amount),
         }
 
     def _serialize_parsed_data(self, data):
@@ -1747,7 +1751,7 @@ class CSVImportService:
             if hasattr(value, "isoformat"):
                 serialized[key] = value.isoformat()
             elif isinstance(value, Decimal):
-                serialized[key] = float(value)
+                serialized[key] = money(value)
             else:
                 serialized[key] = value
         return serialized
@@ -1877,7 +1881,7 @@ def build_uncategorized_suggestions(queryset, default_currency, limit=8):
             {
                 "id": group_key,
                 "reason": reason,
-                "score": money(score),
+                "score": float(score),  # a ranking, not money
                 "transaction_count": transaction_count,
                 "total_amount": money(total_amount),
                 "absolute_total_amount": money(absolute_total_amount),
@@ -1909,7 +1913,7 @@ def build_uncategorized_suggestions(queryset, default_currency, limit=8):
         key=lambda item: (
             item["score"],
             item["transaction_count"],
-            item["absolute_total_amount"],
+            Decimal(item["absolute_total_amount"]),  # a decimal string since 63de6dd
         ),
         reverse=True,
     )
@@ -2306,9 +2310,11 @@ def apply_internal_transfer_candidates(
     skipped = 0
     used_transaction_ids = set()
 
+    offered_ids = set()
     for record in records:
         if record["id"] not in requested_ids:
             continue
+        offered_ids.add(record["id"])
         outgoing_transaction = record["outgoing"]
         incoming_transaction = record["incoming"]
         transaction_ids = {outgoing_transaction.id, incoming_transaction.id}
@@ -2354,6 +2360,9 @@ def apply_internal_transfer_candidates(
         match.incoming_transaction.refresh_from_db()
         matched_records.append(match)
 
+    # Requested pairs that are no longer offered (matched meanwhile, or the data
+    # changed since the preview) count as skipped instead of vanishing.
+    skipped += len(requested_ids - offered_ids)
     return {
         "created": len(matched_records),
         "skipped": skipped,
@@ -2363,7 +2372,16 @@ def apply_internal_transfer_candidates(
     }
 
 
+# Rows listed per result group; the counts cover everything. The UI shows 40.
+RECATEGORIZE_SAMPLE_SIZE = 40
+
+
 def recategorize_transactions(queryset, include_locked=False):
+    """Recategorize the queryset and report counts plus sample rows per group.
+
+    Only conflict_transaction_ids is complete (the grid highlights those rows); the
+    other ID and transaction lists hold up to RECATEGORIZE_SAMPLE_SIZE rows.
+    """
     categorizer = CategorizationService()
 
     def transaction_summary(transaction_obj, data=None):
@@ -2375,7 +2393,7 @@ def recategorize_transactions(queryset, include_locked=False):
                 if data is not None
                 else transaction_obj.description
             ),
-            "amount": float(transaction_obj.amount),
+            "amount": money(transaction_obj.amount),
             "bank_account": model_ref(transaction_obj.bank_account),
         }
 
@@ -2402,6 +2420,14 @@ def recategorize_transactions(queryset, include_locked=False):
         "conflict_details": [],
     }
 
+    def add_sample(group, transaction_obj, data=None):
+        ids = stats[f"{group}_transaction_ids"]
+        if len(ids) < RECATEGORIZE_SAMPLE_SIZE:
+            ids.append(str(transaction_obj.id))
+            stats[f"{group}_transactions"].append(
+                transaction_summary(transaction_obj, data)
+            )
+
     # Matched transfers stay ignored and locked even with include_locked;
     # recategorizing them would count both legs as spending and income again.
     matched_transfer_ids = set()
@@ -2425,17 +2451,13 @@ def recategorize_transactions(queryset, include_locked=False):
             transaction_obj.is_categorization_locked and not include_locked
         ):
             stats["skipped_locked"] += 1
-            stats["skipped_locked_transaction_ids"].append(str(transaction_obj.id))
-            stats["skipped_locked_transactions"].append(
-                transaction_summary(transaction_obj)
-            )
+            add_sample("skipped_locked", transaction_obj)
             continue
 
         csv_mapping = transaction_csv_mapping(transaction_obj)
         if not csv_mapping:
             stats["skipped_no_mapping"] += 1
-            stats["skipped_transaction_ids"].append(str(transaction_obj.id))
-            stats["skipped_transactions"].append(transaction_summary(transaction_obj))
+            add_sample("skipped", transaction_obj)
             continue
 
         mapped_values = mapped_transaction_values_from_raw_data(
@@ -2464,21 +2486,19 @@ def recategorize_transactions(queryset, include_locked=False):
 
         if result.is_uncategorized:
             stats["uncategorized"] += 1
-            stats["uncategorized_transaction_ids"].append(str(transaction_obj.id))
-            stats["uncategorized_transactions"].append(
-                transaction_summary(transaction_obj, data)
-            )
+            add_sample("uncategorized", transaction_obj, data)
         if result.is_category_overlap:
             stats["conflicts"] += 1
             stats["category_overlaps"] += 1
             stats["conflict_transaction_ids"].append(str(transaction_obj.id))
-            stats["conflict_details"].append(
-                {
-                    "transaction": transaction_summary(transaction_obj, data),
-                    "categorization_text": text,
-                    "categorization": serialize_categorization_result(result),
-                }
-            )
+            if len(stats["conflict_details"]) < RECATEGORIZE_SAMPLE_SIZE:
+                stats["conflict_details"].append(
+                    {
+                        "transaction": transaction_summary(transaction_obj, data),
+                        "categorization_text": text,
+                        "categorization": serialize_categorization_result(result),
+                    }
+                )
             lock_changed = transaction_obj.is_categorization_locked and include_locked
             if refreshed_fields or lock_changed:
                 for field_name, value in refreshed_fields.items():
@@ -2497,10 +2517,7 @@ def recategorize_transactions(queryset, include_locked=False):
                     ]
                 )
                 stats["updated"] += 1
-                stats["updated_transaction_ids"].append(str(transaction_obj.id))
-                stats["updated_transactions"].append(
-                    transaction_summary(transaction_obj, data)
-                )
+                add_sample("updated", transaction_obj, data)
             continue
 
         scalar_changed = (
@@ -2539,16 +2556,10 @@ def recategorize_transactions(queryset, include_locked=False):
 
         if scalar_changed or refreshed_fields or tags_changed or lock_changed:
             stats["updated"] += 1
-            stats["updated_transaction_ids"].append(str(transaction_obj.id))
-            stats["updated_transactions"].append(
-                transaction_summary(transaction_obj, data)
-            )
+            add_sample("updated", transaction_obj, data)
         else:
             stats["unchanged"] += 1
-            stats["unchanged_transaction_ids"].append(str(transaction_obj.id))
-            stats["unchanged_transactions"].append(
-                transaction_summary(transaction_obj, data)
-            )
+            add_sample("unchanged", transaction_obj, data)
 
     return stats
 
@@ -2572,8 +2583,11 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
         output_field=amount_field,
     )
     if split_by_owners:
+        # Divide as reals: SQLite stores whole amounts (-10.00) as integers, and
+        # integer division drops the cents (-10 / 3 = -3).
         amount = ExpressionWrapper(
-            converted_amount / Coalesce(F("bank_account__owners"), Value(1)),
+            converted_amount
+            / Cast(Coalesce(F("bank_account__owners"), Value(1)), FloatField()),
             output_field=amount_field,
         )
     else:
@@ -2641,8 +2655,8 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
         summary["monthly"].append(
             {
                 "month": month.strftime("%Y-%m"),
-                "income": float(row["income"] or Decimal("0")),
-                "expense": float(row["expense"] or Decimal("0")),
+                "income": money(row["income"] or Decimal("0")),
+                "expense": money(row["expense"] or Decimal("0")),
             }
         )
 
@@ -2716,7 +2730,7 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     summary["income_categories"] = _category_tree(income_categories)
     summary["expense_categories"] = _category_tree(expense_categories)
     summary["want_need_investment"] = [
-        {"name": row["wni_name"], "amount": float(row["amount"] or Decimal("0"))}
+        {"name": row["wni_name"], "amount": money(row["amount"] or Decimal("0"))}
         for row in wni_rows
     ]
     return summary
@@ -2729,15 +2743,20 @@ def _category_tree(grouped_amounts):
         children = [
             {
                 "name": subcategory_name,
-                "amount": float(subcategory_data["amount"]),
+                "amount": money(subcategory_data["amount"]),
                 "color": subcategory_data["color"],
             }
             for subcategory_name, subcategory_data in sorted(subcategories.items())
         ]
+        # The category is the sum of its rounded subcategories: the sunburst chart
+        # (branchvalues "total") drops a category that is a cent short of them.
+        category_amount = sum(
+            (Decimal(child["amount"]) for child in children), Decimal("0")
+        )
         tree.append(
             {
                 "name": category_name,
-                "amount": float(category_data["amount"]),
+                "amount": money(category_amount),
                 "color": category_data["color"],
                 "children": children,
             }

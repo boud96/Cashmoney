@@ -13,15 +13,25 @@ export function appendParams(url, params = {}) {
   });
 }
 
-async function readJson(response) {
+// Errors come back as JSON from the API; anything else (an HTML error page) is reduced to a
+// short message instead of being shown as raw markup.
+export async function readJson(response, fallbackError = "") {
   const contentType = response.headers.get("content-type") || "";
-  const payload = contentType.includes("application/json")
-    ? await response.json()
-    : { error: await response.text() };
-  if (!response.ok) {
-    throw new Error(payload.error || `Request failed with ${response.status}`);
+  let payload = null;
+  if (contentType.includes("application/json")) {
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
   }
-  return payload;
+  if (!response.ok) {
+    const statusMessage = response.status >= 500
+      ? `Server error (${response.status})`
+      : `Request failed (${response.status})`;
+    throw new Error(payload?.error || fallbackError || statusMessage);
+  }
+  return payload ?? {};
 }
 
 function csrfToken() {

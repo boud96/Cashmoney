@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useRef } from "react";
 
 const modalStack = [];
 
@@ -46,32 +46,116 @@ export function CloseButton({ className = "", label = "Close", ...props }) {
   );
 }
 
-function useModalEscape(onClose, closeDisabled = false) {
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type='hidden'])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function focusableElements(container) {
+  return [...container.querySelectorAll(FOCUSABLE_SELECTOR)].filter((element) => element.getClientRects().length > 0);
+}
+
+// Where focus goes when a dialog opens: the given element; else the dialog itself when
+// it is focusable (tabIndex -1); else its first field, skipping the header's close button.
+function initialFocusTarget(dialog, initialFocusRef) {
+  if (initialFocusRef?.current) {
+    return initialFocusRef.current;
+  }
+  if (dialog.hasAttribute("tabindex")) {
+    return dialog;
+  }
+  const elements = focusableElements(dialog);
+  return elements.find((element) => !element.classList.contains("icon-button")) || elements[0] || null;
+}
+
+// The topmost open dialog owns the keyboard: Escape closes it, Tab and Shift+Tab wrap
+// around inside it. Focus moves into a dialog when it opens and returns to where it was
+// (usually the button that opened it) when it closes.
+function useModalBehavior(onClose, { closeDisabled = false, dialogRef, initialFocusRef } = {}) {
   const modalIdRef = useRef(Symbol("modal"));
+  // Read during the first render: effects run children first, and dialog content may
+  // already have focused one of its fields by the time this hook's effect runs.
+  const previousFocusRef = useRef(undefined);
+  if (previousFocusRef.current === undefined) {
+    previousFocusRef.current = document.activeElement;
+  }
 
   useEffect(() => {
     const modalId = modalIdRef.current;
     modalStack.push(modalId);
+    const previousFocus = previousFocusRef.current;
+    const dialog = dialogRef?.current;
+    if (dialog && !dialog.contains(document.activeElement)) {
+      initialFocusTarget(dialog, initialFocusRef)?.focus({ preventScroll: true });
+    }
     return () => {
       const index = modalStack.indexOf(modalId);
       if (index >= 0) {
         modalStack.splice(index, 1);
       }
+      const active = document.activeElement;
+      const focusLeftWithDialog = !active || active === document.body || Boolean(dialog?.contains(active));
+      if (focusLeftWithDialog && previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+        previousFocus.focus({ preventScroll: true });
+      }
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const modalId = modalIdRef.current;
     function handleKeyDown(event) {
-      if (event.key !== "Escape" || closeDisabled || modalStack[modalStack.length - 1] !== modalId) {
+      if (modalStack[modalStack.length - 1] !== modalId) {
         return;
       }
-      event.preventDefault();
-      onClose?.();
+      if (event.key === "Escape") {
+        if (!closeDisabled) {
+          event.preventDefault();
+          onClose?.();
+        }
+        return;
+      }
+      const dialog = dialogRef?.current;
+      if (event.key !== "Tab" || !dialog) {
+        return;
+      }
+      const elements = focusableElements(dialog);
+      const active = document.activeElement;
+      if (!elements.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (!dialog.contains(active) || active === dialog) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [closeDisabled, onClose]);
+  }, [closeDisabled, dialogRef, initialFocusRef, onClose]);
+}
+
+// For dialogs rendered conditionally inside an always-mounted component: render this
+// next to the open dialog element (in the same backdrop) for Escape and focus handling.
+export function ModalEscape({ onClose }) {
+  const markerRef = useRef(null);
+  const dialogRef = useRef(null);
+  useLayoutEffect(() => {
+    dialogRef.current = markerRef.current?.parentElement?.querySelector("[role='dialog']") || null;
+  }, []);
+  useModalBehavior(onClose, { dialogRef });
+  return <span hidden ref={markerRef} />;
 }
 
 export function ModalShell({
@@ -85,9 +169,11 @@ export function ModalShell({
   title,
   titleId,
 }) {
-  const dialogTitleId = titleId || "modal-title";
+  const generatedTitleId = useId();
+  const dialogTitleId = titleId || generatedTitleId;
+  const dialogRef = useRef(null);
 
-  useModalEscape(onClose, closeDisabled);
+  useModalBehavior(onClose, { closeDisabled, dialogRef });
 
   function closeFromBackdrop(event) {
     if (event.target === event.currentTarget && !closeDisabled) {
@@ -102,7 +188,9 @@ export function ModalShell({
         aria-modal="true"
         className={className}
         onMouseDown={(event) => event.stopPropagation()}
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
       >
         <div className={`action-modal-header ${headerClassName}`.trim()}>
           <div className="action-modal-title-block">
@@ -127,12 +215,10 @@ export function ConfirmDialog({
   title = "Confirm Action",
 }) {
   const cancelButtonRef = useRef(null);
+  const dialogRef = useRef(null);
+  const titleId = useId();
 
-  useModalEscape(onCancel);
-
-  useEffect(() => {
-    cancelButtonRef.current?.focus();
-  }, []);
+  useModalBehavior(onCancel, { dialogRef, initialFocusRef: cancelButtonRef });
 
   return (
     <div
@@ -141,14 +227,15 @@ export function ConfirmDialog({
       role="presentation"
     >
       <div
-        aria-labelledby="confirm-dialog-title"
+        aria-labelledby={titleId}
         aria-modal="true"
         className={`confirm-modal ${danger ? "is-danger" : ""}`.trim()}
         onMouseDown={(event) => event.stopPropagation()}
+        ref={dialogRef}
         role="dialog"
       >
         <div className="confirm-modal-header">
-          <h2 id="confirm-dialog-title">{title}</h2>
+          <h2 id={titleId}>{title}</h2>
         </div>
         <div className="confirm-modal-message">{message}</div>
         <div className="confirm-modal-actions">

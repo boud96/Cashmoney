@@ -1,63 +1,89 @@
 # Cashmoney
 
-Cashmoney is a local finance dashboard built with Django, React, AG Grid, and
-Electron packaging support.
+Cashmoney is a local-first personal finance app for Windows. You import your bank
+statements, rules sort the transactions into categories, and a dashboard shows where
+the money went.
+
+Everything runs on your own computer: a Django + SQLite backend and a React frontend
+in an Electron window. There are no accounts and no cloud services. The only outside
+request is for exchange rates (the public [Frankfurter](https://frankfurter.dev) API),
+used when transactions are in a currency other than your default one.
+
+## What it does
+
+- **Import** bank statements as CSV, described by an import mapping (columns, date and
+  amount formats, encoding; the app detects most of it), or as camt.053 XML. Imports
+  show a preview first, skip duplicates, list rows that failed, and can be undone.
+- **Categorize** with keyword rules: include and exclude terms, priorities, and what a
+  match sets (subcategory, tags, want/need/investment, ignore). Recategorize applies
+  changed rules to existing transactions; edited rows are locked so rules don't
+  overwrite them.
+- **Review** on the dashboard: filters (dates, accounts, categories, tags, search),
+  monthly flow and category charts, and an editable transaction table with bulk
+  assignment. Transfers between your own accounts can be matched and excluded, and
+  shared accounts can be split by their number of owners.
+- **Keep the data safe** with backups: download or restore the database, and an
+  automatic backup is made before restores and other destructive actions.
 
 ## Download
 
-Latest version: [View release notes](https://github.com/boud96/CashmoneyDjango/releases/latest)
+Latest version: [release notes](https://github.com/boud96/Cashmoney/releases/latest)
 
-- [Download installer](https://github.com/boud96/CashmoneyDjango/releases/latest/download/Cashmoney-Setup.exe)
-- [Download portable app](https://github.com/boud96/CashmoneyDjango/releases/latest/download/Cashmoney-Portable.exe)
-- [Checksums](https://github.com/boud96/CashmoneyDjango/releases/latest/download/checksums.txt)
+- [Installer](https://github.com/boud96/Cashmoney/releases/latest/download/Cashmoney-Setup.exe)
+- [Portable app](https://github.com/boud96/Cashmoney/releases/latest/download/Cashmoney-Portable.exe)
+- [Checksums](https://github.com/boud96/Cashmoney/releases/latest/download/checksums.txt) (SHA-256)
 
-## Launch
+The app keeps its database and logs in Electron's user data folder under `%APPDATA%`,
+not in the installation folder. A new install starts with a small set of sample data,
+which Maintenance can remove.
 
-For a fresh clone on Windows, bootstrap the local Python and Node dependencies
-first:
+## Development
+
+For a fresh clone on Windows, install the Python and Node dependencies first:
 
 ```powershell
 .\setup_dev.bat
 ```
 
-The setup script creates `.venv`, installs backend dependencies, and installs
-frontend/desktop npm dependencies. If npm is not available globally, it downloads
-a portable Node.js runtime into `tools\node`.
+It creates `.venv`, installs the backend requirements, and installs the frontend and
+desktop npm packages from their lockfiles. If npm isn't available, it downloads a
+portable Node.js into `tools\node` and checks it against its published SHA-256.
 
-Then run the app with:
+Then run the app:
 
 ```powershell
 .\run_app.bat
 ```
 
-The launcher also calls `setup_dev.bat`, applies Django migrations, builds the
-React frontend when needed, starts the backend, and opens the app. If Electron
-has been installed in `desktop\node_modules`, it launches the Electron shell;
-otherwise it opens the Django-served frontend in the default browser.
+The launcher runs the setup, applies migrations, builds the frontend, starts the
+Django development server on `127.0.0.1:8000`, and opens the Electron shell (or the
+default browser if Electron isn't installed). To install the Electron
+shell, run `.\desktop\install_desktop.bat`.
 
-To build the React frontend manually:
-
-```powershell
-.\build_frontend.bat
-```
-
-The generated React bundle is written to
-`backend\finance\static\finance\react\`. This directory is generated build
-output and is intentionally not tracked in git.
-
-To install the Electron shell:
+The frontend has no separate dev server: build it, and Django serves it.
 
 ```powershell
-.\desktop\install_desktop.bat
+.\build_frontend.bat --skip-setup
 ```
 
-This also calls `setup_dev.bat`, so it works on a fresh clone.
+The bundle goes to `backend\finance\static\finance\react\`, which is generated and not
+tracked in git.
 
-## Backend
+### Tests and lint
 
-The Django backend lives in `backend\`.
+```powershell
+cd backend
+..\.venv\Scripts\python.exe manage.py test finance
 
-Manual setup and launch:
+cd ..\frontend
+npm run lint
+npm test
+```
+
+Python formatting and lint run through pre-commit (ruff). CI runs the backend tests and
+the frontend lint and tests before every build.
+
+### Backend by hand
 
 ```powershell
 cd backend
@@ -67,56 +93,46 @@ py -m venv ..\.venv
 ..\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
 ```
 
-If your shell does not like the spaced path examples above, use:
+The database is `backend\db.sqlite3` unless `CASHMONEY_DATA_DIR` points somewhere
+else.
 
-```powershell
-& "..\.venv\Scripts\python.exe" manage.py runserver 127.0.0.1:8000
-```
+## Django admin
 
-## Django Admin
+The app has no default admin account and no built-in admin credentials. To create or
+reset a local admin user, open Maintenance → Danger Zone in the app. Once an admin
+user exists, the same card has an Open Admin button for `/admin/`.
 
-The app does not create a default admin account or ship hardcoded admin
-credentials. In the app, open Maintenance -> Danger Zone and use the Django
-admin card to create or reset a local admin user. After an admin user exists,
-the same card shows an Open Admin button for `/admin/`.
-
-For development, you can also create a local superuser from the command line:
+For development you can also create one from the command line:
 
 ```powershell
 .\.venv\Scripts\python.exe .\backend\manage.py createsuperuser
 ```
 
-Then open `/admin/` from the running app and sign in.
-
 ## Packaging
 
-To build a Windows package using Electron plus a PyInstaller Django backend:
+To build the Windows app (Electron plus a PyInstaller build of the backend):
 
 ```powershell
 .\build_packaged_app.bat
 ```
 
-This also calls `setup_dev.bat`, so it creates `.venv` and installs npm
-dependencies before building.
+It runs the setup, builds the frontend, builds
+`backend\dist\cashmoney-backend\cashmoney-backend.exe` (PyInstaller is pinned in
+`backend\requirements-build.txt`), and packages Electron into `desktop\dist\`:
 
-This command:
+- `Cashmoney Setup <version>.exe`: installer
+- `Cashmoney <version>.exe`: portable app
+- `win-unpacked\Cashmoney.exe`: unpacked app, for quick local testing
 
-1. Builds the React frontend into Django-served static assets.
-2. Builds `backend\dist\cashmoney-backend\cashmoney-backend.exe` with PyInstaller.
-3. Packages Electron with that backend executable.
+The packaged backend runs on `127.0.0.1:8765` with waitress, `DEBUG` off, and a
+secret key generated per install.
 
-The generated test artifacts are written to:
+## Releases
 
-```text
-desktop\dist\
-```
+GitHub Actions builds every pull request into `main` (and manual runs). Pushing a
+`vX.Y.Z` tag builds again and publishes `Cashmoney-Setup.exe`,
+`Cashmoney-Portable.exe` and `checksums.txt` to a GitHub release; the download links
+above depend on those names. The product version comes from `desktop/package.json`.
 
-Useful outputs:
-
-- `Cashmoney Setup 0.1.0.exe` - installer
-- `Cashmoney 0.1.0.exe` - portable executable
-- `win-unpacked\Cashmoney.exe` - unpacked app folder for quick local testing
-
-In packaged mode, Electron starts the bundled backend on `127.0.0.1:8765`.
-The SQLite database and backend logs are stored in the Electron user data
-folder, not inside the installation directory.
+An optional repository variable, `VITE_CASHMONEY_DONATION_URL`, adds a donation link
+(a public payment link) to Help → About. Without it, the panel is hidden.

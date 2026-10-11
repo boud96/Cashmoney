@@ -88,6 +88,9 @@ function backendLogs() {
 function backendLogPaths() {
   const logDir = app.getPath("userData");
   return {
+    // backend.log is the packaged backend's own log (packaged_backend.py); the other
+    // two catch whatever the process prints, such as a crash before logging starts.
+    log: path.join(logDir, "backend.log"),
     stderr: path.join(logDir, "backend.err.log"),
     stdout: path.join(logDir, "backend.out.log"),
   };
@@ -204,6 +207,7 @@ function backendErrorHtml(title, message) {
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(message)}</p>
     <p>Backend logs:</p>
+    <code>${escapeHtml(logs.log)}</code>
     <code>${escapeHtml(logs.stdout)}</code>
     <code>${escapeHtml(logs.stderr)}</code>
   </main>
@@ -325,8 +329,11 @@ function createWindow(options = {}) {
     }
     return isAppOriginUrl(url) ? { action: "allow" } : { action: "deny" };
   });
+  // Only app pages load in the window. External http(s) links open in the system
+  // browser; any other scheme (file:, data:, custom protocols) goes nowhere.
+  // loadURL (the startup error page) doesn't emit will-navigate.
   window.webContents.on("will-navigate", (event, url) => {
-    if (openExternalUrl(url)) {
+    if (openExternalUrl(url) || !isAppOriginUrl(url)) {
       event.preventDefault();
     }
   });

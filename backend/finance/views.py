@@ -1,4 +1,7 @@
+import codecs
 import json
+import logging
+import re
 import sqlite3
 import tempfile
 from datetime import date, datetime
@@ -15,7 +18,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
 from django.http import Http404
-from django.http import HttpResponse
+from django.http import FileResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -24,6 +27,8 @@ from django.views.generic import TemplateView
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.csrf import csrf_failure as django_csrf_failure
+from django.views.defaults import bad_request as django_bad_request
+from django.views.defaults import server_error as django_server_error
 
 from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .search import SEARCH_FIELDS, fold_search_text
@@ -174,6 +179,34 @@ def clean_text(value, field_name, required=False):
             raise APIValidationError("Missing required field", {"field": field_name})
         return ""
     return str(value).strip()
+
+
+# Statement files are read into memory, so they get a limit far above any real export.
+# Backups are copied to disk in chunks; their limit only stops obviously wrong files.
+# The frontend checks the same limits before uploading (shared.js).
+MAX_IMPORT_FILE_BYTES = 50 * 1024 * 1024
+MAX_BACKUP_FILE_BYTES = 1024 * 1024 * 1024
+
+
+def require_upload_size(upload, field_name, max_bytes):
+    if upload.size > max_bytes:
+        raise APIValidationError(
+            f"The file is too large ({upload.size / 1048576:.1f} MB). "
+            f"The limit is {max_bytes // 1048576} MB.",
+            {"field": field_name},
+        )
+
+
+def clean_encoding(value, field_name):
+    encoding = clean_text(value, field_name, required=True)
+    try:
+        codecs.lookup(encoding)
+    except LookupError as exc:
+        raise APIValidationError(
+            f"Unknown encoding '{encoding}'. Use one like utf-8, utf-8-sig or cp1250.",
+            {"field": field_name},
+        ) from exc
+    return encoding
 
 
 def clean_currency_code(value, field_name, default="CZK"):
@@ -428,6 +461,15 @@ def id_list(value):
     return [item for item in str(value).split(",") if item]
 
 
+# SQLite caps the parameters of one statement (32,766, or 999 in older builds).
+ID_CHUNK_SIZE = 900
+
+
+def id_chunks(ids):
+    for start in range(0, len(ids), ID_CHUNK_SIZE):
+        yield ids[start : start + ID_CHUNK_SIZE]
+
+
 def filter_values(params, field_name):
     raw_values = (
         params.getlist(field_name)
@@ -486,6 +528,44 @@ class AppShellView(TemplateView):
         return context
 
 
+logger = logging.getLogger(__name__)
+
+# Unique columns as SQLite reports them, with what to tell the user.
+UNIQUE_CONFLICT_MESSAGES = {
+    "finance_bankaccount.account_number": (
+        "Another bank account already has this account number."
+    ),
+    "finance_csvmapping.name": "A mapping with this name already exists.",
+    "finance_category.name": "A category with this name already exists.",
+    "finance_subcategory.category_id, finance_subcategory.name": (
+        "This category already has a subcategory with this name."
+    ),
+    "finance_tag.name": "A tag with this name already exists.",
+    "finance_savedfilter.name": "A saved filter with this name already exists.",
+    "finance_transaction.bank_account_id, finance_transaction.original_id": (
+        "This account already has a transaction with this ID."
+    ),
+}
+
+
+def integrity_error_response(exc):
+    """A user-facing message and status for a database constraint error."""
+    text = str(exc)
+    unique = re.match(r"UNIQUE constraint failed: (.+)", text)
+    if unique:
+        message = UNIQUE_CONFLICT_MESSAGES.get(
+            unique.group(1).strip(), "This would duplicate an existing item."
+        )
+        return message, 409
+    not_null = re.match(r"NOT NULL constraint failed: \w+\.(\w+)", text)
+    if not_null:
+        field = not_null.group(1).removesuffix("_id").replace("_", " ")
+        return f"{field.capitalize()} is required.", 400
+    if "FOREIGN KEY constraint failed" in text:
+        return "It refers to an item that no longer exists.", 400
+    return "This change conflicts with existing data.", 409
+
+
 class JsonView(View):
     # Writes run in one transaction, so a request that fails part-way saves nothing.
     # Views that manage the connection themselves or call the network opt out.
@@ -518,7 +598,18 @@ class JsonView(View):
         except (UnicodeError, ValueError) as exc:
             return json_response({"error": str(exc), "details": {}}, status=400)
         except IntegrityError as exc:
-            return json_response({"error": str(exc), "details": {}}, status=409)
+            message, status = integrity_error_response(exc)
+            return json_response({"error": message, "details": {}}, status=status)
+        except Exception:
+            # Anything else is a bug; keep the traceback in the log, not in the UI.
+            logger.exception("Unhandled error in %s %s", request.method, request.path)
+            return json_response(
+                {
+                    "error": "Something went wrong on the server. Details are in the log.",
+                    "details": {},
+                },
+                status=500,
+            )
 
     def options(self, request, *args, **kwargs):
         return json_response({})
@@ -705,9 +796,7 @@ class CSVMappingCollectionView(JsonView):
             or ImportFileFormat.CSV,
             delimiter=clean_csv_char(data.get("delimiter"), "delimiter", ","),
             quotechar=clean_csv_char(data.get("quotechar"), "quotechar", '"'),
-            encoding=clean_text(
-                data.get("encoding", "utf-8-sig"), "encoding", required=True
-            ),
+            encoding=clean_encoding(data.get("encoding", "utf-8-sig"), "encoding"),
             header_row=clean_int(
                 data.get("header_row"), "header_row", default=0, minimum=0
             ),
@@ -742,6 +831,7 @@ class CSVMappingColumnDetectionView(JsonView):
         csv_file = request.FILES.get("csv_file")
         if not csv_file:
             raise APIValidationError("Missing required field", {"field": "csv_file"})
+        require_upload_size(csv_file, "csv_file", MAX_IMPORT_FILE_BYTES)
 
         use_manual_settings = parse_bool(
             request.POST.get("manual_settings"), default=False
@@ -750,10 +840,8 @@ class CSVMappingColumnDetectionView(JsonView):
             name="Column detection",
             delimiter=clean_csv_char(request.POST.get("delimiter"), "delimiter", ","),
             quotechar=clean_csv_char(request.POST.get("quotechar"), "quotechar", '"'),
-            encoding=clean_text(
-                request.POST.get("encoding", "utf-8-sig"),
-                "encoding",
-                required=True,
+            encoding=clean_encoding(
+                request.POST.get("encoding", "utf-8-sig"), "encoding"
             ),
             header_row=clean_int(
                 request.POST.get("header_row"), "header_row", default=0, minimum=0
@@ -836,6 +924,8 @@ class CSVMappingDetailView(JsonView):
                         field,
                         clean_csv_char(data[field], field, defaults[field]),
                     )
+                elif field == "encoding":
+                    setattr(mapping, field, clean_encoding(data[field], field))
                 elif field == "thousands_separator":
                     setattr(
                         mapping,
@@ -1188,64 +1278,6 @@ class TransactionCollectionView(JsonView):
             }
         )
 
-    def post(self, request):
-        data = parse_json_body(request)
-        transaction_obj = Transaction.objects.create(
-            original_id=clean_text(data.get("original_id"), "original_id"),
-            bank_account=optional_object(
-                BankAccount, data.get("bank_account_id"), "bank_account_id"
-            ),
-            transaction_date=parse_date_value(
-                require_field(data, "transaction_date"), "transaction_date"
-            ),
-            posted_date=parse_date_value(data.get("posted_date"), "posted_date"),
-            description=clean_text(data.get("description"), "description"),
-            amount=parse_decimal(require_field(data, "amount")),
-            currency=clean_currency_code(data.get("currency", "CZK"), "currency"),
-            counterparty_account_number=clean_text(
-                data.get("counterparty_account_number"), "counterparty_account_number"
-            ),
-            counterparty_name=clean_text(
-                data.get("counterparty_name"), "counterparty_name"
-            ),
-            transaction_type=clean_text(
-                data.get("transaction_type"), "transaction_type"
-            ),
-            variable_symbol=clean_text(data.get("variable_symbol"), "variable_symbol"),
-            specific_symbol=clean_text(data.get("specific_symbol"), "specific_symbol"),
-            constant_symbol=clean_text(data.get("constant_symbol"), "constant_symbol"),
-            counterparty_note=clean_text(
-                data.get("counterparty_note"), "counterparty_note"
-            ),
-            my_note=clean_text(data.get("my_note"), "my_note"),
-            other_note=clean_text(data.get("other_note"), "other_note"),
-            subcategory=optional_object(
-                Subcategory, data.get("subcategory_id"), "subcategory_id"
-            ),
-            want_need_investment=clean_choice(
-                data.get("want_need_investment"),
-                "want_need_investment",
-                WantNeedInvestment.CHOICES,
-            ),
-            is_ignored=parse_bool(data.get("is_ignored"), default=False),
-            raw_data=clean_dict(data.get("raw_data"), "raw_data"),
-        )
-        if "tag_ids" in data:
-            set_tags(transaction_obj, data["tag_ids"])
-        settings_obj = FinanceSettings.load()
-        recalculate_transaction_conversions(
-            Transaction.objects.filter(id=transaction_obj.id),
-            default_currency=settings_obj.default_currency,
-        )
-        transaction_obj.refresh_from_db()
-        return json_response(
-            serialize_transaction(
-                transaction_obj,
-                default_currency=settings_obj.default_currency,
-            ),
-            status=201,
-        )
-
 
 class UncategorizedSuggestionView(JsonView):
     def get(self, request):
@@ -1425,11 +1457,13 @@ class TransactionDetailView(JsonView):
             transaction.subcategory = optional_object(
                 Subcategory, data["subcategory_id"], "subcategory_id"
             )
+        # An explicit lock value wins; otherwise categorization edits lock the row
+        # (the same rule as bulk assign).
         if "is_categorization_locked" in data:
             transaction.is_categorization_locked = parse_bool(
                 data["is_categorization_locked"]
             )
-        if should_lock_categorization:
+        elif should_lock_categorization:
             transaction.is_categorization_locked = True
         transaction.save()
         if "tag_ids" in data:
@@ -1440,16 +1474,20 @@ class TransactionDetailView(JsonView):
             default_currency=settings_obj.default_currency,
         )
         transaction.refresh_from_db()
-        return json_response(
-            serialize_transaction(
-                transaction,
-                split_by_owners=parse_bool(
-                    request.GET.get("split_by_owners"), default=False
-                ),
-                default_currency=settings_obj.default_currency,
-                include_raw_data=False,
-            )
+        payload = serialize_transaction(
+            transaction,
+            split_by_owners=parse_bool(
+                request.GET.get("split_by_owners"), default=False
+            ),
+            default_currency=settings_obj.default_currency,
+            include_raw_data=False,
         )
+        # Whether the edited row still fits the dashboard filters sent with the edit,
+        # decided by the list's own filter code; the dashboard highlights it if not.
+        payload["matches_filters"] = (
+            filtered_transactions(request).filter(id=transaction.id).exists()
+        )
+        return json_response(payload)
 
     def delete(self, request, pk):
         get_object_or_404(Transaction, id=pk).delete()
@@ -1514,30 +1552,6 @@ class BulkDeleteTransactionsView(JsonView):
         return json_response({"deleted": delete_transactions(queryset)})
 
 
-def legacy_bulk_assign_payload(data):
-    assignment_type = clean_text(
-        require_field(data, "assignment_type"), "assignment_type", required=True
-    )
-    if assignment_type == "subcategory":
-        return {"subcategory_id": require_field(data, "subcategory_id")}
-    if assignment_type == "tag":
-        return {
-            "tag_mode": "add",
-            "tag_ids": [require_field(data, "tag_id")],
-        }
-    if assignment_type == "want_need_investment":
-        return {
-            "want_need_investment": require_field(data, "want_need_investment"),
-        }
-    raise APIValidationError(
-        "Invalid assignment type",
-        {
-            "field": "assignment_type",
-            "allowed": ["subcategory", "tag", "want_need_investment"],
-        },
-    )
-
-
 class BulkAssignTransactionsView(JsonView):
     def post(self, request):
         data = parse_json_body(request)
@@ -1545,9 +1559,6 @@ class BulkAssignTransactionsView(JsonView):
         transaction_ids = list(queryset.values_list("id", flat=True))
         updated_count = len(transaction_ids)
         actions = []
-
-        if "assignment_type" in data:
-            data = legacy_bulk_assign_payload(data)
 
         update_values = {"updated_at": timezone.now()}
         should_lock_categorization = False
@@ -1652,14 +1663,18 @@ class BulkAssignTransactionsView(JsonView):
         if not actions:
             raise APIValidationError("Choose at least one bulk assignment")
 
-        Transaction.objects.filter(id__in=transaction_ids).update(**update_values)
+        # The ID list is a snapshot on purpose: after the first update, the filters may
+        # no longer match these rows (e.g. "Uncategorized"), so a subquery would miss
+        # them in the tag steps. It goes in chunks to stay under SQLite's limit on
+        # parameters per statement.
+        for chunk in id_chunks(transaction_ids):
+            Transaction.objects.filter(id__in=chunk).update(**update_values)
 
         if tag_mode != "no_change":
             through_model = Transaction.tags.through
             if tag_mode in {"replace", "clear"}:
-                through_model.objects.filter(
-                    transaction_id__in=transaction_ids
-                ).delete()
+                for chunk in id_chunks(transaction_ids):
+                    through_model.objects.filter(transaction_id__in=chunk).delete()
             if tag_mode in {"add", "replace"}:
                 through_model.objects.bulk_create(
                     [
@@ -1688,6 +1703,7 @@ def resolve_import_inputs(request):
             "bank_account_id and csv_file are required",
             {"fields": ["bank_account_id", "csv_file"]},
         )
+    require_upload_size(csv_file, "csv_file", MAX_IMPORT_FILE_BYTES)
 
     bank_account = optional_object(BankAccount, bank_account_id, "bank_account_id")
     csv_mapping = (
@@ -1727,9 +1743,12 @@ class ImportTransactionsView(JsonView):
         limit = min(
             clean_int(request.GET.get("limit"), "limit", default=8, minimum=1), 25
         )
-        imports = CSVImport.objects.select_related(
-            "bank_account", "csv_mapping"
-        ).order_by("-created_at")[:limit]
+        # Reports stay out of the list; the import response carries the new one.
+        imports = (
+            CSVImport.objects.select_related("bank_account", "csv_mapping")
+            .defer("report")
+            .order_by("-created_at")[:limit]
+        )
         return json_response(
             [serialize_csv_import(csv_import) for csv_import in imports]
         )
@@ -2009,12 +2028,16 @@ def delete_with_safety_backup(delete_function):
 
 
 class MaintenanceTransactionsView(JsonView):
+    atomic_writes = False  # backs up first; the delete runs in its own transaction
+
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_ALL_TRANSACTIONS)
         return delete_with_safety_backup(delete_all_transactions)
 
 
 class MaintenanceFinanceDataView(JsonView):
+    atomic_writes = False  # backs up first; the delete runs in its own transaction
+
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_ALL_FINANCE_DATA)
         return delete_with_safety_backup(delete_all_finance_data)
@@ -2028,15 +2051,20 @@ class MaintenanceDatabaseBackupView(JsonView):
                 {"vendor": connection.vendor},
             )
 
-        connection.ensure_connection()
-        content = connection.connection.serialize()
-
         timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
-        response = HttpResponse(content, content_type="application/x-sqlite3")
-        response["Content-Disposition"] = (
-            f'attachment; filename="cashmoney-backup-{timestamp}.sqlite3"'
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as handle:
+            temporary_path = Path(handle.name)
+        try:
+            backup_database_to(temporary_path)
+        except BaseException:
+            temporary_path.unlink(missing_ok=True)
+            raise
+        return TemporaryFileResponse(
+            temporary_path,
+            as_attachment=True,
+            filename=f"cashmoney-backup-{timestamp}.sqlite3",
+            content_type="application/x-sqlite3",
         )
-        return response
 
 
 def backup_directory():
@@ -2088,10 +2116,31 @@ def get_saved_backup_path(filename):
     return backup_path
 
 
-def sqlite_attachment_response(content, filename):
-    response = HttpResponse(content, content_type="application/x-sqlite3")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
+def backup_database_to(path):
+    """Copy the live database to path with SQLite's backup API (page by page, not in memory)."""
+    connection.ensure_connection()
+    if connection.in_atomic_block:
+        # Inside a transaction the backup API can wait forever on this connection's own
+        # locks; serialize() snapshots exactly what this connection sees.
+        Path(path).write_bytes(connection.connection.serialize())
+        return
+    target = sqlite3.connect(str(path))
+    try:
+        connection.connection.backup(target)
+    finally:
+        target.close()
+
+
+class TemporaryFileResponse(FileResponse):
+    """Streams a temporary file and deletes it once the response is closed."""
+
+    def __init__(self, path, **kwargs):
+        self.temporary_path = Path(path)
+        super().__init__(self.temporary_path.open("rb"), **kwargs)
+
+    def close(self):
+        super().close()
+        self.temporary_path.unlink(missing_ok=True)
 
 
 def validate_sqlite_backup(backup_path):
@@ -2135,7 +2184,7 @@ def create_safety_backup(prefix):
     while backup_path.exists():
         backup_path = backup_dir / f"{prefix}-{timestamp}-{suffix}.sqlite3"
         suffix += 1
-    backup_path.write_bytes(connection.connection.serialize())
+    backup_database_to(backup_path)
     return backup_path
 
 
@@ -2168,7 +2217,12 @@ class MaintenanceSavedBackupsView(JsonView):
 class MaintenanceSavedBackupExportView(JsonView):
     def get(self, request, filename):
         backup_path = get_saved_backup_path(filename)
-        return sqlite_attachment_response(backup_path.read_bytes(), backup_path.name)
+        return FileResponse(
+            backup_path.open("rb"),
+            as_attachment=True,
+            filename=backup_path.name,
+            content_type="application/x-sqlite3",
+        )
 
 
 class MaintenanceSavedBackupRestoreView(JsonView):
@@ -2224,6 +2278,7 @@ class MaintenanceDatabaseRestoreView(JsonView):
         backup_file = request.FILES.get("backup_file")
         if not backup_file:
             raise APIValidationError("Missing required field", {"field": "backup_file"})
+        require_upload_size(backup_file, "backup_file", MAX_BACKUP_FILE_BYTES)
 
         upload_path = None
         try:
@@ -2248,11 +2303,21 @@ class MaintenanceDatabaseRestoreView(JsonView):
 
 
 def handler400(request, exception=None):
-    return json_response({"error": "Bad request"}, status=400)
+    if not request.path.startswith("/api/"):
+        return django_bad_request(request, exception)
+    return json_response({"error": "Bad request", "details": {}}, status=400)
 
 
 def handler500(request):
-    return json_response({"error": "Server error"}, status=500)
+    if not request.path.startswith("/api/"):
+        return django_server_error(request)
+    return json_response(
+        {
+            "error": "Something went wrong on the server. Details are in the log.",
+            "details": {},
+        },
+        status=500,
+    )
 
 
 def csrf_failure(request, reason=""):

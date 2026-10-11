@@ -13,6 +13,9 @@ hiddenimports += collect_submodules("django.contrib.admin.migrations")
 hiddenimports += collect_submodules("django.contrib.auth.migrations")
 hiddenimports += collect_submodules("django.contrib.contenttypes.migrations")
 hiddenimports += collect_submodules("django.contrib.sessions.migrations")
+# Named only in settings (MIDDLEWARE) or imported late; make sure they are bundled.
+hiddenimports += collect_submodules("whitenoise")
+hiddenimports += collect_submodules("waitress")
 
 a = Analysis(
     ["packaged_backend.py"],

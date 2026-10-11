@@ -37,8 +37,8 @@ export const wniOptions = [
   ["investment", "Investment"],
 ];
 export const definitionHelp = {
-  "Bank Accounts": "Bank accounts group imported transactions by account, bank, currency, owner count, and optional default CSV mapping.",
-  "CSV Mappings": "CSV mappings describe how a bank statement file should be parsed, including separators, date formats, columns, and categorization text fields.",
+  "Bank Accounts": "Bank accounts group imported transactions by account, bank, currency, owner count, and optional default import mapping.",
+  "Import Mappings": "Import mappings describe how a bank file is read: a CSV layout (separators, date formats, columns) or a camt.053 XML statement, plus the fields used for categorization.",
   Categories: "Categories are the top-level buckets used for dashboard breakdowns and reporting.",
   Subcategories: "Subcategories sit under categories and are the actual category-like value assigned to transactions.",
   Tags: "Tags are optional labels that can be attached to multiple transactions for flexible filtering.",
@@ -212,6 +212,12 @@ export function normalizeTagSelection(selection, tags) {
   return coversAllTags ? [] : values;
 }
 
+// The number of filters a saved preset applies; an old preset with "Untagged" plus
+// every tag applies no tag filter at all.
+export function presetFilterCount(filters, tags) {
+  return countActiveFilters({ ...filters, tag: normalizeTagSelection(filters?.tag, tags) });
+}
+
 export function cloneFilters(filters) {
   return {
     ...emptyFilters(),
@@ -371,13 +377,13 @@ export function sunburstData(rows) {
     ids.push(categoryId);
     labels.push(category.name);
     parents.push("");
-    values.push(category.amount);
+    values.push(Number(category.amount || 0));
     colors.push(normalizeHexColor(category.color) || cssVar("--muted", "#667481"));
     (category.children || []).forEach((child) => {
       ids.push(`${categoryId}:${child.name}`);
       labels.push(child.name);
       parents.push(categoryId);
-      values.push(child.amount);
+      values.push(Number(child.amount || 0));
       colors.push(normalizeHexColor(child.color) || normalizeHexColor(category.color) || cssVar("--surface-2", "#eef3f6"));
     });
   });
@@ -645,6 +651,17 @@ export function amountNumber(value) {
   return formatNumber(value, { maximumFractionDigits: 2, minimumFractionDigits: 0 });
 }
 
+// The API sends money as decimal strings ("-12.50"), which would sort as text.
+// Grid comparator: numeric order, missing values first.
+export function compareAmounts(left, right) {
+  const leftMissing = left === null || left === undefined || left === "";
+  const rightMissing = right === null || right === undefined || right === "";
+  if (leftMissing || rightMissing) {
+    return Number(rightMissing) - Number(leftMissing);
+  }
+  return Number(left) - Number(right);
+}
+
 export function formatMoneyValue(value, hideAmounts = false) {
   return hideAmounts ? HIDDEN_AMOUNT : money(value);
 }
@@ -675,6 +692,17 @@ export function formatBytes(value, fallback = "") {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// The backend refuses larger uploads (MAX_IMPORT_FILE_BYTES and MAX_BACKUP_FILE_BYTES in views.py).
+export const MAX_IMPORT_FILE_BYTES = 50 * 1024 * 1024;
+export const MAX_BACKUP_FILE_BYTES = 1024 * 1024 * 1024;
+
+export function fileTooLargeMessage(file, maxBytes) {
+  if (!file || file.size <= maxBytes) {
+    return "";
+  }
+  return `The file is too large (${formatBytes(file.size)}). The limit is ${Math.round(maxBytes / (1024 * 1024))} MB.`;
 }
 
 export function formatDateTime(value, fallback = "") {
@@ -709,7 +737,7 @@ export function colorPillStyle(color) {
 }
 
 export function tagTitle(tags) {
-  return tags.length ? tags.map((tag) => tag.name).join(", ") : "No tags";
+  return tags.length ? tags.map((tag) => tag.name).join(", ") : "Untagged";
 }
 
 export function estimateVisibleTagCount(tags, width) {

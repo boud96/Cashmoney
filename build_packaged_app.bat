@@ -9,12 +9,9 @@ if errorlevel 1 exit /b 1
 call build_frontend.bat --skip-setup
 if errorlevel 1 exit /b 1
 
-".venv\Scripts\python.exe" -m pip show pyinstaller >nul 2>nul
-if errorlevel 1 (
-  echo Installing PyInstaller...
-  ".venv\Scripts\python.exe" -m pip install pyinstaller
-  if errorlevel 1 exit /b 1
-)
+rem Build tools are pinned in requirements-build.txt (PyInstaller).
+".venv\Scripts\python.exe" -m pip install -r backend\requirements-build.txt
+if errorlevel 1 exit /b 1
 
 pushd backend
 "..\.venv\Scripts\python.exe" -m PyInstaller cashmoney-backend.spec --noconfirm --clean
@@ -37,7 +34,8 @@ if exist "..\tools\node\node.exe" (
     if not defined NPX set "NPX=%%I"
   )
 )
-call "%NPM%" install
+rem A clean install from the lockfile, so the package never uses stale or newer modules.
+call "%NPM%" ci
 if errorlevel 1 (
   popd
   exit /b 1
