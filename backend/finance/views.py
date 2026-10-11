@@ -2252,7 +2252,8 @@ def migrations_unknown_here(backup_path):
     )
 
 
-def create_safety_backup(prefix):
+def create_saved_backup(prefix):
+    """Save a copy of the database in the backups folder as <prefix>-<time>.sqlite3."""
     connection.ensure_connection()
     timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
     backup_dir = backup_directory()
@@ -2263,8 +2264,17 @@ def create_safety_backup(prefix):
         backup_path = backup_dir / f"{prefix}-{timestamp}-{suffix}.sqlite3"
         suffix += 1
     backup_database_to(backup_path)
+    return backup_path
+
+
+def create_safety_backup(prefix):
+    backup_path = create_saved_backup(prefix)
     prune_safety_backups(prefix)
     return backup_path
+
+
+# Backups the user saves with "Save backup" (listed as Manual, never pruned).
+MANUAL_BACKUP_PREFIX = "cashmoney-backup"
 
 
 # Of each kind of safety backup, the newest SAFETY_BACKUP_KEEP always stay, and so
@@ -2314,8 +2324,16 @@ def restore_sqlite_database_from_path(backup_path):
 
 
 class MaintenanceSavedBackupsView(JsonView):
+    atomic_writes = False  # the backup API copies page by page outside a transaction
+
     def get(self, request):
         return json_response({"backups": saved_backup_payload()})
+
+    def post(self, request):
+        backup_path = create_saved_backup(MANUAL_BACKUP_PREFIX)
+        return json_response(
+            {"saved": backup_path.name, "backups": saved_backup_payload()}, status=201
+        )
 
 
 class MaintenanceSavedBackupExportView(JsonView):

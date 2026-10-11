@@ -172,6 +172,19 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
     }
   }
 
+  async function saveBackup() {
+    setSafeBusy("save");
+    try {
+      const payload = await apiPost("/maintenance/backups/");
+      setBackups(payload.backups || []);
+      notify(`Backup saved as ${payload.saved}`);
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSafeBusy("");
+    }
+  }
+
   async function exportSavedBackup(backup) {
     setBackupAction(`export:${backup.filename}`);
     try {
@@ -349,6 +362,16 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
             </div>
             <div className="backup-actions">
               <LoadingButton
+                busy={safeBusy === "save"}
+                busyLabel="Saving"
+                className="link-button"
+                disabled={backupBusy}
+                onClick={saveBackup}
+                type="button"
+              >
+                Save backup
+              </LoadingButton>
+              <LoadingButton
                 busy={safeBusy === "backup"}
                 busyLabel="Exporting"
                 className="primary-action"
@@ -408,13 +431,15 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
             ))
           ) : (
             <div className="backup-empty-state">
-              No saved backups yet. Safety backups appear here after a database restore or a "Delete all" action.
+              No saved backups yet. Save backup keeps one here; safety backups appear after a database restore or a
+              "Delete all" action.
             </div>
           )}
         </div>
         <p className="maintenance-backup-note">
           The app keeps the newest 10 safety backups of each kind and every one from the last 90 days, and deletes
-          older ones when it saves a new one. Exports you download aren't affected.
+          older ones when it saves a new one. Backups you save here (Manual) and exports you download are never
+          deleted.
         </p>
         <div className="maintenance-tool-grid">
           <article className="maintenance-tool-card restore-card">

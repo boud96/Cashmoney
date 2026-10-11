@@ -3846,6 +3846,37 @@ class APITests(FinanceTestCase):
         self.assertTrue(new_backup.exists())
         self.assertEqual([path for path in recent if not path.exists()], [])
 
+    def test_save_backup_keeps_a_manual_backup_that_is_never_pruned(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="In the manual backup",
+            amount=Decimal("-12.50"),
+        )
+        older = [
+            self.saved_backup(f"cashmoney-backup-2025{month:02d}01-120000.sqlite3", 200)
+            for month in range(1, 13)
+        ]
+
+        response = self.client.post("/api/maintenance/backups/")
+        payload = json_body(response)
+        create_safety_backup("pre-delete")
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(payload["saved"].startswith("cashmoney-backup-"))
+        listed = {backup["filename"]: backup["label"] for backup in payload["backups"]}
+        self.assertEqual(listed[payload["saved"]], "Manual")
+        self.assertEqual([path for path in older if not path.exists()], [])
+        backup = sqlite3.connect(self.backup_dir() / payload["saved"])
+        try:
+            descriptions = [
+                row[0]
+                for row in backup.execute("SELECT description FROM finance_transaction")
+            ]
+        finally:
+            backup.close()
+        self.assertEqual(descriptions, ["In the manual backup"])
+
     def test_maintenance_delete_finance_data_preserves_auth_users(self):
         user = get_user_model().objects.create_user(
             username="local-admin",
