@@ -18,7 +18,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import IntegrityError, connection, transaction
 from django.db.models import Q
 from django.http import Http404
-from django.http import HttpResponse
+from django.http import FileResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -2082,12 +2082,16 @@ def delete_with_safety_backup(delete_function):
 
 
 class MaintenanceTransactionsView(JsonView):
+    atomic_writes = False  # backs up first; the delete runs in its own transaction
+
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_ALL_TRANSACTIONS)
         return delete_with_safety_backup(delete_all_transactions)
 
 
 class MaintenanceFinanceDataView(JsonView):
+    atomic_writes = False  # backs up first; the delete runs in its own transaction
+
     def delete(self, request):
         require_confirmation(request, CONFIRM_DELETE_ALL_FINANCE_DATA)
         return delete_with_safety_backup(delete_all_finance_data)
@@ -2101,15 +2105,20 @@ class MaintenanceDatabaseBackupView(JsonView):
                 {"vendor": connection.vendor},
             )
 
-        connection.ensure_connection()
-        content = connection.connection.serialize()
-
         timestamp = timezone.localtime().strftime("%Y%m%d-%H%M%S")
-        response = HttpResponse(content, content_type="application/x-sqlite3")
-        response["Content-Disposition"] = (
-            f'attachment; filename="cashmoney-backup-{timestamp}.sqlite3"'
+        with tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False) as handle:
+            temporary_path = Path(handle.name)
+        try:
+            backup_database_to(temporary_path)
+        except BaseException:
+            temporary_path.unlink(missing_ok=True)
+            raise
+        return TemporaryFileResponse(
+            temporary_path,
+            as_attachment=True,
+            filename=f"cashmoney-backup-{timestamp}.sqlite3",
+            content_type="application/x-sqlite3",
         )
-        return response
 
 
 def backup_directory():
@@ -2161,10 +2170,31 @@ def get_saved_backup_path(filename):
     return backup_path
 
 
-def sqlite_attachment_response(content, filename):
-    response = HttpResponse(content, content_type="application/x-sqlite3")
-    response["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return response
+def backup_database_to(path):
+    """Copy the live database to path with SQLite's backup API (page by page, not in memory)."""
+    connection.ensure_connection()
+    if connection.in_atomic_block:
+        # Inside a transaction the backup API can wait forever on this connection's own
+        # locks; serialize() snapshots exactly what this connection sees.
+        Path(path).write_bytes(connection.connection.serialize())
+        return
+    target = sqlite3.connect(str(path))
+    try:
+        connection.connection.backup(target)
+    finally:
+        target.close()
+
+
+class TemporaryFileResponse(FileResponse):
+    """Streams a temporary file and deletes it once the response is closed."""
+
+    def __init__(self, path, **kwargs):
+        self.temporary_path = Path(path)
+        super().__init__(self.temporary_path.open("rb"), **kwargs)
+
+    def close(self):
+        super().close()
+        self.temporary_path.unlink(missing_ok=True)
 
 
 def validate_sqlite_backup(backup_path):
@@ -2208,7 +2238,7 @@ def create_safety_backup(prefix):
     while backup_path.exists():
         backup_path = backup_dir / f"{prefix}-{timestamp}-{suffix}.sqlite3"
         suffix += 1
-    backup_path.write_bytes(connection.connection.serialize())
+    backup_database_to(backup_path)
     return backup_path
 
 
@@ -2241,7 +2271,12 @@ class MaintenanceSavedBackupsView(JsonView):
 class MaintenanceSavedBackupExportView(JsonView):
     def get(self, request, filename):
         backup_path = get_saved_backup_path(filename)
-        return sqlite_attachment_response(backup_path.read_bytes(), backup_path.name)
+        return FileResponse(
+            backup_path.open("rb"),
+            as_attachment=True,
+            filename=backup_path.name,
+            content_type="application/x-sqlite3",
+        )
 
 
 class MaintenanceSavedBackupRestoreView(JsonView):

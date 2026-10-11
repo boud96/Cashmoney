@@ -3391,7 +3391,12 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "application/x-sqlite3")
         self.assertIn("cashmoney-backup-", response["Content-Disposition"])
-        self.assertTrue(response.content.startswith(b"SQLite format 3"))
+        temporary_path = response.temporary_path
+        self.assertTrue(temporary_path.exists())
+        # Reading the stream to the end closes the response, which deletes the file.
+        content = b"".join(response.streaming_content)
+        self.assertTrue(content.startswith(b"SQLite format 3"))
+        self.assertFalse(temporary_path.exists())
 
     def test_maintenance_saved_backups_can_be_listed_exported_and_deleted(self):
         Transaction.objects.create(
@@ -3432,7 +3437,11 @@ class APITests(FinanceTestCase):
                 "pre-restore-20260102-030405.sqlite3",
                 export_response["Content-Disposition"],
             )
-            self.assertTrue(export_response.content.startswith(b"SQLite format 3"))
+            self.assertTrue(
+                b"".join(export_response.streaming_content).startswith(
+                    b"SQLite format 3"
+                )
+            )
 
             delete_response = self.delete_json(
                 "/api/maintenance/backups/pre-restore-20260102-030405.sqlite3/",
