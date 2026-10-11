@@ -27,6 +27,7 @@ import {
   getStoredFilterPresets,
   normalizeName,
   normalizeTagSelection,
+  presetFilterCount,
   storeFilterPresets,
   subLabel,
   subtractRelativeDate,
@@ -738,6 +739,7 @@ export default function DashboardPage({
                 onNameChange={setSavedFilterName}
                 onSave={saveCurrentFilterPreset}
                 presets={savedFilters}
+                tags={refs.tags}
               />
             </div>
             <div className="filter-main-stack">
@@ -1916,7 +1918,7 @@ function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTr
           updateTransaction={saveTransaction}
         />
       ),
-      valueFormatter: (params) => (params.value || []).map((tag) => tag.name).join(", ") || "No tags",
+      valueFormatter: (params) => (params.value || []).map((tag) => tag.name).join(", ") || "Untagged",
       cellClass: retainedCellClass,
       tooltipValueGetter: retainedCellTooltip,
       sortable: false,
@@ -2434,7 +2436,7 @@ function RelativeRangeForm({ setFilters }) {
   );
 }
 
-function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave, presets }) {
+function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave, presets, tags }) {
   return (
     <div className="filter-card saved-filters-card">
       <div className="filter-card-header">
@@ -2457,7 +2459,7 @@ function SavedFiltersPanel({ busy, name, onDelete, onLoad, onNameChange, onSave,
           <div className="saved-filter-row" key={preset.id}>
             <button className="saved-filter-load-button" disabled={busy} onClick={() => onLoad(preset)} type="button">
               <span>{preset.name}</span>
-              <small>{formatCount(countActiveFilters(preset.filters))} filters</small>
+              <small>{formatCount(presetFilterCount(preset.filters, tags))} filters</small>
             </button>
             <button aria-label={`Delete ${preset.name}`} className="icon-button" disabled={busy} onClick={() => onDelete(preset.id)} type="button">x</button>
           </div>

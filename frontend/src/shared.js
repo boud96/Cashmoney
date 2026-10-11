@@ -212,6 +212,12 @@ export function normalizeTagSelection(selection, tags) {
   return coversAllTags ? [] : values;
 }
 
+// The number of filters a saved preset applies; an old preset with "Untagged" plus
+// every tag applies no tag filter at all.
+export function presetFilterCount(filters, tags) {
+  return countActiveFilters({ ...filters, tag: normalizeTagSelection(filters?.tag, tags) });
+}
+
 export function cloneFilters(filters) {
   return {
     ...emptyFilters(),
@@ -731,7 +737,7 @@ export function colorPillStyle(color) {
 }
 
 export function tagTitle(tags) {
-  return tags.length ? tags.map((tag) => tag.name).join(", ") : "No tags";
+  return tags.length ? tags.map((tag) => tag.name).join(", ") : "Untagged";
 }
 
 export function estimateVisibleTagCount(tags, width) {
