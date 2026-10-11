@@ -1,6 +1,14 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
-import { addDays, addMonths, calendarWeeks, formatDateInput, parseDateInput, todayInputValue } from "./shared.js";
+import {
+  addDays,
+  addMonths,
+  calendarWeeks,
+  formatDateInput,
+  parseDateInput,
+  tagToggleStyle,
+  todayInputValue,
+} from "./shared.js";
 
 const modalStack = [];
 
@@ -50,6 +58,41 @@ export function HelpTooltip({ text }) {
       <button aria-label={text} className="help-tooltip-button" type="button">?</button>
       <span className="help-tooltip-bubble" role="tooltip">{text}</span>
     </span>
+  );
+}
+
+// Tags as pills that switch on and off: filled in the tag's colour with a ✓ when on,
+// outlined in it when off. options are [value, label] pairs (all tags if left out);
+// values that aren't tags, like the tag filter's Untagged and Tagged, get grey dashed pills.
+export function TagToggleList({ disabled = false, emptyText = "No tags", label, onToggle, options, tags, value }) {
+  const colors = new Map(tags.map((tag) => [tag.id, tag.color]));
+  const shown = options || tags.map((tag) => [tag.id, tag.name]);
+  const selected = new Set(value || []);
+  if (!shown.length) {
+    return <span className="muted">{emptyText}</span>;
+  }
+  return (
+    <div aria-label={label} className="tag-toggle-list" role="group">
+      {shown.map(([optionValue, text]) => {
+        const isOn = selected.has(optionValue);
+        const isTag = colors.has(optionValue);
+        return (
+          <button
+            aria-pressed={isOn}
+            className={["tag-toggle", isOn ? "is-on" : "", isTag ? "" : "is-special"].filter(Boolean).join(" ")}
+            disabled={disabled}
+            key={optionValue}
+            onClick={() => onToggle(optionValue)}
+            style={isTag ? tagToggleStyle(colors.get(optionValue)) : undefined}
+            title={text}
+            type="button"
+          >
+            {isOn ? <span aria-hidden="true" className="tag-toggle-check">✓</span> : null}
+            <span className="tag-toggle-label">{text}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

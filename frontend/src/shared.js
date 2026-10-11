@@ -726,6 +726,13 @@ export function colorPillStyle(color) {
   };
 }
 
+// A tag's colour for a TagToggleList pill, as CSS variables: filled when on, its outline
+// when off. None for a tag without a valid colour (the pill stays grey).
+export function tagToggleStyle(color) {
+  const background = normalizeHexColor(color);
+  return background ? { "--tag-color": background, "--tag-text": readableTextColor(background) } : undefined;
+}
+
 export function tagTitle(tags) {
   return tags.length ? tags.map((tag) => tag.name).join(", ") : "Untagged";
 }

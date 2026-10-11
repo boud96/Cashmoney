@@ -23,6 +23,7 @@ import {
   parseDateInput,
   presetFilterCount,
   subtractRelativeDate,
+  tagToggleStyle,
   sunburstData,
   syncChecklistFilters,
   tagTitle,
@@ -84,6 +85,19 @@ describe("relative date ranges", () => {
     expect(monthsBack(new Date(2026, 0, 15), 2)).toBe("2025-11-15");
     expect(formatDateInput(subtractRelativeDate(new Date(2026, 0, 3), 1, "weeks"))).toBe("2025-12-27");
     expect(formatDateInput(subtractRelativeDate(new Date(2026, 2, 1), 1, "days"))).toBe("2026-02-28");
+  });
+});
+
+describe("tag pills", () => {
+  it("colours a pill from the tag's colour, with readable text", () => {
+    expect(tagToggleStyle("#1C7ED6")).toEqual({ "--tag-color": "#1C7ED6", "--tag-text": "#ffffff" });
+    expect(tagToggleStyle("#99E7E2")).toEqual({ "--tag-color": "#99E7E2", "--tag-text": "#08111d" });
+  });
+
+  it("leaves a tag without a valid colour grey", () => {
+    for (const color of ["", null, undefined, "red", "#12345", "#1234567"]) {
+      expect(tagToggleStyle(color)).toBeUndefined();
+    }
   });
 });
 

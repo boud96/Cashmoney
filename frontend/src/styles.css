@@ -448,10 +448,6 @@ h2 {
   opacity: 0.58;
 }
 
-.bulk-tag-picker .check-row {
-  min-height: 32px;
-}
-
 .bulk-assign-warning {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -2341,16 +2337,6 @@ select option {
   text-transform: uppercase;
 }
 
-.uncategorized-tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.uncategorized-tag-list .check-row {
-  min-height: 34px;
-}
-
 .uncategorized-ignore-row {
   align-self: end;
   min-height: 38px;
@@ -3196,6 +3182,70 @@ select option {
 
 .tag-search {
   height: 34px;
+}
+
+.tag-toggle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 3px; /* room for the focus ring inside scrolling lists */
+}
+
+.tag-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 26px;
+  border: 1px solid var(--tag-color, var(--border));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.2;
+}
+
+.tag-toggle:not(.is-on):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tag-color, var(--muted)) 18%, transparent);
+}
+
+.tag-toggle.is-on {
+  background: var(--tag-color, var(--chip-hover));
+  color: var(--tag-text, var(--text));
+}
+
+.tag-toggle.is-special {
+  border-style: dashed;
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
+.tag-toggle.is-special.is-on {
+  background: var(--chip-hover);
+  color: var(--text);
+}
+
+.tag-toggle:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.tag-toggle:disabled {
+  cursor: default;
+}
+
+.tag-toggle-check {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.tag-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag-option-list {

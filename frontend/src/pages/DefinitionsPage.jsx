@@ -12,7 +12,7 @@ import {
 } from "ag-grid-community";
 
 import { apiDelete, apiFetch, apiGet, apiPatch, apiPost, readJson } from "../api.js";
-import { CloseButton, HelpTooltip, LoadingButton, ModalEscape, Select } from "../components.jsx";
+import { CloseButton, HelpTooltip, LoadingButton, ModalEscape, Select, TagToggleList } from "../components.jsx";
 import {
   MAX_IMPORT_FILE_BYTES,
   categorizationFieldOptions,
@@ -1551,7 +1551,8 @@ function ColorInput({ initialValue = "", label = "Color", name }) {
   );
 }
 
-function DefinitionCheckboxField({ className = "", helpText = "", label, onChange, options, placeholder = "None selected", value }) {
+// tags: show the options as tag pills (TagToggleList) in these tags' colours.
+function DefinitionCheckboxField({ className = "", helpText = "", label, onChange, options, placeholder = "None selected", tags, value }) {
   const selectedValues = value || [];
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
 
@@ -1577,7 +1578,11 @@ function DefinitionCheckboxField({ className = "", helpText = "", label, onChang
         </div>
       </div>
       <div className="definition-checkbox-list">
-        {options.length ? options.map(([optionValue, text]) => (
+        {!options.length ? (
+          <div className="filter-no-matches">No options</div>
+        ) : tags ? (
+          <TagToggleList label={label} onToggle={toggleOption} options={options} tags={tags} value={selectedValues} />
+        ) : options.map(([optionValue, text]) => (
           <label className="checkbox-filter-row" key={optionValue} title={text}>
             <input
               checked={selectedSet.has(optionValue)}
@@ -1586,7 +1591,7 @@ function DefinitionCheckboxField({ className = "", helpText = "", label, onChang
             />
             <span>{text}</span>
           </label>
-        )) : <div className="filter-no-matches">No options</div>}
+        ))}
       </div>
     </div>
   );
@@ -1711,7 +1716,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
                 <FormField label="Exclude Terms"><textarea defaultValue={(editingItem?.exclude_terms || []).join("\n")} name="exclude_terms" placeholder="One term per line" rows="3" /></FormField>
                 <FormField label="Subcategory"><Select blank="No subcategory" defaultValue={editingItem?.subcategory?.id || ""} name="subcategory_id" options={refs.subcategories.map((item) => [item.id, subLabel(item)])} /></FormField>
                 <FormField label="Want / Need / Investment"><Select blank="No WNI" defaultValue={editingItem?.want_need_investment || ""} name="want_need_investment" options={wniOptions} /></FormField>
-                <DefinitionCheckboxField label="Tags" onChange={setTagIds} options={refs.tags.map((item) => [item.id, item.name])} placeholder="No tags selected" value={tagIds} />
+                <DefinitionCheckboxField label="Tags" onChange={setTagIds} options={refs.tags.map((item) => [item.id, item.name])} placeholder="No tags selected" tags={refs.tags} value={tagIds} />
                 <FormField label="Priority"><input defaultValue={editingItem?.priority ?? "0"} name="priority" type="number" /></FormField>
                 <label className="check-row"><input defaultChecked={Boolean(editingItem?.is_ignored)} name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
                 <div className="keyword-preview-panel">
