@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { apiDelete, apiFetch, apiGet, apiPost, readJson } from "../api.js";
 import { LoadingButton, Metric } from "../components.jsx";
-import { formatBytes, formatCount, formatDateTime } from "../shared.js";
+import { MAX_BACKUP_FILE_BYTES, fileTooLargeMessage, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
 function maintenanceDeleteMessage(title, payload) {
   if (payload?.safety_backup) {
@@ -241,6 +241,11 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
   async function restoreDatabase(event) {
     event.preventDefault();
     if (!restoreFile) {
+      return;
+    }
+    const tooLarge = fileTooLargeMessage(restoreFile, MAX_BACKUP_FILE_BYTES);
+    if (tooLarge) {
+      notify(tooLarge);
       return;
     }
     const confirmed = await confirmAction({

@@ -677,6 +677,17 @@ export function formatBytes(value, fallback = "") {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// The backend refuses larger uploads (MAX_IMPORT_FILE_BYTES and MAX_BACKUP_FILE_BYTES in views.py).
+export const MAX_IMPORT_FILE_BYTES = 50 * 1024 * 1024;
+export const MAX_BACKUP_FILE_BYTES = 1024 * 1024 * 1024;
+
+export function fileTooLargeMessage(file, maxBytes) {
+  if (!file || file.size <= maxBytes) {
+    return "";
+  }
+  return `The file is too large (${formatBytes(file.size)}). The limit is ${Math.round(maxBytes / (1024 * 1024))} MB.`;
+}
+
 export function formatDateTime(value, fallback = "") {
   if (!value) {
     return fallback;

@@ -5,12 +5,14 @@ import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-communi
 import { apiDelete, apiFetch, apiGet, apiPatch, apiPost, readJson } from "../api.js";
 import { CloseButton, HelpTooltip, LoadingButton, ModalEscape, Select } from "../components.jsx";
 import {
+  MAX_IMPORT_FILE_BYTES,
   categorizationFieldOptions,
   coerceArray,
   defaultCategorizationFields,
   defaultParsingSettings,
   definitionHelp,
   fieldLabel,
+  fileTooLargeMessage,
   findDuplicate,
   findDuplicateSubcategory,
   formatCount,
@@ -865,6 +867,11 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     const file = sampleFileRef.current?.files?.[0] || sampleFile;
     if (!file) {
       notify("Choose a sample CSV");
+      return;
+    }
+    const tooLarge = fileTooLargeMessage(file, MAX_IMPORT_FILE_BYTES);
+    if (tooLarge) {
+      notify(tooLarge);
       return;
     }
     const formData = new FormData();

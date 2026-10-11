@@ -3454,6 +3454,50 @@ class APITests(FinanceTestCase):
             self.assertFalse(backup_path.exists())
             self.assertEqual(delete_payload["backups"], [])
 
+    def test_uploads_over_the_size_limit_are_refused(self):
+        body = "ID,Date,Description,Amount\napi-1,2026-01-02,McDonalds,-12.50\n"
+        with patch("finance.views.MAX_IMPORT_FILE_BYTES", 20), patch(
+            "finance.views.MAX_BACKUP_FILE_BYTES", 5
+        ):
+            responses = [
+                self.client.post(
+                    "/api/csv-mappings/detect-columns/",
+                    {"default_currency": "CZK", "csv_file": self.csv_file(body)},
+                ),
+                self.client.post(
+                    "/api/imports/preview/",
+                    {
+                        "bank_account_id": str(self.account.id),
+                        "csv_mapping_id": str(self.mapping.id),
+                        "csv_file": self.csv_file(body),
+                    },
+                ),
+                self.client.post(
+                    "/api/imports/",
+                    {
+                        "bank_account_id": str(self.account.id),
+                        "csv_mapping_id": str(self.mapping.id),
+                        "csv_file": self.csv_file(body),
+                    },
+                ),
+                self.client.post(
+                    "/api/maintenance/database-restore/",
+                    {
+                        "confirmation": "RESTORE DATABASE",
+                        "backup_file": SimpleUploadedFile(
+                            "backup.sqlite3",
+                            b"too big for the limit",
+                            content_type="application/x-sqlite3",
+                        ),
+                    },
+                ),
+            ]
+
+        for response in responses:
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("The file is too large", json_body(response)["error"])
+        self.assertFalse(Transaction.objects.exists())
+
     def test_maintenance_database_restore_rejects_invalid_upload(self):
         response = self.client.post(
             "/api/maintenance/database-restore/",

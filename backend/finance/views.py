@@ -181,6 +181,22 @@ def clean_text(value, field_name, required=False):
     return str(value).strip()
 
 
+# Statement files are read into memory, so they get a limit far above any real export.
+# Backups are copied to disk in chunks; their limit only stops obviously wrong files.
+# The frontend checks the same limits before uploading (shared.js).
+MAX_IMPORT_FILE_BYTES = 50 * 1024 * 1024
+MAX_BACKUP_FILE_BYTES = 1024 * 1024 * 1024
+
+
+def require_upload_size(upload, field_name, max_bytes):
+    if upload.size > max_bytes:
+        raise APIValidationError(
+            f"The file is too large ({upload.size / 1048576:.1f} MB). "
+            f"The limit is {max_bytes // 1048576} MB.",
+            {"field": field_name},
+        )
+
+
 def clean_encoding(value, field_name):
     encoding = clean_text(value, field_name, required=True)
     try:
@@ -806,6 +822,7 @@ class CSVMappingColumnDetectionView(JsonView):
         csv_file = request.FILES.get("csv_file")
         if not csv_file:
             raise APIValidationError("Missing required field", {"field": "csv_file"})
+        require_upload_size(csv_file, "csv_file", MAX_IMPORT_FILE_BYTES)
 
         use_manual_settings = parse_bool(
             request.POST.get("manual_settings"), default=False
@@ -1758,6 +1775,7 @@ def resolve_import_inputs(request):
             "bank_account_id and csv_file are required",
             {"fields": ["bank_account_id", "csv_file"]},
         )
+    require_upload_size(csv_file, "csv_file", MAX_IMPORT_FILE_BYTES)
 
     bank_account = optional_object(BankAccount, bank_account_id, "bank_account_id")
     csv_mapping = (
@@ -2332,6 +2350,7 @@ class MaintenanceDatabaseRestoreView(JsonView):
         backup_file = request.FILES.get("backup_file")
         if not backup_file:
             raise APIValidationError("Missing required field", {"field": "backup_file"})
+        require_upload_size(backup_file, "backup_file", MAX_BACKUP_FILE_BYTES)
 
         upload_path = None
         try:

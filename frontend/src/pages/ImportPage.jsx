@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiDelete, apiFetch, apiGet, readJson } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
-import { formatAmountValue, formatBytes, formatCount, formatDateTime } from "../shared.js";
+import { MAX_IMPORT_FILE_BYTES, fileTooLargeMessage, formatAmountValue, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
 export default function ImportPage({ confirmAction, hideAmounts = false, importReport, notify, refs, reloadAll, reloadDashboard, setImportReport }) {
   const [dragActive, setDragActive] = useState(false);
@@ -40,7 +40,14 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
   }, [loadRecentImports]);
 
   function setFile(file) {
-    setSelectedFile(file || null);
+    const tooLarge = fileTooLargeMessage(file, MAX_IMPORT_FILE_BYTES);
+    if (tooLarge) {
+      notify(tooLarge);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+    setSelectedFile(tooLarge ? null : file || null);
     setPreview(null);
     setImportReport(null);
   }
