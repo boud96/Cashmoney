@@ -448,7 +448,7 @@ class Camt053ImportAPITests(FinanceTestCase):
         self.assertEqual(len(json_body(again)["report"]["skipped"]["duplicates"]), 2)
 
     def test_a_batch_an_older_version_imported_whole_is_not_imported_again(self):
-        # Versions before 0.9 imported the entry as one row with the total.
+        # Versions up to 0.8.0 imported the entry as one row with the total.
         Transaction.objects.create(
             bank_account=self.account,
             original_id="B1",

@@ -320,7 +320,7 @@ def parse_entry(entry):
         for detail in children(entry_details, "TxDtls")
     ]
     first = details[0] if details else None
-    # The entry's ID as one row, which is how versions before 0.9 imported batches.
+    # The entry's ID as one row, which is how versions up to 0.8.0 imported batches.
     entry_id = text(first, "Refs", "AcctSvcrRef") or text(entry, "NtryRef")
     if len(details) > 1 and entry_id:
         parts = [batch_detail_amount(detail, indicator, currency) for detail in details]

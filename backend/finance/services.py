@@ -1837,7 +1837,7 @@ class CSVImportService:
     def _find_unsplit_batch(self, row, csv_import):
         """The one row an older version made from this payment's camt.053 batch entry.
 
-        Versions before 0.9 imported a batch entry as a single row with the total, so
+        Versions up to 0.8.0 imported a batch entry as a single row with the total, so
         its payments, which now have their own IDs, would otherwise import again.
         """
         if self.csv_mapping.file_format != ImportFileFormat.CAMT053 or not row:
