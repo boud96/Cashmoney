@@ -163,6 +163,23 @@ def parse_decimal(value):
         raise APIValidationError("Invalid decimal value", {"value": value}) from exc
 
 
+MAX_AMOUNT = Decimal("999999999999.99")  # Transaction.amount: max_digits=14, 2 decimals
+
+
+def parse_amount(value, field_name="amount"):
+    """A transaction amount: present, finite, at most 2 decimals, within the column."""
+    amount = parse_decimal(value)
+    if amount is None or not amount.is_finite():
+        raise APIValidationError("Amount must be a number", {"field": field_name})
+    if amount != amount.quantize(Decimal("0.01")):
+        raise APIValidationError(
+            "Amount can have at most 2 decimal places", {"field": field_name}
+        )
+    if abs(amount) > MAX_AMOUNT:
+        raise APIValidationError("Amount is too large", {"field": field_name})
+    return amount.quantize(Decimal("0.01"))
+
+
 def parse_date_value(value, field_name):
     if value in (None, ""):
         return None
@@ -601,7 +618,13 @@ class JsonView(View):
             )
         except Http404 as exc:
             return json_response({"error": str(exc), "details": {}}, status=404)
-        except (ObjectDoesNotExist, ValidationError) as exc:
+        except ValidationError as exc:
+            # From a model's own checks (CR-52): say what's wrong, not a dict repr.
+            details = exc.message_dict if hasattr(exc, "error_dict") else {}
+            return json_response(
+                {"error": " ".join(exc.messages), "details": details}, status=400
+            )
+        except ObjectDoesNotExist as exc:
             return json_response({"error": str(exc), "details": {}}, status=400)
         except (UnicodeError, ValueError) as exc:
             return json_response({"error": str(exc), "details": {}}, status=400)
@@ -1469,7 +1492,7 @@ class TransactionDetailView(JsonView):
                 else:
                     setattr(transaction, field, clean_text(data[field], field))
         if "amount" in data:
-            transaction.amount = parse_decimal(data["amount"])
+            transaction.amount = parse_amount(data["amount"])
         if "bank_account_id" in data:
             transaction.bank_account = optional_object(
                 BankAccount, data["bank_account_id"], "bank_account_id"

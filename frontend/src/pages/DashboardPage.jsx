@@ -1,7 +1,16 @@
 import { forwardRef, lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AgGridReact } from "ag-grid-react";
-import { AllCommunityModule, ModuleRegistry, themeQuartz } from "ag-grid-community";
+import {
+  CellStyleModule,
+  ClientSideRowModelModule,
+  CustomEditorModule,
+  ModuleRegistry,
+  RowAutoHeightModule,
+  SelectEditorModule,
+  themeQuartz,
+  TooltipModule,
+} from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
 import { HelpTooltip, LoadingButton, ModalShell, Spinner } from "../components.jsx";
@@ -38,7 +47,17 @@ import {
   wniOptions,
 } from "../shared.js";
 
-ModuleRegistry.registerModules([AllCommunityModule]);
+// Only the grid features this page uses (CR-30). A missing module can fail silently,
+// so after changing a grid, register ValidationModule while checking it: it names
+// every option whose module is missing.
+ModuleRegistry.registerModules([
+  ClientSideRowModelModule,
+  CellStyleModule,  // cellClass
+  TooltipModule,  // tooltipValueGetter
+  CustomEditorModule,  // the subcategory editor
+  SelectEditorModule,  // agSelectCellEditor for Want/Need/Investment
+  RowAutoHeightModule,  // autoHeight
+]);
 
 // Plotly loads as its own chunk (see PlotlyChart.jsx); ChartPanel shows a placeholder meanwhile.
 const Plot = lazy(() => import("../PlotlyChart.jsx"));

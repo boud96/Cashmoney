@@ -1,3 +1,8 @@
+# Currency spellings banks use that map to an ISO code. Shared by the API's validation
+# (services.normalize_currency_code) and the models' own check.
+CURRENCY_ALIASES = {"KČ": "CZK", "KC": "CZK", "€": "EUR"}
+
+
 class Direction:
     INCOME = "income"
     EXPENSE = "expense"

@@ -7,6 +7,7 @@ from django.db.models import Q
 
 from .constants import (
     CAMT053_COLUMN_MAP,
+    CURRENCY_ALIASES,
     DEFAULT_CATEGORIZATION_FIELDS,
     Direction,
     ImportFileFormat,
@@ -49,6 +50,59 @@ def prepare_hex_color(value):
     return color
 
 
+CURRENCY_CODE_VALIDATOR = RegexValidator(
+    regex=r"^[A-Z]{3}$",
+    message="Currency must be a three-letter code like CZK or EUR.",
+)
+
+
+def prepare_currency_code(value, default=""):
+    """Upper-case a currency code, refusing anything that isn't three letters.
+
+    Blank stays blank, or becomes the default. The models used to cut codes to three
+    characters, so "EURO" was saved as "EUR" (CR-52). Aliases map like in the API, so
+    a "KČ" stored before v0.5.1 becomes "CZK" on its next save instead of blocking it.
+    """
+    code = str(value or default).strip().upper()
+    code = CURRENCY_ALIASES.get(code, code)
+    if code:
+        CURRENCY_CODE_VALIDATOR(code)
+    return code
+
+
+class CheckedValuesMixin:
+    """Values the API validates itself, checked again for the admin and scripts (CR-52).
+
+    clean() reports them on the admin form's fields, and save() refuses them, instead
+    of the old silent fixes: a currency cut to three letters, an account with 0 owners.
+    """
+
+    currency_defaults = {}  # currency field -> value used when it is blank
+
+    def value_errors(self):
+        """Further problems, as {field: message}."""
+        return {}
+
+    def check_values(self):
+        errors = {}
+        for name, default in self.currency_defaults.items():
+            try:
+                setattr(self, name, prepare_currency_code(getattr(self, name), default))
+            except ValidationError as error:
+                errors[name] = error.messages
+        errors.update(self.value_errors())
+        if errors:
+            raise ValidationError(errors)
+
+    def clean(self):
+        super().clean()
+        self.check_values()
+
+    def save(self, *args, **kwargs):
+        self.check_values()
+        super().save(*args, **kwargs)
+
+
 class TimestampedModel(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -58,7 +112,9 @@ class TimestampedModel(models.Model):
         abstract = True
 
 
-class FinanceSettings(TimestampedModel):
+class FinanceSettings(CheckedValuesMixin, TimestampedModel):
+    currency_defaults = {"default_currency": "CZK"}
+
     singleton_key = models.PositiveSmallIntegerField(
         default=1, unique=True, editable=False
     )
@@ -92,10 +148,6 @@ class FinanceSettings(TimestampedModel):
     def __str__(self):
         return "Finance settings"
 
-    def save(self, *args, **kwargs):
-        self.default_currency = str(self.default_currency or "CZK").upper()[:3]
-        super().save(*args, **kwargs)
-
     @classmethod
     def load(cls):
         settings, _created = cls.objects.select_related(
@@ -104,7 +156,9 @@ class FinanceSettings(TimestampedModel):
         return settings
 
 
-class CSVMapping(TimestampedModel):
+class CSVMapping(CheckedValuesMixin, TimestampedModel):
+    currency_defaults = {"default_currency": ""}
+
     name = models.CharField(max_length=128, unique=True)
     is_sample = models.BooleanField(default=False)
     description = models.TextField(blank=True)
@@ -163,7 +217,9 @@ class CSVMapping(TimestampedModel):
         return default_categorization_fields()
 
 
-class BankAccount(TimestampedModel):
+class BankAccount(CheckedValuesMixin, TimestampedModel):
+    currency_defaults = {"currency": ""}
+
     name = models.CharField(max_length=128)
     is_sample = models.BooleanField(default=False)
     account_number = models.CharField(max_length=128, blank=True, default="")
@@ -190,6 +246,12 @@ class BankAccount(TimestampedModel):
 
     def __str__(self):
         return self.name
+
+    def value_errors(self):
+        # The owner split divides by this; 0 made the account's rows "missing rates".
+        if self.owners is not None and self.owners < 1:
+            return {"owners": "An account has at least one owner."}
+        return {}
 
 
 class Category(TimestampedModel):
@@ -314,8 +376,9 @@ class CSVImport(TimestampedModel):
         return self.source_filename or str(self.id)
 
 
-class ExchangeRate(TimestampedModel):
+class ExchangeRate(CheckedValuesMixin, TimestampedModel):
     SOURCE_FRANKFURTER = "frankfurter"
+    currency_defaults = {"base_currency": "", "quote_currency": ""}
 
     date = models.DateField()
     base_currency = models.CharField(max_length=3)
@@ -338,8 +401,6 @@ class ExchangeRate(TimestampedModel):
         ]
 
     def save(self, *args, **kwargs):
-        self.base_currency = str(self.base_currency or "").upper()[:3]
-        self.quote_currency = str(self.quote_currency or "").upper()[:3]
         self.source = str(self.source or self.SOURCE_FRANKFURTER).lower()
         super().save(*args, **kwargs)
 
@@ -350,7 +411,8 @@ class ExchangeRate(TimestampedModel):
         )
 
 
-class Transaction(TimestampedModel):
+class Transaction(CheckedValuesMixin, TimestampedModel):
+    currency_defaults = {"currency": "", "converted_currency": ""}
     CONVERSION_STATUS_NATIVE = "native"
     CONVERSION_STATUS_CONVERTED = "converted"
     CONVERSION_STATUS_MISSING_RATE = "missing_rate"
@@ -444,8 +506,6 @@ class Transaction(TimestampedModel):
         ]
 
     def save(self, *args, **kwargs):
-        self.currency = str(self.currency or "").upper()[:3]
-        self.converted_currency = str(self.converted_currency or "").upper()[:3]
         self.direction = Direction.INCOME if self.amount >= 0 else Direction.EXPENSE
         super().save(*args, **kwargs)
 

@@ -89,7 +89,7 @@ export default function HelpPage() {
             <li><strong>Description:</strong> can combine multiple CSV columns into the dashboard description.</li>
             <li><strong>Categorization Fields:</strong> decide which parsed transaction fields Keywords inspect during import and recategorization.</li>
             <li><strong>Advanced parsing:</strong> delimiter, quote character, encoding, header row, date format, and decimal separator stay editable. The other mark (a dot when the decimal separator is a comma, and the reverse) may only group thousands, and spaces are ignored, so 1 234,50 and 1.234,50 both read as 1234.50 with comma decimals.</li>
-            <li><strong>camt.053 XML:</strong> choose this format for ISO 20022 XML bank statements. Columns are mapped automatically, and the preview checks that the statement balances add up and that its account matches the bank account.</li>
+            <li><strong>camt.053 XML:</strong> choose this format for ISO 20022 XML bank statements. Columns are mapped automatically, and the preview checks that the statement balances add up and that its account matches the bank account. A booking that bundles several payments becomes one transaction per payment when the statement lists each payment's amount; otherwise it stays one transaction with the total, and the preview says so.</li>
           </ul>
         </HelpCard>
 

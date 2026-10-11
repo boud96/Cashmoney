@@ -3,12 +3,12 @@ import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 import { apiDelete, apiGet, apiPatch, BACKEND_REACHABILITY_EVENT } from "./api.js";
 import { ConfirmDialog, ModalShell, Spinner } from "./components.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
+import SidebarAsciiPlay from "./SidebarAsciiPlay.jsx";
 import {
   accentPresets,
   applyAccent,
   applyTheme,
   buildFilterParams,
-  buildSidebarAsciiFrame,
   defaultAccentForTheme,
   defaultCategorizationFields,
   emptyFilters,
@@ -671,93 +671,4 @@ function PageFallback() {
       Loading page
     </div>
   );
-}
-
-function SidebarAsciiPlay() {
-  const canvasRef = useRef(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) {
-      return undefined;
-    }
-    const context = canvas.getContext("2d");
-    if (!context) {
-      return undefined;
-    }
-
-    let animationFrame = 0;
-    let lastDraw = 0;
-    let columns = 34;
-    let rows = 64;
-    let characterHeight = 10.6;
-
-    function updateSize() {
-      const width = canvas.clientWidth;
-      const height = canvas.clientHeight;
-      const pixelRatio = window.devicePixelRatio || 1;
-      const styles = window.getComputedStyle(canvas);
-      const font = styles.font || `${styles.fontWeight} ${styles.fontSize} ${styles.fontFamily}`;
-      context.font = font;
-      const characterWidth = context.measureText("M").width || 5.1;
-      const parsedLineHeight = Number.parseFloat(styles.lineHeight);
-      const parsedFontSize = Number.parseFloat(styles.fontSize);
-      characterHeight = parsedLineHeight || parsedFontSize * 1.2 || 10.6;
-      columns = Math.max(24, Math.ceil(width / characterWidth));
-      rows = Math.max(24, Math.ceil(height / characterHeight));
-      canvas.width = Math.ceil(width * pixelRatio);
-      canvas.height = Math.ceil(height * pixelRatio);
-      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-      context.font = font;
-      context.textBaseline = "top";
-    }
-
-    function renderFrame(timestamp) {
-      const width = canvas.clientWidth;
-      const height = canvas.clientHeight;
-      context.fillStyle = window.getComputedStyle(canvas).color;
-      context.clearRect(0, 0, width, height);
-      const content = buildSidebarAsciiFrame(timestamp / 120, { columns, rows });
-      content.split("\n").forEach((line, index) => {
-        context.fillText(line, 0, index * characterHeight);
-      });
-    }
-
-    function draw(timestamp) {
-      animationFrame = window.requestAnimationFrame(draw);
-      if (timestamp - lastDraw < 33) {
-        return;
-      }
-      lastDraw = timestamp;
-      renderFrame(timestamp);
-    }
-
-    updateSize();
-    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) {
-      renderFrame(0);
-      const observer = new MutationObserver(() => renderFrame(0));
-      observer.observe(document.documentElement, {
-        attributeFilter: ["class", "data-theme", "style"],
-        attributes: true,
-      });
-      return () => observer.disconnect();
-    }
-    animationFrame = window.requestAnimationFrame(draw);
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateSize);
-      return () => {
-        window.cancelAnimationFrame(animationFrame);
-        window.removeEventListener("resize", updateSize);
-      };
-    }
-    const observer = new ResizeObserver(updateSize);
-    observer.observe(canvas);
-    return () => {
-      window.cancelAnimationFrame(animationFrame);
-      observer.disconnect();
-    };
-  }, []);
-
-  return <canvas aria-hidden="true" className="sidebar-ascii-play" ref={canvasRef} />;
 }

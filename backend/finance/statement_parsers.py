@@ -58,6 +58,7 @@ class StatementSummary:
     declared_entry_count: int | None = None
     booked_total: Decimal = Decimal("0.00")
     skipped_unbooked: int = 0
+    unsplit_batches: int = 0
 
     def warnings(self):
         warnings = []
@@ -82,6 +83,11 @@ class StatementSummary:
             warnings.append(
                 f"{label}: skipped {self.skipped_unbooked} entries that are not booked yet."
             )
+        if self.unsplit_batches:
+            warnings.append(
+                f"{label}: {self.unsplit_batches} entries bundle several payments that "
+                "couldn't be split, so each is imported as one row with the total."
+            )
         return warnings
 
     def as_dict(self):
@@ -101,6 +107,7 @@ class StatementSummary:
             "declared_entry_count": self.declared_entry_count,
             "booked_total": money(self.booked_total),
             "skipped_unbooked": self.skipped_unbooked,
+            "unsplit_batches": self.unsplit_batches,
         }
 
 
@@ -255,11 +262,13 @@ def parse_camt053(raw):
                 summary.skipped_unbooked += 1
                 continue
             try:
-                row = parse_entry(entry)
+                rows, unsplit_batch = parse_entry(entry)
             except ValueError as exc:
                 raise ValueError(f"Entry {entry_number}: {exc}") from exc
-            summary.booked_total += Decimal(row["amount"])
-            result.rows.append((entry_number, row))
+            summary.unsplit_batches += unsplit_batch
+            for row in rows:
+                summary.booked_total += Decimal(row["amount"])
+                result.rows.append((entry_number, row))
         result.statements.append(summary)
 
     if not result.statements:
@@ -295,10 +304,78 @@ def parse_statement_summary(statement_element):
 
 
 def parse_entry(entry):
+    """The entry's rows, and whether it bundles payments that couldn't be split.
+
+    A batch entry (several TxDtls) becomes one row per payment when it has an ID and
+    every detail has its own amount in the entry's currency, adding up to the entry.
+    Otherwise it stays one row with the first detail's parties, as before (CR-17).
+    """
     indicator = text(entry, "CdtDbtInd")
     amount_element = child(entry, "Amt")
     amount = signed_amount(text(amount_element), indicator)
-    details = child(entry, "NtryDtls", "TxDtls")
+    currency = (amount_element.get("Ccy") if amount_element is not None else "") or ""
+    details = [
+        detail
+        for entry_details in children(entry, "NtryDtls")
+        for detail in children(entry_details, "TxDtls")
+    ]
+    first = details[0] if details else None
+    # The entry's ID as one row, which is how versions up to 0.8.0 imported batches.
+    entry_id = text(first, "Refs", "AcctSvcrRef") or text(entry, "NtryRef")
+    if len(details) > 1 and entry_id:
+        parts = [batch_detail_amount(detail, indicator, currency) for detail in details]
+        if None not in parts and sum(part[0] for part in parts) == amount:
+            return batch_rows(entry, details, parts, currency, entry_id, amount), False
+    row = build_row(entry, first, amount, indicator, currency, entry_id)
+    return [row], len(details) > 1
+
+
+DETAIL_AMOUNT_PATHS = (
+    ("Amt",),  # camt.053.001.04 and later
+    ("AmtDtls", "TxAmt", "Amt"),
+    ("AmtDtls", "InstdAmt", "Amt"),  # used only when it is in the entry's currency
+)
+
+
+def batch_detail_amount(detail, entry_indicator, entry_currency):
+    """A batch detail's (signed amount, indicator) in the entry's currency, or None."""
+    indicator = text(detail, "CdtDbtInd") or entry_indicator
+    for path in DETAIL_AMOUNT_PATHS:
+        amount_element = child(detail, *path)
+        if amount_element is None or not text(amount_element):
+            continue
+        if (amount_element.get("Ccy") or entry_currency) != entry_currency:
+            continue
+        try:
+            return signed_amount(text(amount_element), indicator), indicator
+        except ValueError:
+            return None
+    return None
+
+
+def batch_rows(entry, details, parts, currency, entry_id, entry_amount):
+    # Each payment needs its own ID, or the import would skip the others as duplicates
+    # of the first: the detail's bank reference when it is unique within the batch,
+    # otherwise the entry's reference and the payment's position.
+    references = [text(detail, "Refs", "AcctSvcrRef") for detail in details]
+    prefix = text(entry, "NtryRef") or text(entry, "AcctSvcrRef") or entry_id
+    rows = []
+    for position, (detail, (amount, indicator), reference) in enumerate(
+        zip(details, parts, references), start=1
+    ):
+        if reference and references.count(reference) == 1:
+            original_id = reference
+        else:
+            original_id = f"{prefix}/{position}"
+        row = build_row(entry, detail, amount, indicator, currency, original_id)
+        # Lets the import recognize a batch that an older version imported as one row.
+        row["batch_original_id"] = entry_id
+        row["batch_amount"] = str(entry_amount)
+        rows.append(row)
+    return rows
+
+
+def build_row(entry, details, amount, indicator, currency, original_id):
     parties = child(details, "RltdPties")
 
     # The counterparty is the creditor for outgoing payments and the debtor for
@@ -318,13 +395,12 @@ def parse_entry(entry):
         text(item) for item in children(child(details, "RmtInf"), "Ustrd") if text(item)
     ]
     row = {
-        "original_id": text(details, "Refs", "AcctSvcrRef") or text(entry, "NtryRef"),
+        "original_id": original_id,
         "transaction_date": date_value(child(entry, "BookgDt")),
         "posted_date": date_value(child(entry, "ValDt")),
         "description": " ".join(messages) or counterparty_name,
         "amount": str(amount),
-        "currency": (amount_element.get("Ccy") if amount_element is not None else "")
-        or "",
+        "currency": currency,
         "counterparty_name": counterparty_name,
         "counterparty_account_number": counterparty_account,
         "transaction_type": text(entry, "BkTxCd", "Prtry", "Cd")

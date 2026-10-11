@@ -27,10 +27,10 @@ from django.db.models import (
     Value,
     When,
 )
-from django.db.models.functions import Cast, Coalesce, TruncMonth
+from django.db.models.functions import Cast, Coalesce, Greatest, TruncMonth
 from django.utils import timezone
 
-from .constants import DEFAULT_CATEGORIZATION_FIELDS, ImportFileFormat
+from .constants import CURRENCY_ALIASES, DEFAULT_CATEGORIZATION_FIELDS, ImportFileFormat
 from .models import (
     BankAccount,
     CSVImport,
@@ -207,9 +207,6 @@ def coerce_list(value):
     if isinstance(value, str):
         return [value] if value else []
     return [value]
-
-
-CURRENCY_ALIASES = {"KČ": "CZK", "KC": "CZK", "€": "EUR"}
 
 
 def normalize_currency_code(value, default="CZK"):
@@ -544,7 +541,12 @@ def cache_exchange_rate_rows(rows):
     return ExchangeRate.objects.count() - before
 
 
-def build_rate_lookup(currencies, end_date):
+def build_rate_lookup(currencies, end_date, start_date=None):
+    """Cached rates for the currencies up to end_date, as sorted dates and rates.
+
+    With start_date, rates older than each currency's last one on or before it are left
+    out: no date from start_date on can use them (CR-37).
+    """
     quote_currencies = [
         currency for currency in currencies if currency != CANONICAL_RATE_BASE_CURRENCY
     ]
@@ -552,15 +554,23 @@ def build_rate_lookup(currencies, end_date):
     if not quote_currencies or not end_date:
         return lookup
 
-    rates = (
-        ExchangeRate.objects.filter(
-            source=FRANKFURTER_SOURCE,
-            base_currency=CANONICAL_RATE_BASE_CURRENCY,
-            quote_currency__in=quote_currencies,
-            date__lte=end_date,
+    rates = ExchangeRate.objects.filter(
+        source=FRANKFURTER_SOURCE,
+        base_currency=CANONICAL_RATE_BASE_CURRENCY,
+        quote_currency__in=quote_currencies,
+        date__lte=end_date,
+    )
+    if start_date:
+        floors = (
+            rates.filter(date__lte=start_date)
+            .values("quote_currency")
+            .annotate(floor=Max("date"))
+            .values_list("floor", flat=True)
         )
-        .order_by("quote_currency", "date")
-        .values_list("quote_currency", "date", "rate")
+        if floors:
+            rates = rates.filter(date__gte=min(floors))
+    rates = rates.order_by("quote_currency", "date").values_list(
+        "quote_currency", "date", "rate"
     )
     for quote_currency, rate_date, rate in rates:
         bucket = lookup.setdefault(quote_currency, {"dates": [], "rates": []})
@@ -640,7 +650,14 @@ def recalculate_transaction_conversions(queryset=None, default_currency=None):
         }
 
     currencies = transaction_currencies(queryset, default_currency)
-    lookup = build_rate_lookup(currencies, end_date)
+    if currencies == [default_currency]:
+        # Every row is in the default currency: native conversions need no rates. A row
+        # edit runs this for one row, and loading every cached rate was most of its cost.
+        lookup = {}
+    else:
+        lookup = build_rate_lookup(
+            currencies, end_date, start_date=date_range["start_date"]
+        )
     processed = 0
     missing_rates = 0
     changed = []
@@ -1753,7 +1770,7 @@ class CSVImportService:
     def preview_row(self, line_number, row, seen_keys):
         try:
             data = self.extractor.extract(row)
-            duplicate = self._find_duplicate(data, seen_keys)
+            duplicate = self._find_duplicate(data, seen_keys, row=row)
             categorization_text = self.categorizer.build_categorization_text(
                 data, self.csv_mapping
             )
@@ -1785,12 +1802,12 @@ class CSVImportService:
         self.statement_report = statement_import_report(statement, self.bank_account)
         return rows, headers
 
-    def _find_duplicate(self, data, seen_keys, csv_import=None):
+    def _find_duplicate(self, data, seen_keys, csv_import=None, row=None):
         if data.get("original_id"):
             return Transaction.objects.filter(
                 bank_account=self.bank_account,
                 original_id=data["original_id"],
-            ).first()
+            ).first() or self._find_unsplit_batch(row, csv_import)
 
         # Without a bank ID, identical rows match by count: the n-th one in a file
         # duplicates the n-th such transaction that existed before this import.
@@ -1813,6 +1830,25 @@ class CSVImportService:
         position = seen_keys[key] - 1
         matches = existing.order_by("created_at", "id")[position : position + 1]
         return matches[0] if matches else None
+
+    def _find_unsplit_batch(self, row, csv_import):
+        """The one row an older version made from this payment's camt.053 batch entry.
+
+        Versions up to 0.8.0 imported a batch entry as a single row with the total, so
+        its payments, which now have their own IDs, would otherwise import again.
+        """
+        if self.csv_mapping.file_format != ImportFileFormat.CAMT053 or not row:
+            return None
+        if not row.get("batch_original_id"):
+            return None
+        older = Transaction.objects.filter(
+            bank_account=self.bank_account,
+            original_id=row["batch_original_id"],
+            amount=Decimal(row["batch_amount"]),
+        )
+        if csv_import is not None:
+            older = older.exclude(import_batch=csv_import)
+        return older.first()
 
     def _row_description(self, row):
         # Shown in the import report so users can recognize skipped rows.
@@ -1845,7 +1881,7 @@ class CSVImportService:
     @transaction.atomic
     def _import_row(self, row, csv_import, seen_keys):
         data = self.extractor.extract(row)
-        duplicate = self._find_duplicate(data, seen_keys, csv_import)
+        duplicate = self._find_duplicate(data, seen_keys, csv_import, row)
         if duplicate:
             return None, duplicate
 
@@ -2169,7 +2205,7 @@ def internal_transfer_candidate_records(
             )
             records.append(
                 {
-                    "id": (f"{outgoing_transaction.id}:" f"{incoming_transaction.id}"),
+                    "id": (f"{outgoing_transaction.id}:{incoming_transaction.id}"),
                     "outgoing": outgoing_transaction,
                     "incoming": incoming_transaction,
                     "amount": abs(outgoing_transaction.amount),
@@ -2670,10 +2706,11 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     )
     if split_by_owners:
         # Divide as reals: SQLite stores whole amounts (-10.00) as integers, and
-        # integer division drops the cents (-10 / 3 = -3).
+        # integer division drops the cents (-10 / 3 = -3). At least one owner: an
+        # account saved with 0 (through the admin, before CR-52) divided by zero.
+        owners = Greatest(Coalesce(F("bank_account__owners"), Value(1)), Value(1))
         amount = ExpressionWrapper(
-            converted_amount
-            / Cast(Coalesce(F("bank_account__owners"), Value(1)), FloatField()),
+            converted_amount / Cast(owners, FloatField()),
             output_field=amount_field,
         )
     else:
