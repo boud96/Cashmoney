@@ -1,0 +1,16 @@
+# Keeps the commit-pinned actions in build-windows.yml current. Updates arrive as one
+# monthly pull request into develop, where CI builds them, and wait two weeks after a
+# release before they are proposed.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 14
+    groups:
+      github-actions:
+        patterns:
+          - "*"
