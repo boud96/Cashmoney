@@ -26,6 +26,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.csrf import csrf_failure as django_csrf_failure
 
 from .constants import Direction, ImportFileFormat, WantNeedInvestment
+from .search import SEARCH_FIELDS, fold_search_text
 from .models import (
     BankAccount,
     CSVImport,
@@ -1149,17 +1150,12 @@ def filtered_transactions(request):
         if include_unassigned_tags:
             tag_query |= Q(tags__isnull=True)
         queryset = queryset.filter(tag_query)
-    if params.get("q"):
-        query = params["q"]
-        queryset = queryset.filter(
-            Q(description__icontains=query)
-            | Q(counterparty_name__icontains=query)
-            | Q(counterparty_account_number__icontains=query)
-            | Q(transaction_type__icontains=query)
-            | Q(counterparty_note__icontains=query)
-            | Q(my_note__icontains=query)
-            | Q(other_note__icontains=query)
-        )
+    folded_query = fold_search_text(params.get("q"))
+    if folded_query:
+        search = Q()
+        for field_name in SEARCH_FIELDS:
+            search |= Q(**{f"{field_name}__searchfold__contains": folded_query})
+        queryset = queryset.filter(search)
 
     return queryset.distinct()
 

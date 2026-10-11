@@ -2,6 +2,7 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
+from django.db.backends.signals import connection_created
 from django.db.models import Q
 
 from .constants import (
@@ -11,6 +12,7 @@ from .constants import (
     ImportFileFormat,
     WantNeedInvestment,
 )
+from .search import SearchFold, register_sqlite_search
 
 
 HEX_COLOR_VALIDATOR = RegexValidator(
@@ -538,3 +540,12 @@ class Keyword(TimestampedModel):
 
     def __str__(self):
         return self.name
+
+
+# Accent- and case-insensitive transaction search (see search.py). Registered with
+# the models, which every entry point loads, including the packaged app.
+models.CharField.register_lookup(SearchFold)
+models.TextField.register_lookup(SearchFold)
+connection_created.connect(
+    register_sqlite_search, dispatch_uid="finance.register_sqlite_search"
+)

@@ -2083,6 +2083,34 @@ class APITests(FinanceTestCase):
         )
         self.assertEqual(list(CSVImport.objects.all()), [old_import])
 
+    def test_search_ignores_case_accents_and_punctuation(self):
+        for description, counterparty in [
+            ("ČSOB Praha", ""),
+            ("Kavárna U Lípy", ""),
+            ("LIDL-Praha 5", ""),
+            ("Coffee", "Shop"),
+        ]:
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                description=description,
+                counterparty_name=counterparty,
+                amount=Decimal("-10.00"),
+            )
+
+        def found(query):
+            payload = json_body(self.client.get("/api/transactions/", {"q": query}))
+            return sorted(row["description"] for row in payload["results"])
+
+        self.assertEqual(found("csob"), ["ČSOB Praha"])
+        self.assertEqual(found("KAVARNA u lipy"), ["Kavárna U Lípy"])
+        self.assertEqual(found("lidl praha"), ["LIDL-Praha 5"])
+        self.assertEqual(found("shop"), ["Coffee"])
+        # Fields are matched one by one, as in the frontend's filter check.
+        self.assertEqual(found("coffeeshop"), [])
+        # A query with nothing searchable doesn't filter at all.
+        self.assertEqual(len(found("&")), 4)
+
     def test_recategorize_regenerates_description_from_current_mapping(self):
         self.keyword("McDonalds", ["mcdonald"])
         transaction_obj = Transaction.objects.create(
