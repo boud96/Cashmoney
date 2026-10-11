@@ -15,6 +15,7 @@ from .models import (
     Transaction,
     TransactionTag,
 )
+from .services import unmatch_internal_transfer
 
 
 class TransactionTagInline(admin.TabularInline):
@@ -55,6 +56,9 @@ class TransactionAdmin(admin.ModelAdmin):
     )
     date_hierarchy = "transaction_date"
     inlines = [TransactionTagInline]
+    # Each row shows its account and its subcategory with the category's name; without
+    # this, the list ran about three queries per row (CR-51).
+    list_select_related = ("bank_account", "subcategory__category")
 
     @admin.display(description="Category")
     def category_name(self, obj):
@@ -75,6 +79,18 @@ class InternalTransferMatchAdmin(admin.ModelAdmin):
         "incoming_transaction__description",
     )
     readonly_fields = ("match_reasons",)
+    list_select_related = ("outgoing_transaction", "incoming_transaction")
+
+    # Deleting a match must undo what applying it changed, like Unmatch in the app. A
+    # plain delete left both transactions ignored and locked (CR-51).
+    def delete_model(self, request, obj):
+        unmatch_internal_transfer(obj)
+
+    def delete_queryset(self, request, queryset):
+        for match in queryset.select_related(
+            "outgoing_transaction", "incoming_transaction"
+        ):
+            unmatch_internal_transfer(match)
 
 
 @admin.register(BankAccount)
@@ -94,6 +110,7 @@ class SubcategoryAdmin(admin.ModelAdmin):
     list_display = ("name", "category", "description")
     list_filter = ("category",)
     search_fields = ("name", "category__name")
+    list_select_related = ("category",)
 
 
 @admin.register(Tag)
@@ -122,6 +139,7 @@ class KeywordAdmin(admin.ModelAdmin):
     )
     search_fields = ("name",)
     filter_horizontal = ("tags",)
+    list_select_related = ("subcategory__category",)
 
     @admin.display(description="Category")
     def category_name(self, obj):
@@ -147,6 +165,7 @@ class CSVImportAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("status", "bank_account", "csv_mapping")
+    list_select_related = ("bank_account", "csv_mapping")
 
 
 @admin.register(ExchangeRate)
