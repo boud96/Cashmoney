@@ -138,6 +138,9 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
         loadRecentImports(),
       ]);
     } catch (error) {
+      if (error.payload?.report) {
+        setImportReport(error.payload.report);
+      }
       notify(error.message);
     } finally {
       setImporting(false);
@@ -323,16 +326,19 @@ function previewRowLabel(row) {
 function ImportReport({ report }) {
   const duplicates = report.skipped?.duplicates || [];
   const errors = report.skipped?.errors || [];
+  // Reports list at most 100 failed rows; older reports have no total.
+  const errorCount = report.skipped?.error_count ?? errors.length;
   return (
     <div className="import-report-content">
+      {report.error ? <div className="mapping-status mapping-status-warning">{report.error}</div> : null}
       <div className="metrics-grid report-grid">
         <Metric label="Loaded" value={formatCount(report.loaded)} />
         <Metric label="Created" tone="positive" value={formatCount(report.created?.count)} />
         <Metric label="Duplicates" value={formatCount(duplicates.length)} />
-        <Metric label="Errors" tone="negative" value={formatCount(report.skipped?.errors?.length)} />
+        <Metric label="Errors" tone="negative" value={formatCount(errorCount)} />
       </div>
       <StatementChecks statement={report.statement} />
-      {errors.length ? <ErrorList errors={errors} /> : null}
+      {errors.length ? <ErrorList errorCount={errorCount} errors={errors} /> : null}
       {duplicates.length ? <DuplicateList duplicates={duplicates} /> : null}
     </div>
   );
@@ -373,19 +379,20 @@ function DuplicateList({ duplicates }) {
   );
 }
 
-function ErrorList({ errors }) {
+function ErrorList({ errorCount, errors }) {
+  const shown = errors.slice(0, 12);
   return (
     <div className="import-duplicate-list">
       <div className="import-duplicate-list-title">Rows with errors</div>
-      {errors.slice(0, 12).map((error, index) => (
+      {shown.map((error, index) => (
         <div className="import-duplicate-item" key={`${error.line || index}-${index}`}>
           <span>{error.line ? `Line ${error.line}` : "File"}</span>
           <strong title={error.description || ""}>{error.description || "No description"}</strong>
           <span className="import-error-message">{error.error || "Could not import this row"}</span>
         </div>
       ))}
-      {errors.length > 12 ? (
-        <div className="muted">+{formatCount(errors.length - 12)} more errors</div>
+      {errorCount > shown.length ? (
+        <div className="muted">+{formatCount(errorCount - shown.length)} more errors</div>
       ) : null}
     </div>
   );

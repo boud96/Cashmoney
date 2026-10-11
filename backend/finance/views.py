@@ -1767,8 +1767,13 @@ class ImportTransactionsView(JsonView):
         )
         if dry_run:
             return json_response({"dry_run": True, "preview": report})
+        if csv_import.status == csv_import.STATUS_FAILED:
+            # Nothing was imported or kept; the report lists the failed rows.
+            return json_response(
+                {"error": report["error"], "report": report}, status=400
+            )
         exchange_rate_sync = {"attempted": False}
-        if csv_import.status != csv_import.STATUS_FAILED and csv_import.created_count:
+        if csv_import.created_count:
             exchange_rate_sync["attempted"] = True
             try:
                 exchange_rate_sync.update(sync_missing_exchange_rates())
@@ -1787,7 +1792,7 @@ class ImportTransactionsView(JsonView):
                 "report": report,
                 "exchange_rate_sync": exchange_rate_sync,
             },
-            status=201 if csv_import.status != csv_import.STATUS_FAILED else 400,
+            status=201,
         )
 
 

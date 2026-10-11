@@ -1877,6 +1877,54 @@ class APITests(FinanceTestCase):
         self.assertFalse(payload["exchange_rate_sync"]["synced"])
         self.assertIn("provider unavailable", payload["exchange_rate_sync"]["error"])
 
+    def test_an_import_where_every_row_fails_is_a_failure_and_is_not_kept(self):
+        def post(body):
+            return self.client.post(
+                "/api/imports/",
+                {
+                    "bank_account_id": str(self.account.id),
+                    "csv_mapping_id": str(self.mapping.id),
+                    "csv_file": self.csv_file(body),
+                },
+            )
+
+        all_failed = post(
+            "ID,Date,Description,Amount\n"
+            "f-1,02.30.2026,Bad date,-1.00\n"
+            "f-2,2026-01-02,Bad amount,n/a\n"
+        )
+        empty = post("ID,Date,Description,Amount\n")
+        payload = json_body(all_failed)
+
+        self.assertEqual(all_failed.status_code, 400)
+        self.assertEqual(
+            payload["error"],
+            "None of the 2 rows could be imported. Check that the bank account's "
+            "import mapping fits this file.",
+        )
+        self.assertEqual(payload["report"]["skipped"]["error_count"], 2)
+        self.assertEqual(len(payload["report"]["skipped"]["errors"]), 2)
+        self.assertEqual(empty.status_code, 400)
+        self.assertEqual(json_body(empty)["error"], "The file has no rows to import.")
+        self.assertFalse(CSVImport.objects.exists())
+        self.assertFalse(Transaction.objects.exists())
+
+    def test_import_reports_list_at_most_100_failed_rows(self):
+        lines = ["ID,Date,Description,Amount", "ok-1,2026-01-02,Lunch,-12.50"]
+        lines += [f"bad-{index},2026-01-02,Broken,n/a" for index in range(150)]
+
+        csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file("\n".join(lines) + "\n")
+        )
+        csv_import.refresh_from_db()
+
+        self.assertEqual(csv_import.status, CSVImport.STATUS_COMPLETED)
+        self.assertEqual(csv_import.created_count, 1)
+        self.assertEqual(csv_import.error_count, 150)
+        self.assertEqual(csv_import.report["skipped"]["error_count"], 150)
+        self.assertEqual(len(csv_import.report["skipped"]["errors"]), 100)
+        self.assertEqual(report["skipped"]["errors"][0]["line"], 3)
+
     def test_imports_api_lists_recent_imports(self):
         older = CSVImport.objects.create(
             bank_account=self.account,
@@ -4243,6 +4291,22 @@ class Camt053ImportAPITests(FinanceTestCase):
         self.assertEqual(card.raw_data["transaction_type"], "30000201000")
         foreign = Transaction.objects.get(original_id="F1")
         self.assertEqual(foreign.raw_data["instructed_currency"], "USD")
+
+    def test_an_unreadable_statement_fails_with_a_readable_message(self):
+        response = self.client.post(
+            "/api/imports/",
+            self.import_data(
+                csv_file=self.xml_file(
+                    b'<?xml version="1.0"?><!DOCTYPE x [<!ENTITY a "b">]><Document/>'
+                )
+            ),
+        )
+        payload = json_body(response)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(payload["error"].startswith("Could not read the file: "))
+        self.assertIn("DOCTYPE", payload["error"])
+        self.assertFalse(CSVImport.objects.exists())
 
 
 class SampleFlagMigrationTests(TransactionTestCase):

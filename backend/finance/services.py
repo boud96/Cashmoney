@@ -67,6 +67,9 @@ COMMON_CURRENCY_OPTIONS = [
 ]
 UNCATEGORIZED_SUGGESTION_SAMPLE_SIZE = 5
 UNCATEGORIZED_SUGGESTION_COUNT_WEIGHT = Decimal("25.00")
+# An import report lists at most this many failed rows (with their raw data);
+# skipped.error_count has the total.
+MAX_REPORTED_ERRORS = 100
 RECATEGORIZABLE_TRANSACTION_FIELDS = (
     "description",
     "counterparty_account_number",
@@ -1568,19 +1571,15 @@ class CSVImportService:
             rows = self._read_rows(file_obj)
         except Exception as exc:
             report["skipped"]["errors"].append({"error": str(exc)})
-            csv_import.status = CSVImport.STATUS_FAILED
-            csv_import.report = report
-            csv_import.error_count = 1
-            csv_import.save(
-                update_fields=["status", "report", "error_count", "updated_at"]
-            )
-            return csv_import, report
+            report["skipped"]["error_count"] = 1
+            return self._fail(csv_import, report, f"Could not read the file: {exc}")
 
         report["loaded"] = len(rows)
         if self.statement_report:
             report["statement"] = self.statement_report
 
         seen_keys = Counter()
+        error_count = 0
         for line_number, row in rows:
             try:
                 created_transaction = self._import_row(row, csv_import, seen_keys)
@@ -1594,14 +1593,16 @@ class CSVImportService:
                 )
                 continue
             except Exception as exc:
-                report["skipped"]["errors"].append(
-                    {
-                        "line": line_number,
-                        "error": str(exc),
-                        "description": self._row_description(row),
-                        "row": row,
-                    }
-                )
+                error_count += 1
+                if error_count <= MAX_REPORTED_ERRORS:
+                    report["skipped"]["errors"].append(
+                        {
+                            "line": line_number,
+                            "error": str(exc),
+                            "description": self._row_description(row),
+                            "row": row,
+                        }
+                    )
                 continue
 
             if created_transaction is None:
@@ -1634,13 +1635,32 @@ class CSVImportService:
                 report["created"]["uncategorized_count"] += 1
 
         report["created"]["count"] = len(report["created"]["transaction_ids"])
+        report["skipped"]["error_count"] = error_count
+        if not report["created"]["count"] and not report["skipped"]["duplicates"]:
+            if not report["loaded"]:
+                return self._fail(csv_import, report, "The file has no rows to import.")
+            return self._fail(
+                csv_import,
+                report,
+                f"None of the {report['loaded']} rows could be imported. Check that "
+                "the bank account's import mapping fits this file.",
+            )
         csv_import.loaded_count = report["loaded"]
         csv_import.created_count = report["created"]["count"]
         csv_import.skipped_count = len(report["skipped"]["duplicates"])
-        csv_import.error_count = len(report["skipped"]["errors"])
+        csv_import.error_count = error_count
         csv_import.status = CSVImport.STATUS_COMPLETED
         csv_import.report = report
         csv_import.save()
+        return csv_import, report
+
+    def _fail(self, csv_import, report, message):
+        """Nothing was imported, so the import isn't kept; its report goes back with the error."""
+        csv_import.delete()
+        csv_import.status = CSVImport.STATUS_FAILED
+        csv_import.loaded_count = report["loaded"]
+        csv_import.error_count = report["skipped"]["error_count"]
+        report["error"] = message
         return csv_import, report
 
     def preview_file(self, file_obj, source_filename="", sample_size=10):

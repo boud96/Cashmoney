@@ -29,7 +29,9 @@ export async function readJson(response, fallbackError = "") {
     const statusMessage = response.status >= 500
       ? `Server error (${response.status})`
       : `Request failed (${response.status})`;
-    throw new Error(payload?.error || fallbackError || statusMessage);
+    const error = new Error(payload?.error || fallbackError || statusMessage);
+    error.payload = payload; // e.g. the report of a failed import
+    throw error;
   }
   return payload ?? {};
 }
