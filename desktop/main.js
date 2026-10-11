@@ -325,8 +325,11 @@ function createWindow(options = {}) {
     }
     return isAppOriginUrl(url) ? { action: "allow" } : { action: "deny" };
   });
+  // Only app pages load in the window. External http(s) links open in the system
+  // browser; any other scheme (file:, data:, custom protocols) goes nowhere.
+  // loadURL (the startup error page) doesn't emit will-navigate.
   window.webContents.on("will-navigate", (event, url) => {
-    if (openExternalUrl(url)) {
+    if (openExternalUrl(url) || !isAppOriginUrl(url)) {
       event.preventDefault();
     }
   });
