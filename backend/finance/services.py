@@ -2372,7 +2372,16 @@ def apply_internal_transfer_candidates(
     }
 
 
+# Rows listed per result group; the counts cover everything. The UI shows 40.
+RECATEGORIZE_SAMPLE_SIZE = 40
+
+
 def recategorize_transactions(queryset, include_locked=False):
+    """Recategorize the queryset and report counts plus sample rows per group.
+
+    Only conflict_transaction_ids is complete (the grid highlights those rows); the
+    other ID and transaction lists hold up to RECATEGORIZE_SAMPLE_SIZE rows.
+    """
     categorizer = CategorizationService()
 
     def transaction_summary(transaction_obj, data=None):
@@ -2411,6 +2420,14 @@ def recategorize_transactions(queryset, include_locked=False):
         "conflict_details": [],
     }
 
+    def add_sample(group, transaction_obj, data=None):
+        ids = stats[f"{group}_transaction_ids"]
+        if len(ids) < RECATEGORIZE_SAMPLE_SIZE:
+            ids.append(str(transaction_obj.id))
+            stats[f"{group}_transactions"].append(
+                transaction_summary(transaction_obj, data)
+            )
+
     # Matched transfers stay ignored and locked even with include_locked;
     # recategorizing them would count both legs as spending and income again.
     matched_transfer_ids = set()
@@ -2434,17 +2451,13 @@ def recategorize_transactions(queryset, include_locked=False):
             transaction_obj.is_categorization_locked and not include_locked
         ):
             stats["skipped_locked"] += 1
-            stats["skipped_locked_transaction_ids"].append(str(transaction_obj.id))
-            stats["skipped_locked_transactions"].append(
-                transaction_summary(transaction_obj)
-            )
+            add_sample("skipped_locked", transaction_obj)
             continue
 
         csv_mapping = transaction_csv_mapping(transaction_obj)
         if not csv_mapping:
             stats["skipped_no_mapping"] += 1
-            stats["skipped_transaction_ids"].append(str(transaction_obj.id))
-            stats["skipped_transactions"].append(transaction_summary(transaction_obj))
+            add_sample("skipped", transaction_obj)
             continue
 
         mapped_values = mapped_transaction_values_from_raw_data(
@@ -2473,21 +2486,19 @@ def recategorize_transactions(queryset, include_locked=False):
 
         if result.is_uncategorized:
             stats["uncategorized"] += 1
-            stats["uncategorized_transaction_ids"].append(str(transaction_obj.id))
-            stats["uncategorized_transactions"].append(
-                transaction_summary(transaction_obj, data)
-            )
+            add_sample("uncategorized", transaction_obj, data)
         if result.is_category_overlap:
             stats["conflicts"] += 1
             stats["category_overlaps"] += 1
             stats["conflict_transaction_ids"].append(str(transaction_obj.id))
-            stats["conflict_details"].append(
-                {
-                    "transaction": transaction_summary(transaction_obj, data),
-                    "categorization_text": text,
-                    "categorization": serialize_categorization_result(result),
-                }
-            )
+            if len(stats["conflict_details"]) < RECATEGORIZE_SAMPLE_SIZE:
+                stats["conflict_details"].append(
+                    {
+                        "transaction": transaction_summary(transaction_obj, data),
+                        "categorization_text": text,
+                        "categorization": serialize_categorization_result(result),
+                    }
+                )
             lock_changed = transaction_obj.is_categorization_locked and include_locked
             if refreshed_fields or lock_changed:
                 for field_name, value in refreshed_fields.items():
@@ -2506,10 +2517,7 @@ def recategorize_transactions(queryset, include_locked=False):
                     ]
                 )
                 stats["updated"] += 1
-                stats["updated_transaction_ids"].append(str(transaction_obj.id))
-                stats["updated_transactions"].append(
-                    transaction_summary(transaction_obj, data)
-                )
+                add_sample("updated", transaction_obj, data)
             continue
 
         scalar_changed = (
@@ -2548,16 +2556,10 @@ def recategorize_transactions(queryset, include_locked=False):
 
         if scalar_changed or refreshed_fields or tags_changed or lock_changed:
             stats["updated"] += 1
-            stats["updated_transaction_ids"].append(str(transaction_obj.id))
-            stats["updated_transactions"].append(
-                transaction_summary(transaction_obj, data)
-            )
+            add_sample("updated", transaction_obj, data)
         else:
             stats["unchanged"] += 1
-            stats["unchanged_transaction_ids"].append(str(transaction_obj.id))
-            stats["unchanged_transactions"].append(
-                transaction_summary(transaction_obj, data)
-            )
+            add_sample("unchanged", transaction_obj, data)
 
     return stats
 

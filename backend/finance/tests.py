@@ -1910,6 +1910,26 @@ class APITests(FinanceTestCase):
             2,
         )
 
+    def test_recategorize_reports_counts_with_sample_rows(self):
+        for index in range(5):
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                description=f"Unknown shop {index}",
+                amount=Decimal("-1.00"),
+            )
+
+        with patch("finance.services.RECATEGORIZE_SAMPLE_SIZE", 2):
+            payload = json_body(self.post_json("/api/transactions/recategorize/", {}))
+
+        # The response used to list every processed row in each group.
+        self.assertEqual(payload["processed"], 5)
+        self.assertEqual(payload["uncategorized"], 5)
+        self.assertEqual(payload["unchanged"], 5)
+        for group in ("uncategorized", "unchanged"):
+            self.assertEqual(len(payload[f"{group}_transaction_ids"]), 2)
+            self.assertEqual(len(payload[f"{group}_transactions"]), 2)
+
     def test_recategorize_uses_current_filters_and_replaces_tags(self):
         stale_tag = Tag.objects.create(name="Old rule")
         Keyword.objects.create(

@@ -2274,7 +2274,7 @@ function RecategorizeStats({ result }) {
       value: result.uncategorized,
     },
     {
-      details: <ConflictDetailList details={conflictDetails} />,
+      details: <ConflictDetailList details={conflictDetails} total={result.conflicts} />,
       detailCount: conflictDetails.length,
       label: "Conflicts",
       value: result.conflicts,
@@ -2305,16 +2305,16 @@ function RecategorizeMetric({ metric }) {
   const count = Number(metric.value || 0);
   const ids = metric.ids || [];
   const transactions = metric.transactions || [];
-  const detailCount = metric.detailCount ?? (transactions.length || ids.length);
-  const hasDetails = Boolean(detailCount);
+  // The lists are samples (up to 40 rows); count is the whole group.
+  const hasDetails = Boolean(metric.detailCount ?? (transactions.length || ids.length));
   return (
     <div className={`metric recategorize-metric${hasDetails ? " metric-has-details" : ""}`}>
       <div className="metric-label">{metric.label}</div>
       <div className="metric-value">{formatCount(count)}</div>
       {hasDetails ? (
         <details className="metric-details">
-          <summary>{formatCount(detailCount)} details</summary>
-          {metric.details || (transactions.length ? <TransactionSummaryList transactions={transactions} /> : <TransactionIdList ids={ids} />)}
+          <summary>{formatCount(count)} details</summary>
+          {metric.details || (transactions.length ? <TransactionSummaryList total={count} transactions={transactions} /> : <TransactionIdList ids={ids} total={count} />)}
         </details>
       ) : (
         <div className="metric-empty-detail">No details</div>
@@ -2323,20 +2323,20 @@ function RecategorizeMetric({ metric }) {
   );
 }
 
-function TransactionIdList({ ids }) {
+function TransactionIdList({ ids, total = ids.length }) {
   const visibleIds = ids.slice(0, 40);
+  const hidden = Math.max(total, ids.length) - visibleIds.length;
   return (
     <div className="metric-id-list">
       {visibleIds.map((id) => <code key={id}>{id}</code>)}
-      {ids.length > visibleIds.length ? (
-        <span className="muted">+{formatCount(ids.length - visibleIds.length)} more</span>
-      ) : null}
+      {hidden > 0 ? <span className="muted">+{formatCount(hidden)} more</span> : null}
     </div>
   );
 }
 
-function TransactionSummaryList({ transactions }) {
+function TransactionSummaryList({ total = 0, transactions }) {
   const visibleTransactions = transactions.slice(0, 40);
+  const hidden = Math.max(total, transactions.length) - visibleTransactions.length;
   return (
     <div className="metric-transaction-list">
       {visibleTransactions.map((transaction) => (
@@ -2353,18 +2353,17 @@ function TransactionSummaryList({ transactions }) {
           ) : null}
         </div>
       ))}
-      {transactions.length > visibleTransactions.length ? (
-        <span className="muted">+{formatCount(transactions.length - visibleTransactions.length)} more</span>
-      ) : null}
+      {hidden > 0 ? <span className="muted">+{formatCount(hidden)} more</span> : null}
     </div>
   );
 }
 
-function ConflictDetailList({ details }) {
+function ConflictDetailList({ details, total = 0 }) {
   if (!details.length) {
     return null;
   }
   const visibleDetails = details.slice(0, 20);
+  const hidden = Math.max(total, details.length) - visibleDetails.length;
   return (
     <div className="conflict-detail-list">
       {visibleDetails.map((detail) => (
@@ -2380,9 +2379,7 @@ function ConflictDetailList({ details }) {
           <KeywordMatchList matches={detail.categorization.top_matched_keywords || []} />
         </article>
       ))}
-      {details.length > visibleDetails.length ? (
-        <div className="muted">+{formatCount(details.length - visibleDetails.length)} more conflicts</div>
-      ) : null}
+      {hidden > 0 ? <div className="muted">+{formatCount(hidden)} more conflicts</div> : null}
     </div>
   );
 }
