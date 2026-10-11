@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import re
+import time
 import unicodedata
 from bisect import bisect_right
 from collections import Counter, defaultdict
@@ -226,6 +227,17 @@ class ExchangeRateProviderError(Exception):
 class FrankfurterExchangeRateProvider:
     api_base_url = "https://api.frankfurter.dev/v2"
     user_agent = "Cashmoney"
+    # The calls run inside requests (imports, App Settings), so a stalled network
+    # must not hold them for long. After a network failure the provider is skipped
+    # for a while instead of timing out again on every import; an explicit sync
+    # (forget_failure) retries at once.
+    timeout_seconds = 5
+    unreachable_for_seconds = 300
+    unreachable_until = 0.0  # time.monotonic(); shared by all instances
+
+    @classmethod
+    def forget_failure(cls):
+        FrankfurterExchangeRateProvider.unreachable_until = 0.0
 
     def fetch_rates(self, base_currency, quote_currencies, start_date, end_date):
         quotes = sorted(
@@ -253,6 +265,11 @@ class FrankfurterExchangeRateProvider:
         return self._parse_currencies_payload(payload)
 
     def _fetch_json(self, url):
+        if time.monotonic() < FrankfurterExchangeRateProvider.unreachable_until:
+            raise ExchangeRateProviderError(
+                "Could not fetch Frankfurter data: it was unreachable a few minutes "
+                "ago. Retry from App Settings."
+            )
         request = Request(
             url,
             headers={
@@ -261,14 +278,21 @@ class FrankfurterExchangeRateProvider:
             },
         )
         try:
-            with urlopen(request, timeout=30) as response:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
                 payload = json.loads(response.read().decode("utf-8"))
         except HTTPError as exc:
             message = self._error_message(exc)
             raise ExchangeRateProviderError(
                 f"Could not fetch Frankfurter data: {message}"
             ) from exc
-        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        except (URLError, TimeoutError, OSError) as exc:
+            FrankfurterExchangeRateProvider.unreachable_until = (
+                time.monotonic() + self.unreachable_for_seconds
+            )
+            raise ExchangeRateProviderError(
+                f"Could not fetch Frankfurter data: {exc}"
+            ) from exc
+        except json.JSONDecodeError as exc:
             raise ExchangeRateProviderError(
                 f"Could not fetch Frankfurter data: {exc}"
             ) from exc
@@ -403,13 +427,32 @@ def configured_currency_options():
     ]
 
 
+# The provider's currency list rarely changes, and Definitions asks for it on every
+# visit, so it is kept for a day (per backend process).
+CURRENCY_LIST_CACHE_SECONDS = 24 * 60 * 60
+_currency_list_cache = {"fetched_at": 0.0, "currencies": None}
+
+
+def clear_currency_list_cache():
+    _currency_list_cache.update(fetched_at=0.0, currencies=None)
+
+
 def available_currency_options(provider=None):
-    provider = provider or FrankfurterExchangeRateProvider()
-    currencies = provider.fetch_currencies()
+    cache = _currency_list_cache
+    if (
+        cache["currencies"] is None
+        or time.monotonic() - cache["fetched_at"] > CURRENCY_LIST_CACHE_SECONDS
+    ):
+        provider = provider or FrankfurterExchangeRateProvider()
+        cache.update(
+            currencies=provider.fetch_currencies(), fetched_at=time.monotonic()
+        )
     return {
         "source": FRANKFURTER_SOURCE,
         "fallback": False,
-        "currencies": merge_currency_options(currencies, configured_currency_options()),
+        "currencies": merge_currency_options(
+            cache["currencies"], configured_currency_options()
+        ),
     }
 
 

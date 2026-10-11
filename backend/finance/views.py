@@ -65,6 +65,7 @@ from .services import (
     CSVImportService,
     CategorizationService,
     ExchangeRateProviderError,
+    FrankfurterExchangeRateProvider,
     available_currency_options,
     apply_internal_transfer_candidates,
     build_dashboard_summary,
@@ -676,6 +677,8 @@ class ExchangeRateSyncView(JsonView):
     atomic_writes = False  # calls the rate provider over the network
 
     def post(self, request):
+        # An explicit sync (the retry in App Settings) always tries the network.
+        FrankfurterExchangeRateProvider.forget_failure()
         try:
             return json_response(sync_missing_exchange_rates())
         except ExchangeRateProviderError as exc:

@@ -8,6 +8,7 @@ from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import URLError
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -43,11 +44,15 @@ from .sample_data import (
     delete_sample_data,
     sample_name,
 )
+from . import services as finance_services
 from .services import (
+    CURRENCY_LIST_CACHE_SECONDS,
     CSVImportService,
     CategorizationService,
     ExchangeRateProviderError,
     FrankfurterExchangeRateProvider,
+    available_currency_options,
+    clear_currency_list_cache,
     recalculate_transaction_conversions,
     sync_missing_exchange_rates,
     transaction_mentions_account,
@@ -70,6 +75,11 @@ class FinanceTestCase(TestCase):
         data_dir_override = self.settings(DATA_DIR=self.data_dir)
         data_dir_override.enable()
         self.addCleanup(data_dir_override.disable)
+        # The rate provider remembers failures and caches currencies per process.
+        FrankfurterExchangeRateProvider.forget_failure()
+        clear_currency_list_cache()
+        self.addCleanup(FrankfurterExchangeRateProvider.forget_failure)
+        self.addCleanup(clear_currency_list_cache)
 
         self.mapping = CSVMapping.objects.create(
             name="Test Bank",
@@ -213,7 +223,7 @@ class ModelTests(FinanceTestCase):
             )
 
         request, timeout = captured_requests[0]
-        self.assertEqual(timeout, 30)
+        self.assertEqual(timeout, 5)
         self.assertEqual(request.get_header("Accept"), "application/json")
         self.assertEqual(request.get_header("User-agent"), provider.user_agent)
         self.assertEqual(rows[0]["date"], date(2024, 1, 2))
@@ -1421,6 +1431,65 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(payload["fallback"])
         self.assertEqual(payload["currencies"][0]["code"], "CZK")
+
+    def test_a_network_failure_is_remembered_until_an_explicit_sync(self):
+        Transaction.objects.create(
+            bank_account=self.account,
+            transaction_date="2026-01-02",
+            description="Hotel",
+            amount=Decimal("-80.00"),
+            currency="USD",
+        )
+        calls = []
+
+        def offline_urlopen(request, timeout):
+            calls.append(request.full_url)
+            raise URLError("network is unreachable")
+
+        provider = FrankfurterExchangeRateProvider()
+        with patch("finance.services.urlopen", offline_urlopen):
+            with self.assertRaises(ExchangeRateProviderError):
+                provider.fetch_currencies()
+            with self.assertRaisesMessage(ExchangeRateProviderError, "a few minutes"):
+                provider.fetch_rates("EUR", ["USD"], date(2026, 1, 2), date(2026, 1, 2))
+            calls_while_remembered = len(calls)
+            retry = self.client.post("/api/exchange-rates/sync/")
+
+        self.assertEqual(calls_while_remembered, 1)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(retry.status_code, 502)
+        self.assertIn("network is unreachable", json_body(retry)["error"])
+
+    def test_the_currency_list_is_fetched_once_a_day(self):
+        calls = []
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, traceback):
+                return False
+
+            def read(self):
+                return json.dumps(
+                    [{"iso_code": "CZK", "name": "Czech Koruna"}]
+                ).encode()
+
+        def fake_urlopen(request, timeout):
+            calls.append(request.full_url)
+            return FakeResponse()
+
+        with patch("finance.services.urlopen", fake_urlopen):
+            first = available_currency_options()
+            second = available_currency_options()
+            finance_services._currency_list_cache["fetched_at"] -= (
+                CURRENCY_LIST_CACHE_SECONDS + 1
+            )
+            available_currency_options()
+
+        self.assertEqual(first, second)
+        self.assertEqual(first["currencies"][0]["code"], "CZK")
+        self.assertEqual(len(calls), 2)
 
     def test_saved_filter_api_persists_updates_and_deletes_presets(self):
         created = self.post_json(
