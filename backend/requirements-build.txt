@@ -1,0 +1,3 @@
+# Tools for build_packaged_app.bat on top of the app's own requirements.
+-r requirements.txt
+pyinstaller==6.22.3

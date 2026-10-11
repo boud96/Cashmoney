@@ -13,10 +13,10 @@ Session handoffs are in `.claude/handoffs/` (newest first). `.claude/notes/` hol
 The dev tooling is Windows `.bat` scripts at the repo root. Python is always `.venv\Scripts\python.exe`. Node comes from `PATH`, or from the portable copy in `tools\node` (`node.bat` / `npm.bat` wrap it).
 
 ```powershell
-.\setup_dev.bat                 # create .venv, pip install backend/requirements.txt, npm install frontend+desktop
+.\setup_dev.bat                 # create .venv, pip install backend/requirements.txt, npm ci frontend+desktop (if missing)
 .\run_app.bat                   # setup + migrate + build frontend + runserver :8000 + open Electron (or browser)
 .\build_frontend.bat --skip-setup   # Vite build into backend\finance\static\finance\react\
-.\build_packaged_app.bat        # frontend + PyInstaller backend + electron-builder -> desktop\dist\
+.\build_packaged_app.bat        # frontend + PyInstaller backend (pinned in backend\requirements-build.txt) + electron-builder -> desktop\dist\
 .\node.bat --check desktop\main.js  # Electron syntax check
 ```
 
@@ -59,7 +59,7 @@ There is no Vite dev-server proxy. `api.js` calls `/api` on the page's own origi
 
 **Versioning and releases**
 - The product version comes from `desktop/package.json` and `desktop/package-lock.json`. `frontend/vite.config.js` reads the lockfile to show the version in Help → About, so run `npm install` in `desktop/` after a bump. `frontend/package.json`'s version is not the product version.
-- `.github/workflows/build-windows.yml` builds on PRs into `main` and on manual runs, not on pushes to `main`. A pushed `vX.Y.Z` tag publishes `Cashmoney-Setup.exe`, `Cashmoney-Portable.exe` and `checksums.txt` to a GitHub Release; README download links depend on those names. To release, merge to `main`, then tag that exact `main` commit.
+- `.github/workflows/build-windows.yml` builds on PRs into `main` and on manual runs, not on pushes to `main`. A pushed `vX.Y.Z` tag publishes `Cashmoney-Setup.exe`, `Cashmoney-Portable.exe` and `checksums.txt` to a GitHub Release (from a separate `publish-release` job; the build job has read-only access); README download links depend on those names. To release, merge to `main`, then tag that exact `main` commit.
 - Git flow: feature work on `develop` → PR to `main`.
 
 ## Project-specific rules

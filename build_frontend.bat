@@ -27,7 +27,7 @@ if exist "%LOCAL_NPM%" (
 
 if not exist "%FRONTEND%\node_modules" (
     cd /d "%FRONTEND%"
-    call "%NPM%" install
+    call "%NPM%" ci
     if errorlevel 1 exit /b 1
 )
 
