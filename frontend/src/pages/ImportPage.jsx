@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { apiDelete, apiFetch, apiGet } from "../api.js";
+import { apiDelete, apiFetch, apiGet, readJson } from "../api.js";
 import { LoadingButton, Metric, Spinner } from "../components.jsx";
 import { formatAmountValue, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
@@ -94,10 +94,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
       const formData = buildFormData();
       formData.append("sample_size", "100");
       const response = await apiFetch("/api/imports/preview/", { method: "POST", body: formData });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Preview failed");
-      }
+      const payload = await readJson(response, "Preview failed");
       setPreview(payload);
       notify("CSV preview ready");
     } catch (error) {
@@ -116,10 +113,7 @@ export default function ImportPage({ confirmAction, hideAmounts = false, importR
     setImporting(true);
     try {
       const response = await apiFetch("/api/imports/", { method: "POST", body: buildFormData() });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Import failed");
-      }
+      const payload = await readJson(response, "Import failed");
       setImportReport(payload.report);
       setPreview(null);
       setSelectedFile(null);

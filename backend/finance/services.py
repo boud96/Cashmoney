@@ -787,7 +787,13 @@ def read_csv_rows_with_headers(csv_mapping, file_obj):
     if isinstance(raw, str):
         text = raw
     else:
-        text = raw.decode(csv_mapping.encoding)
+        try:
+            text = raw.decode(csv_mapping.encoding)
+        except LookupError as exc:
+            raise ValueError(
+                f"Unknown file encoding '{csv_mapping.encoding}'. "
+                "Fix it in the mapping, e.g. utf-8 or cp1250."
+            ) from exc
     return read_csv_rows_from_text(csv_mapping, text)
 
 

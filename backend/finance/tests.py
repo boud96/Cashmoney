@@ -949,6 +949,52 @@ class APITests(FinanceTestCase):
         self.assertEqual(default_scope["uncategorized_count"], 1)
         self.assertEqual(with_ignored["uncategorized_count"], 1)
 
+    def test_unknown_encodings_are_rejected(self):
+        create = self.post_json(
+            "/api/csv-mappings/", {"name": "Odd bank", "encoding": "utf-9"}
+        )
+        patch_response = self.patch_json(
+            f"/api/csv-mappings/{self.mapping.id}/", {"encoding": "latin-99"}
+        )
+        CSVMapping.objects.filter(id=self.mapping.id).update(encoding="bogus")
+        preview = self.client.post(
+            "/api/imports/preview/",
+            {
+                "bank_account_id": str(self.account.id),
+                "csv_file": self.csv_file("ID,Date,Description,Amount\n"),
+            },
+        )
+
+        self.assertEqual(create.status_code, 400)
+        self.assertIn("Unknown encoding 'utf-9'", json_body(create)["error"])
+        self.assertEqual(patch_response.status_code, 400)
+        self.assertEqual(preview.status_code, 400)
+        self.assertIn("Unknown file encoding 'bogus'", json_body(preview)["error"])
+
+    def test_database_conflicts_get_readable_messages(self):
+        duplicate = self.post_json("/api/categories/", {"name": self.category.name})
+        missing_category = self.patch_json(
+            f"/api/subcategories/{self.subcategory.id}/", {"category_id": None}
+        )
+
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(
+            json_body(duplicate)["error"], "A category with this name already exists."
+        )
+        self.assertEqual(missing_category.status_code, 400)
+        self.assertEqual(json_body(missing_category)["error"], "Category is required.")
+
+    def test_unexpected_errors_return_json_and_are_logged(self):
+        with patch(
+            "finance.views.maintenance_counts", side_effect=RuntimeError("boom")
+        ):
+            with self.assertLogs("finance.views", level="ERROR") as logs:
+                response = self.client.get("/api/maintenance/summary/")
+
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Something went wrong", json_body(response)["error"])
+        self.assertIn("boom", "\n".join(logs.output))
+
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)
 

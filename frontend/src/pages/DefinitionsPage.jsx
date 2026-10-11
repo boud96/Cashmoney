@@ -879,10 +879,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
     setDetecting(true);
     try {
       const response = await apiFetch("/api/csv-mappings/detect-columns/", { method: "POST", body: formData });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Column detection failed");
-      }
+      const payload = await readJson(response, "Column detection failed");
       const nextSettings = { ...defaultParsingSettings, ...(payload.detected_settings || {}) };
       setParsingSettings(nextSettings);
       setManualParsingSettings(false);

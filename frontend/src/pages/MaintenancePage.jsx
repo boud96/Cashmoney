@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { apiDelete, apiFetch, apiGet, apiPost } from "../api.js";
+import { apiDelete, apiFetch, apiGet, apiPost, readJson } from "../api.js";
 import { LoadingButton, Metric } from "../components.jsx";
 import { formatBytes, formatCount, formatDateTime } from "../shared.js";
 
@@ -261,10 +261,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
         method: "POST",
         body: formData,
       });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error || "Restore failed");
-      }
+      const payload = await readJson(response, "Restore failed");
       setBackups(payload.backups || []);
       notify("Database restored");
       setRestoreFile(null);

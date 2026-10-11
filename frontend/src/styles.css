@@ -4168,6 +4168,9 @@ td {
   right: 22px;
   bottom: 22px;
   max-width: min(420px, calc(100vw - 44px));
+  max-height: min(40vh, 240px);
+  overflow: hidden;
+  overflow-wrap: anywhere;
   background: var(--toast-bg);
   color: var(--text);
   border-radius: 8px;

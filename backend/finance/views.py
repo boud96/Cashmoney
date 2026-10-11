@@ -1,4 +1,7 @@
+import codecs
 import json
+import logging
+import re
 import sqlite3
 import tempfile
 from datetime import date, datetime
@@ -24,6 +27,8 @@ from django.views.generic import TemplateView
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.csrf import csrf_failure as django_csrf_failure
+from django.views.defaults import bad_request as django_bad_request
+from django.views.defaults import server_error as django_server_error
 
 from .constants import Direction, ImportFileFormat, WantNeedInvestment
 from .search import SEARCH_FIELDS, fold_search_text
@@ -174,6 +179,18 @@ def clean_text(value, field_name, required=False):
             raise APIValidationError("Missing required field", {"field": field_name})
         return ""
     return str(value).strip()
+
+
+def clean_encoding(value, field_name):
+    encoding = clean_text(value, field_name, required=True)
+    try:
+        codecs.lookup(encoding)
+    except LookupError as exc:
+        raise APIValidationError(
+            f"Unknown encoding '{encoding}'. Use one like utf-8, utf-8-sig or cp1250.",
+            {"field": field_name},
+        ) from exc
+    return encoding
 
 
 def clean_currency_code(value, field_name, default="CZK"):
@@ -486,6 +503,44 @@ class AppShellView(TemplateView):
         return context
 
 
+logger = logging.getLogger(__name__)
+
+# Unique columns as SQLite reports them, with what to tell the user.
+UNIQUE_CONFLICT_MESSAGES = {
+    "finance_bankaccount.account_number": (
+        "Another bank account already has this account number."
+    ),
+    "finance_csvmapping.name": "A mapping with this name already exists.",
+    "finance_category.name": "A category with this name already exists.",
+    "finance_subcategory.category_id, finance_subcategory.name": (
+        "This category already has a subcategory with this name."
+    ),
+    "finance_tag.name": "A tag with this name already exists.",
+    "finance_savedfilter.name": "A saved filter with this name already exists.",
+    "finance_transaction.bank_account_id, finance_transaction.original_id": (
+        "This account already has a transaction with this ID."
+    ),
+}
+
+
+def integrity_error_response(exc):
+    """A user-facing message and status for a database constraint error."""
+    text = str(exc)
+    unique = re.match(r"UNIQUE constraint failed: (.+)", text)
+    if unique:
+        message = UNIQUE_CONFLICT_MESSAGES.get(
+            unique.group(1).strip(), "This would duplicate an existing item."
+        )
+        return message, 409
+    not_null = re.match(r"NOT NULL constraint failed: \w+\.(\w+)", text)
+    if not_null:
+        field = not_null.group(1).removesuffix("_id").replace("_", " ")
+        return f"{field.capitalize()} is required.", 400
+    if "FOREIGN KEY constraint failed" in text:
+        return "It refers to an item that no longer exists.", 400
+    return "This change conflicts with existing data.", 409
+
+
 class JsonView(View):
     # Writes run in one transaction, so a request that fails part-way saves nothing.
     # Views that manage the connection themselves or call the network opt out.
@@ -518,7 +573,18 @@ class JsonView(View):
         except (UnicodeError, ValueError) as exc:
             return json_response({"error": str(exc), "details": {}}, status=400)
         except IntegrityError as exc:
-            return json_response({"error": str(exc), "details": {}}, status=409)
+            message, status = integrity_error_response(exc)
+            return json_response({"error": message, "details": {}}, status=status)
+        except Exception:
+            # Anything else is a bug; keep the traceback in the log, not in the UI.
+            logger.exception("Unhandled error in %s %s", request.method, request.path)
+            return json_response(
+                {
+                    "error": "Something went wrong on the server. Details are in the log.",
+                    "details": {},
+                },
+                status=500,
+            )
 
     def options(self, request, *args, **kwargs):
         return json_response({})
@@ -705,9 +771,7 @@ class CSVMappingCollectionView(JsonView):
             or ImportFileFormat.CSV,
             delimiter=clean_csv_char(data.get("delimiter"), "delimiter", ","),
             quotechar=clean_csv_char(data.get("quotechar"), "quotechar", '"'),
-            encoding=clean_text(
-                data.get("encoding", "utf-8-sig"), "encoding", required=True
-            ),
+            encoding=clean_encoding(data.get("encoding", "utf-8-sig"), "encoding"),
             header_row=clean_int(
                 data.get("header_row"), "header_row", default=0, minimum=0
             ),
@@ -750,10 +814,8 @@ class CSVMappingColumnDetectionView(JsonView):
             name="Column detection",
             delimiter=clean_csv_char(request.POST.get("delimiter"), "delimiter", ","),
             quotechar=clean_csv_char(request.POST.get("quotechar"), "quotechar", '"'),
-            encoding=clean_text(
-                request.POST.get("encoding", "utf-8-sig"),
-                "encoding",
-                required=True,
+            encoding=clean_encoding(
+                request.POST.get("encoding", "utf-8-sig"), "encoding"
             ),
             header_row=clean_int(
                 request.POST.get("header_row"), "header_row", default=0, minimum=0
@@ -836,6 +898,8 @@ class CSVMappingDetailView(JsonView):
                         field,
                         clean_csv_char(data[field], field, defaults[field]),
                     )
+                elif field == "encoding":
+                    setattr(mapping, field, clean_encoding(data[field], field))
                 elif field == "thousands_separator":
                     setattr(
                         mapping,
@@ -2248,11 +2312,21 @@ class MaintenanceDatabaseRestoreView(JsonView):
 
 
 def handler400(request, exception=None):
-    return json_response({"error": "Bad request"}, status=400)
+    if not request.path.startswith("/api/"):
+        return django_bad_request(request, exception)
+    return json_response({"error": "Bad request", "details": {}}, status=400)
 
 
 def handler500(request):
-    return json_response({"error": "Server error"}, status=500)
+    if not request.path.startswith("/api/"):
+        return django_server_error(request)
+    return json_response(
+        {
+            "error": "Something went wrong on the server. Details are in the log.",
+            "details": {},
+        },
+        status=500,
+    )
 
 
 def csrf_failure(request, reason=""):
