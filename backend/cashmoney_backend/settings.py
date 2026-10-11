@@ -26,7 +26,8 @@ CSRF_TRUSTED_ORIGINS = [
 CSRF_FAILURE_VIEW = "finance.views.csrf_failure"
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    # django.contrib.admin with a site that opens from the app, without a password.
+    "finance.admin_site.CashmoneyAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

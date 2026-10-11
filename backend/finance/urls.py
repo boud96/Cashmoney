@@ -163,9 +163,9 @@ urlpatterns = [
         name="maintenance-recreate-sample-data",
     ),
     path(
-        "maintenance/admin-user/",
-        views.MaintenanceAdminUserView.as_view(),
-        name="maintenance-admin-user",
+        "maintenance/admin-session/",
+        views.MaintenanceAdminSessionView.as_view(),
+        name="maintenance-admin-session",
     ),
     path(
         "maintenance/transactions/",

@@ -448,10 +448,6 @@ h2 {
   opacity: 0.58;
 }
 
-.bulk-tag-picker .check-row {
-  min-height: 32px;
-}
-
 .bulk-assign-warning {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1032,6 +1028,181 @@ h2 {
 .date-filter-stack {
   display: grid;
   gap: 10px;
+}
+
+.date-field {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.date-field-control {
+  position: relative;
+}
+
+.date-field-control input {
+  padding-right: 40px;
+}
+
+.date-field-control input[aria-invalid="true"] {
+  border-color: var(--red);
+}
+
+.date-field-button {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  transform: translateY(-50%);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.date-field-button:hover,
+.date-field-button[aria-expanded="true"] {
+  background: var(--soft-hover);
+  color: var(--action);
+}
+
+.date-field-button:focus-visible {
+  border-color: var(--action);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.date-field-hint {
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.date-calendar {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: 8px;
+  width: 292px;
+  max-width: calc(100vw - 24px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--floating-shadow);
+  padding: 10px;
+}
+
+.date-calendar-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1.35fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.date-calendar-header select {
+  padding: 6px 7px;
+}
+
+.date-calendar-nav {
+  width: 30px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.date-calendar-nav:hover,
+.date-calendar-nav:focus-visible {
+  border-color: var(--action);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.date-calendar-grid {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.date-calendar-grid th,
+.date-calendar-grid td {
+  border: 0;
+}
+
+.date-calendar-grid th {
+  padding: 2px 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 760;
+  text-align: center;
+}
+
+.date-calendar-grid td {
+  padding: 1px 0;
+}
+
+.date-calendar-day {
+  width: 100%;
+  height: 32px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-calendar-day:hover {
+  background: var(--soft-hover);
+}
+
+.date-calendar-day:focus-visible {
+  border-color: var(--action);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.date-calendar-day.is-outside {
+  color: var(--muted);
+}
+
+.date-calendar-day.is-today {
+  border-color: var(--muted);
+  font-weight: 760;
+}
+
+.date-calendar-day.is-in-range {
+  border-radius: 0;
+  background: color-mix(in srgb, var(--action) 14%, transparent);
+}
+
+.date-calendar-day.is-range-end {
+  background: color-mix(in srgb, var(--action) 32%, transparent);
+  font-weight: 760;
+}
+
+.date-calendar-day.is-selected {
+  background: var(--action);
+  color: var(--on-accent);
+  font-weight: 760;
+}
+
+.date-calendar-footer {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.date-calendar-footer .link-button {
+  padding: 6px 12px;
 }
 
 .filter-basics-card {
@@ -2166,16 +2337,6 @@ select option {
   text-transform: uppercase;
 }
 
-.uncategorized-tag-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.uncategorized-tag-list .check-row {
-  min-height: 34px;
-}
-
 .uncategorized-ignore-row {
   align-self: end;
   min-height: 38px;
@@ -3021,6 +3182,70 @@ select option {
 
 .tag-search {
   height: 34px;
+}
+
+.tag-toggle-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 3px; /* room for the focus ring inside scrolling lists */
+}
+
+.tag-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-height: 26px;
+  border: 1px solid var(--tag-color, var(--border));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 680;
+  line-height: 1.2;
+}
+
+.tag-toggle:not(.is-on):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tag-color, var(--muted)) 18%, transparent);
+}
+
+.tag-toggle.is-on {
+  background: var(--tag-color, var(--chip-hover));
+  color: var(--tag-text, var(--text));
+}
+
+.tag-toggle.is-special {
+  border-style: dashed;
+  border-color: var(--muted);
+  color: var(--muted);
+}
+
+.tag-toggle.is-special.is-on {
+  background: var(--chip-hover);
+  color: var(--text);
+}
+
+.tag-toggle:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
+}
+
+.tag-toggle:disabled {
+  cursor: default;
+}
+
+.tag-toggle-check {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.tag-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tag-option-list {
@@ -3942,36 +4167,6 @@ td {
   align-items: start;
 }
 
-.admin-tool-card {
-  grid-column: 1 / -1;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  align-items: stretch;
-}
-
-.admin-tool-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
-}
-
-.admin-tool-header > div {
-  min-width: 0;
-}
-
-.admin-user-form {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr)) auto;
-  gap: 10px;
-  align-items: end;
-}
-
-.admin-user-submit {
-  min-height: 38px;
-  white-space: nowrap;
-}
-
 .restore-form {
   display: grid;
   grid-template-columns: minmax(240px, 1fr) auto;
@@ -3998,10 +4193,6 @@ td {
   border-radius: 8px;
   padding: 9px 13px;
   font-weight: 760;
-}
-
-.danger-link-button {
-  text-decoration: none;
 }
 
 .danger-button:disabled {
@@ -4368,14 +4559,6 @@ td {
   .help-two-column {
     grid-template-columns: 1fr;
   }
-
-  .admin-user-form {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .admin-user-submit {
-    justify-self: start;
-  }
 }
 
 @media (max-width: 720px) {
@@ -4511,23 +4694,12 @@ td {
     max-height: 168px;
   }
 
-  .admin-tool-header,
   .backup-actions,
   .maintenance-backup-row,
   .maintenance-tool-card,
-  .admin-user-form,
   .restore-form {
     align-items: stretch;
     grid-template-columns: 1fr;
-  }
-
-  .admin-tool-header {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-user-submit {
-    justify-self: stretch;
-    width: 100%;
   }
 
   .help-support-panel {

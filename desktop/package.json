@@ -1,6 +1,6 @@
 {
   "name": "cashmoney-desktop",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "private": true,
   "description": "Electron shell for the Cashmoney app.",
   "main": "main.js",

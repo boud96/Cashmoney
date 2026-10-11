@@ -726,6 +726,13 @@ export function colorPillStyle(color) {
   };
 }
 
+// A tag's colour for a TagToggleList pill, as CSS variables: filled when on, its outline
+// when off. None for a tag without a valid colour (the pill stays grey).
+export function tagToggleStyle(color) {
+  const background = normalizeHexColor(color);
+  return background ? { "--tag-color": background, "--tag-text": readableTextColor(background) } : undefined;
+}
+
 export function tagTitle(tags) {
   return tags.length ? tags.map((tag) => tag.name).join(", ") : "Untagged";
 }
@@ -796,17 +803,43 @@ export function formatDateInput(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-export function subtractRelativeDate(date, amount, unit) {
-  const next = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  if (unit === "weeks") {
-    next.setDate(next.getDate() - amount * 7);
-  } else if (unit === "months") {
-    // Clamp to the target month's last day; setMonth would roll Mar 31 - 1 month into Mar 3.
-    const targetMonth = next.getMonth() - amount;
-    const lastDay = new Date(next.getFullYear(), targetMonth + 1, 0).getDate();
-    next.setFullYear(next.getFullYear(), targetMonth, Math.min(next.getDate(), lastDay));
-  } else {
-    next.setDate(next.getDate() - amount);
+// A date typed as YYYY-MM-DD, or null when it isn't one: incomplete, or not on the
+// calendar ("2026-02-30").
+export function parseDateInput(text) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(text || ""));
+  if (!match) {
+    return null;
   }
-  return next;
+  const [year, month, day] = match.slice(1).map(Number);
+  const date = new Date(year, month - 1, day);
+  const isSameDay = date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+  return isSameDay ? date : null;
+}
+
+export function addDays(date, amount) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + amount);
+}
+
+export function addMonths(date, amount) {
+  // Clamp to the target month's last day; setMonth would roll Mar 31 - 1 month into Mar 3.
+  const targetMonth = date.getMonth() + amount;
+  const lastDay = new Date(date.getFullYear(), targetMonth + 1, 0).getDate();
+  return new Date(date.getFullYear(), targetMonth, Math.min(date.getDate(), lastDay));
+}
+
+// A month as the date picker shows it: 6 weeks of 7 days, Monday first, starting on or
+// before the 1st. Always 6 rows, so the calendar keeps its height between months.
+export function calendarWeeks(year, month) {
+  const first = new Date(year, month, 1);
+  const start = addDays(first, -((first.getDay() + 6) % 7));
+  return Array.from({ length: 6 }, (_, week) => (
+    Array.from({ length: 7 }, (_, day) => addDays(start, week * 7 + day))
+  ));
+}
+
+export function subtractRelativeDate(date, amount, unit) {
+  if (unit === "months") {
+    return addMonths(date, -amount);
+  }
+  return addDays(date, unit === "weeks" ? -amount * 7 : -amount);
 }

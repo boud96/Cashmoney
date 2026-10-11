@@ -5,7 +5,6 @@ from io import StringIO
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.test import (
     TestCase,
 )
@@ -75,30 +74,8 @@ class SampleDataCommandTests(TestCase):
         self.assertFalse(get_user_model().objects.exists())
         self.assertTrue(BankAccount.objects.filter(owners=2).exists())
 
-    def test_create_admin_requires_explicit_credentials(self):
-        with self.assertRaises(CommandError):
-            self.seed("--create-admin", "--admin-username", "local-admin")
-
-    def test_create_admin_uses_supplied_credentials(self):
-        self.seed(
-            "--if-empty",
-            "--create-admin",
-            "--admin-username",
-            "local-admin",
-            "--admin-password",
-            "local-test-password",
-            "--admin-email",
-            "local-admin@example.local",
-        )
-
-        user = get_user_model().objects.get(username="local-admin")
-        self.assertTrue(user.is_staff)
-        self.assertTrue(user.is_superuser)
-        self.assertEqual(user.email, "local-admin@example.local")
-        self.assertTrue(user.check_password("local-test-password"))
-
     def test_sample_data_is_prefixed_spans_four_months_and_has_ignored_transfers(self):
-        self.seed("--if-empty", "--skip-admin")
+        self.seed("--if-empty")
 
         named_models = [BankAccount, CSVMapping, Category, Subcategory, Tag, Keyword]
         for model in named_models:
@@ -126,9 +103,9 @@ class SampleDataCommandTests(TestCase):
         )
 
     def test_if_empty_is_idempotent_and_skips_existing_user_data(self):
-        self.seed("--if-empty", "--skip-admin")
+        self.seed("--if-empty")
         first_counts = self.sample_counts()
-        self.seed("--if-empty", "--skip-admin")
+        self.seed("--if-empty")
         self.assertEqual(self.sample_counts(), first_counts)
 
         delete_sample_data()
@@ -137,14 +114,14 @@ class SampleDataCommandTests(TestCase):
             description="User transaction",
             amount=Decimal("-1.00"),
         )
-        self.seed("--if-empty", "--skip-admin")
+        self.seed("--if-empty")
         self.assertEqual(self.sample_counts()["transactions"], 0)
 
     def test_reset_sample_reseeds_cleanly_and_delete_helper_preserves_non_sample_data(
         self,
     ):
-        self.seed("--skip-admin")
-        self.seed("--reset-sample", "--skip-admin")
+        self.seed()
+        self.seed("--reset-sample")
         self.assertEqual(self.sample_counts()["transactions"], 20)
 
         user_category = Category.objects.create(name="User Category")
@@ -161,7 +138,7 @@ class SampleDataCommandTests(TestCase):
         self.assertTrue(Transaction.objects.filter(id=user_transaction.id).exists())
 
     def test_delete_sample_data_keeps_sample_items_the_user_adopted(self):
-        self.seed("--skip-admin")
+        self.seed()
         main = BankAccount.objects.get(name=sample_name("Main Checking"))
         groceries = Subcategory.objects.get(name=sample_name("Groceries"))
         recurring = Tag.objects.get(name=sample_name("Recurring"))

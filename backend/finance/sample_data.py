@@ -1,6 +1,5 @@
 from io import BytesIO
 
-from django.contrib.auth import get_user_model
 from django.db import transaction
 
 from .constants import WantNeedInvestment
@@ -107,26 +106,12 @@ def delete_sample_data():
 
 
 @transaction.atomic
-def seed_sample_data(
-    *,
-    admin_email="",
-    admin_password="",
-    admin_username="",
-    if_empty=False,
-    reset_sample=False,
-    skip_admin=True,
-):
+def seed_sample_data(*, if_empty=False, reset_sample=False):
     if reset_sample:
         delete_sample_data()
 
     if if_empty and Transaction.objects.exists():
         return {"skipped": True, "reason": "Database already has transactions"}
-
-    admin = None
-    if not skip_admin:
-        if not admin_username or not admin_password:
-            raise ValueError("Admin username and password are required.")
-        admin = create_admin(admin_username, admin_password, admin_email)
 
     mappings = create_csv_mappings()
     accounts = create_bank_accounts(mappings["standard"])
@@ -137,24 +122,9 @@ def seed_sample_data(
     created_count = create_sample_transactions(mappings["standard"], accounts)
 
     return {
-        "admin_username": getattr(admin, "username", None),
         "created_transactions": created_count,
         "skipped": False,
     }
-
-
-def create_admin(username, password, email):
-    User = get_user_model()
-    user, _created = User.objects.get_or_create(
-        username=username,
-        defaults={"email": email, "is_staff": True, "is_superuser": True},
-    )
-    user.email = email
-    user.is_staff = True
-    user.is_superuser = True
-    user.set_password(password)
-    user.save()
-    return user
 
 
 def create_csv_mappings():

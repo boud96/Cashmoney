@@ -4,7 +4,10 @@ import {
   ANY_TAG,
   NO_SELECTION,
   UNASSIGNED,
+  addDays,
+  addMonths,
   buildFilterParams,
+  calendarWeeks,
   compareAmounts,
   completeMonthlyRows,
   countActiveFilters,
@@ -17,8 +20,10 @@ import {
   isChunkLoadError,
   normalizeName,
   normalizeTagSelection,
+  parseDateInput,
   presetFilterCount,
   subtractRelativeDate,
+  tagToggleStyle,
   sunburstData,
   syncChecklistFilters,
   tagTitle,
@@ -80,6 +85,47 @@ describe("relative date ranges", () => {
     expect(monthsBack(new Date(2026, 0, 15), 2)).toBe("2025-11-15");
     expect(formatDateInput(subtractRelativeDate(new Date(2026, 0, 3), 1, "weeks"))).toBe("2025-12-27");
     expect(formatDateInput(subtractRelativeDate(new Date(2026, 2, 1), 1, "days"))).toBe("2026-02-28");
+  });
+});
+
+describe("tag pills", () => {
+  it("colours a pill from the tag's colour, with readable text", () => {
+    expect(tagToggleStyle("#1C7ED6")).toEqual({ "--tag-color": "#1C7ED6", "--tag-text": "#ffffff" });
+    expect(tagToggleStyle("#99E7E2")).toEqual({ "--tag-color": "#99E7E2", "--tag-text": "#08111d" });
+  });
+
+  it("leaves a tag without a valid colour grey", () => {
+    for (const color of ["", null, undefined, "red", "#12345", "#1234567"]) {
+      expect(tagToggleStyle(color)).toBeUndefined();
+    }
+  });
+});
+
+describe("date picker", () => {
+  it("accepts only complete, real YYYY-MM-DD dates", () => {
+    expect(formatDateInput(parseDateInput("2026-10-11"))).toBe("2026-10-11");
+    expect(formatDateInput(parseDateInput("2024-02-29"))).toBe("2024-02-29");
+    for (const text of ["", "2026-1", "2026-01-0", "2026-1-01", "20260101", "2026-02-29", "2026-13-01", "2026-10-11 "]) {
+      expect(parseDateInput(text)).toBeNull();
+    }
+  });
+
+  it("lays a month out in 6 weeks, Monday first", () => {
+    const weeks = calendarWeeks(2026, 1); // February 2026 starts on a Sunday
+    expect(weeks).toHaveLength(6);
+    expect(weeks.every((week) => week.length === 7)).toBe(true);
+    expect(formatDateInput(weeks[0][0])).toBe("2026-01-26");
+    expect(formatDateInput(weeks[0][6])).toBe("2026-02-01");
+    expect(formatDateInput(weeks[5][6])).toBe("2026-03-08");
+    expect(formatDateInput(calendarWeeks(2026, 5)[0][0])).toBe("2026-06-01"); // June 1st is a Monday
+  });
+
+  it("moves by days and months, clamping to shorter months", () => {
+    expect(formatDateInput(addDays(new Date(2026, 11, 31), 1))).toBe("2027-01-01");
+    expect(formatDateInput(addDays(new Date(2026, 2, 1), -1))).toBe("2026-02-28");
+    expect(formatDateInput(addMonths(new Date(2026, 0, 31), 1))).toBe("2026-02-28");
+    expect(formatDateInput(addMonths(new Date(2026, 0, 15), -1))).toBe("2025-12-15");
+    expect(formatDateInput(addMonths(new Date(2026, 10, 30), 12))).toBe("2027-11-30");
   });
 });
 

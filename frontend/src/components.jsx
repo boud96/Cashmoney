@@ -1,4 +1,14 @@
-import { useEffect, useId, useLayoutEffect, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+
+import {
+  addDays,
+  addMonths,
+  calendarWeeks,
+  formatDateInput,
+  parseDateInput,
+  tagToggleStyle,
+  todayInputValue,
+} from "./shared.js";
 
 const modalStack = [];
 
@@ -48,6 +58,41 @@ export function HelpTooltip({ text }) {
       <button aria-label={text} className="help-tooltip-button" type="button">?</button>
       <span className="help-tooltip-bubble" role="tooltip">{text}</span>
     </span>
+  );
+}
+
+// Tags as pills that switch on and off: filled in the tag's colour with a ✓ when on,
+// outlined in it when off. options are [value, label] pairs (all tags if left out);
+// values that aren't tags, like the tag filter's Untagged and Tagged, get grey dashed pills.
+export function TagToggleList({ disabled = false, emptyText = "No tags", label, onToggle, options, tags, value }) {
+  const colors = new Map(tags.map((tag) => [tag.id, tag.color]));
+  const shown = options || tags.map((tag) => [tag.id, tag.name]);
+  const selected = new Set(value || []);
+  if (!shown.length) {
+    return <span className="muted">{emptyText}</span>;
+  }
+  return (
+    <div aria-label={label} className="tag-toggle-list" role="group">
+      {shown.map(([optionValue, text]) => {
+        const isOn = selected.has(optionValue);
+        const isTag = colors.has(optionValue);
+        return (
+          <button
+            aria-pressed={isOn}
+            className={["tag-toggle", isOn ? "is-on" : "", isTag ? "" : "is-special"].filter(Boolean).join(" ")}
+            disabled={disabled}
+            key={optionValue}
+            onClick={() => onToggle(optionValue)}
+            style={isTag ? tagToggleStyle(colors.get(optionValue)) : undefined}
+            title={text}
+            type="button"
+          >
+            {isOn ? <span aria-hidden="true" className="tag-toggle-check">✓</span> : null}
+            <span className="tag-toggle-label">{text}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -259,6 +304,254 @@ export function ConfirmDialog({
             {confirmLabel}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+function CalendarIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="16">
+      <rect height="18" rx="2" width="18" x="3" y="4" />
+      <path d="M16 2v4M8 2v4M3 10h18" />
+    </svg>
+  );
+}
+
+// A YYYY-MM-DD text field with a calendar button. Typed text is applied only once it is
+// a complete, real date, so half-typed text never reaches the filters; a day picked in
+// the calendar is applied at once. rangeFrom/rangeTo shade the whole range in the calendar.
+export function DateField({ firstYear, label, name, onChange, rangeFrom = "", rangeTo = "", value = "" }) {
+  const [text, setText] = useState(value);
+  const [shownValue, setShownValue] = useState(value);
+  const [focused, setFocused] = useState(false);
+  const [open, setOpen] = useState(false);
+  const fieldRef = useRef(null);
+  const inputRef = useRef(null);
+  const buttonRef = useRef(null);
+  const inputId = useId();
+  const hintId = useId();
+  if (value !== shownValue) {
+    // Set from elsewhere (a saved filter, the relative range, the calendar): show it.
+    setShownValue(value);
+    setText(value);
+  }
+  // Not while typing it, unless it's already as long as a date: no red on every keystroke.
+  const showInvalid = Boolean(text) && !parseDateInput(text) && (!focused || text.length >= 10);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    function closeIfOutside(event) {
+      if (!fieldRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    // focusin, not blur: day buttons are re-created when the month changes, and the
+    // blur of a removed button would close the calendar mid-navigation.
+    document.addEventListener("pointerdown", closeIfOutside);
+    document.addEventListener("focusin", closeIfOutside);
+    return () => {
+      document.removeEventListener("pointerdown", closeIfOutside);
+      document.removeEventListener("focusin", closeIfOutside);
+    };
+  }, [open]);
+
+  function changeText(event) {
+    const next = event.target.value;
+    setText(next);
+    if (!next || parseDateInput(next)) {
+      onChange(name, next);
+    }
+  }
+
+  function closeCalendar(returnFocus) {
+    setOpen(false);
+    if (returnFocus) {
+      buttonRef.current?.focus();
+    }
+  }
+
+  function closeOnEscape(event) {
+    if (open && event.key === "Escape") {
+      event.preventDefault();
+      closeCalendar(event.target !== inputRef.current);
+    }
+  }
+
+  return (
+    <div className="date-field" onKeyDown={closeOnEscape} ref={fieldRef}>
+      <label htmlFor={inputId}><span>{label}</span></label>
+      <div className="date-field-control">
+        <input
+          aria-describedby={showInvalid ? hintId : undefined}
+          aria-invalid={showInvalid || undefined}
+          id={inputId}
+          inputMode="numeric"
+          onBlur={() => setFocused(false)}
+          onChange={changeText}
+          onFocus={() => setFocused(true)}
+          placeholder="YYYY-MM-DD"
+          ref={inputRef}
+          type="text"
+          value={text}
+        />
+        <button
+          aria-expanded={open}
+          aria-haspopup="dialog"
+          aria-label={`Choose ${label} date`}
+          className="date-field-button"
+          onClick={() => setOpen((current) => !current)}
+          ref={buttonRef}
+          type="button"
+        >
+          <CalendarIcon />
+        </button>
+      </div>
+      {showInvalid ? <span className="date-field-hint" id={hintId}>Not applied: use YYYY-MM-DD</span> : null}
+      {open ? (
+        <DateCalendar
+          firstYear={firstYear}
+          label={label}
+          onPick={(dateText) => {
+            setText(dateText); // also when it's the applied date, replacing a half-typed one
+            onChange(name, dateText);
+            closeCalendar(true);
+          }}
+          rangeFrom={rangeFrom}
+          rangeTo={rangeTo}
+          value={value}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+// The month view: Monday first, the field's date selected, today outlined, the range
+// shaded. The arrow keys move by day and week, Page Up/Down by month (with Shift, by
+// year), Home/End to the week's start and end; Enter picks.
+function DateCalendar({ firstYear, label, onPick, rangeFrom, rangeTo, value }) {
+  const today = todayInputValue();
+  // The day that takes focus in the grid; the calendar always shows its month.
+  const [focusDay, setFocusDay] = useState(() => (parseDateInput(value) ? value : today));
+  const [shownValue, setShownValue] = useState(value);
+  const calendarRef = useRef(null);
+  const focusDayOnRender = useRef(true); // when it opens, and after keyboard moves
+  if (value !== shownValue) {
+    // Typed into the field while the calendar is open: follow it, without taking focus.
+    setShownValue(value);
+    if (parseDateInput(value)) {
+      setFocusDay(value);
+    }
+  }
+  const focusDate = parseDateInput(focusDay);
+  const year = focusDate.getFullYear();
+  const month = focusDate.getMonth();
+  const thisYear = new Date().getFullYear();
+  const years = [];
+  for (let option = Math.min(firstYear || thisYear - 5, year); option <= Math.max(thisYear + 1, year); option += 1) {
+    years.push(option);
+  }
+  const from = parseDateInput(rangeFrom) ? rangeFrom : "";
+  const to = parseDateInput(rangeTo) ? rangeTo : "";
+  const hasRange = Boolean(from && to && from <= to);
+
+  useEffect(() => {
+    if (focusDayOnRender.current) {
+      focusDayOnRender.current = false;
+      calendarRef.current?.querySelector(`[data-date="${focusDay}"]`)?.focus();
+    }
+  }, [focusDay]);
+
+  function showMonth(nextYear, nextMonth) {
+    const lastDay = new Date(nextYear, nextMonth + 1, 0).getDate();
+    setFocusDay(formatDateInput(new Date(nextYear, nextMonth, Math.min(focusDate.getDate(), lastDay))));
+  }
+
+  function moveWithKeyboard(event) {
+    const weekday = (focusDate.getDay() + 6) % 7;
+    const moves = {
+      ArrowLeft: () => addDays(focusDate, -1),
+      ArrowRight: () => addDays(focusDate, 1),
+      ArrowUp: () => addDays(focusDate, -7),
+      ArrowDown: () => addDays(focusDate, 7),
+      Home: () => addDays(focusDate, -weekday),
+      End: () => addDays(focusDate, 6 - weekday),
+      PageUp: () => addMonths(focusDate, event.shiftKey ? -12 : -1),
+      PageDown: () => addMonths(focusDate, event.shiftKey ? 12 : 1),
+    };
+    if (moves[event.key]) {
+      event.preventDefault();
+      focusDayOnRender.current = true;
+      setFocusDay(formatDateInput(moves[event.key]()));
+    }
+  }
+
+  return (
+    <div aria-label={`Choose ${label} date`} className="date-calendar" ref={calendarRef} role="dialog">
+      <div className="date-calendar-header">
+        <button aria-label="Previous month" className="date-calendar-nav" onClick={() => showMonth(year, month - 1)} type="button">
+          ‹
+        </button>
+        <select aria-label="Month" onChange={(event) => showMonth(year, Number(event.target.value))} value={month}>
+          {MONTH_NAMES.map((monthName, index) => <option key={monthName} value={index}>{monthName}</option>)}
+        </select>
+        <select aria-label="Year" onChange={(event) => showMonth(Number(event.target.value), month)} value={year}>
+          {years.map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+        <button aria-label="Next month" className="date-calendar-nav" onClick={() => showMonth(year, month + 1)} type="button">
+          ›
+        </button>
+      </div>
+      <table aria-label={`${MONTH_NAMES[month]} ${year}`} className="date-calendar-grid" onKeyDown={moveWithKeyboard} role="grid">
+        <thead>
+          <tr>
+            {WEEKDAY_NAMES.map((weekdayName) => <th abbr={weekdayName} key={weekdayName} scope="col">{weekdayName.slice(0, 2)}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {calendarWeeks(year, month).map((week) => (
+            <tr key={formatDateInput(week[0])}>
+              {week.map((day, weekday) => {
+                const dayText = formatDateInput(day);
+                const isRangeEnd = dayText === from || dayText === to;
+                const className = [
+                  "date-calendar-day",
+                  day.getMonth() !== month ? "is-outside" : "",
+                  dayText === today ? "is-today" : "",
+                  hasRange && dayText > from && dayText < to ? "is-in-range" : "",
+                  isRangeEnd && dayText !== value ? "is-range-end" : "",
+                  dayText === value ? "is-selected" : "",
+                ].filter(Boolean).join(" ");
+                return (
+                  <td aria-selected={dayText === value || undefined} key={dayText}>
+                    <button
+                      aria-current={dayText === today ? "date" : undefined}
+                      aria-label={`${WEEKDAY_NAMES[weekday]} ${day.getDate()} ${MONTH_NAMES[day.getMonth()]} ${day.getFullYear()}`}
+                      className={className}
+                      data-date={dayText}
+                      onClick={() => onPick(dayText)}
+                      tabIndex={dayText === focusDay ? 0 : -1}
+                      type="button"
+                    >
+                      {day.getDate()}
+                    </button>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="date-calendar-footer">
+        <button className="link-button" onClick={() => onPick(today)} type="button">Today</button>
       </div>
     </div>
   );

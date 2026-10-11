@@ -13,7 +13,7 @@ import {
 } from "ag-grid-community";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
-import { HelpTooltip, LoadingButton, ModalShell, Spinner } from "../components.jsx";
+import { DateField, HelpTooltip, LoadingButton, ModalShell, Spinner, TagToggleList } from "../components.jsx";
 import {
   ANY_TAG,
   UNASSIGNED,
@@ -748,8 +748,18 @@ export default function DashboardPage({
                   <span className="filter-label">Date range</span>
                 </div>
                 <div className="date-filter-stack">
-                  <DateInput label="From" name="date_from" onChange={onFilterChange} value={filters.date_from} />
-                  <DateInput label="To" name="date_to" onChange={onFilterChange} value={filters.date_to} />
+                  {[["From", "date_from"], ["To", "date_to"]].map(([label, name]) => (
+                    <DateField
+                      firstYear={Number(filterDefaults.from.slice(0, 4)) || undefined}
+                      key={name}
+                      label={label}
+                      name={name}
+                      onChange={onFilterChange}
+                      rangeFrom={filters.date_from}
+                      rangeTo={filters.date_to}
+                      value={filters[name]}
+                    />
+                  ))}
                 </div>
                 <RelativeRangeForm setFilters={setFilters} />
               </div>
@@ -849,6 +859,7 @@ export default function DashboardPage({
                   onChange={onFilterChange}
                   optional
                   options={[[UNASSIGNED, "Untagged"], [ANY_TAG, "Tagged"], ...refs.tags.map((item) => [item.id, item.name])]}
+                  tags={refs.tags}
                   value={filters.tag}
                 />
               </div>
@@ -1184,17 +1195,14 @@ function BulkAssignMultiModal({
             </select>
           </label>
           <div className={`bulk-tag-picker ${tagSelectionDisabled ? "is-disabled" : ""}`.trim()}>
-            {tags.length ? tags.map((tag) => (
-              <label className="check-row" key={tag.id}>
-                <input
-                  checked={draft.tagIds.includes(tag.id)}
-                  disabled={busy || tagSelectionDisabled}
-                  onChange={() => onTagToggle(tag.id)}
-                  type="checkbox"
-                />
-                <span>{tag.name}</span>
-              </label>
-            )) : <span className="muted">No tags defined</span>}
+            <TagToggleList
+              disabled={busy || tagSelectionDisabled}
+              emptyText="No tags defined"
+              label="Tags"
+              onToggle={onTagToggle}
+              tags={tags}
+              value={draft.tagIds}
+            />
           </div>
         </div>
         <div className="bulk-assign-modal-actions">
@@ -1568,18 +1576,7 @@ function UncategorizedReviewPanel({
                 </label>
                 <div className="uncategorized-tag-field">
                   <span>Tags</span>
-                  <div className="uncategorized-tag-list">
-                    {refs.tags.length ? refs.tags.map((tag) => (
-                      <label className="check-row" key={tag.id}>
-                        <input
-                          checked={(draft.tag_ids || []).includes(tag.id)}
-                          onChange={() => toggleTag(tag.id)}
-                          type="checkbox"
-                        />
-                        <span>{tag.name}</span>
-                      </label>
-                    )) : <span className="muted">No tags</span>}
-                  </div>
+                  <TagToggleList label="Tags" onToggle={toggleTag} tags={refs.tags} value={draft.tag_ids || []} />
                 </div>
                 <label className="check-row uncategorized-ignore-row">
                   <input
@@ -2499,23 +2496,8 @@ function SavedFiltersPanel({ busy, dateDefaults, name, onDelete, onLoad, onNameC
   );
 }
 
-function DateInput({ label, name, onChange, value }) {
-  return (
-    <label>
-      <span>{label}</span>
-      <input
-        inputMode="numeric"
-        onChange={(event) => onChange(name, event.target.value)}
-        pattern="\d{4}-\d{2}-\d{2}"
-        placeholder="YYYY-MM-DD"
-        type="text"
-        value={value}
-      />
-    </label>
-  );
-}
-
-function CheckboxFilterPanel({ className = "", label, name, onChange, optional = false, options, searchable = true, value }) {
+// tags: show the options as tag pills (TagToggleList) in these tags' colours.
+function CheckboxFilterPanel({ className = "", label, name, onChange, optional = false, options, searchable = true, tags, value }) {
   const [query, setQuery] = useState("");
   const selectedValues = value || [];
   const selectedSet = useMemo(() => new Set(selectedValues), [selectedValues]);
@@ -2558,7 +2540,11 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, optional =
         </div>
       </div>
       <div className="checkbox-filter-list">
-        {filteredOptions.length ? filteredOptions.map(([optionValue, text]) => (
+        {!filteredOptions.length ? (
+          <div className="filter-no-matches">No matches</div>
+        ) : tags ? (
+          <TagToggleList label={label} onToggle={toggleOption} options={filteredOptions} tags={tags} value={selectedValues} />
+        ) : filteredOptions.map(([optionValue, text]) => (
           <label className="checkbox-filter-row" key={optionValue} title={text}>
             <input
               checked={selectedSet.has(optionValue)}
@@ -2567,7 +2553,7 @@ function CheckboxFilterPanel({ className = "", label, name, onChange, optional =
             />
             <span>{text}</span>
           </label>
-        )) : <div className="filter-no-matches">No matches</div>}
+        ))}
       </div>
     </div>
   );
