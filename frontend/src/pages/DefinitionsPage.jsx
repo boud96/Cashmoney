@@ -996,7 +996,8 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
       thousands_separator: parsingSettings.thousands_separator || "",
       column_map: sanitizeColumnMap(draft.column_map),
       categorization_fields: draft.categorization_fields,
-      fallback_date_formats: [],
+      // The wizard doesn't show extra date formats; keep any the mapping already has.
+      fallback_date_formats: editingItem?.fallback_date_formats || [],
     };
     setSaving(true);
     try {
