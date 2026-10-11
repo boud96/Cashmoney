@@ -236,7 +236,6 @@ def serialize_csv_import(csv_import):
         "created_count": csv_import.created_count,
         "skipped_count": csv_import.skipped_count,
         "error_count": csv_import.error_count,
-        "report": csv_import.report,
         "created_at": iso(csv_import.created_at),
         "updated_at": iso(csv_import.updated_at),
     }

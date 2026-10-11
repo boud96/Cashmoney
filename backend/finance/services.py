@@ -1524,13 +1524,15 @@ class CSVImportService:
             csv_mapping=self.csv_mapping,
         )
 
+        # Kept small: it is stored with the import. Created rows are referenced by ID
+        # (they are in the transactions table), and duplicates without their raw row.
         report = {
             "loaded": 0,
             "created": {
                 "count": 0,
-                "transactions": [],
-                "category_overlaps": [],
-                "uncategorized": [],
+                "transaction_ids": [],
+                "category_overlap_count": 0,
+                "uncategorized_count": 0,
             },
             "skipped": {
                 "duplicates": [],
@@ -1564,7 +1566,6 @@ class CSVImportService:
                         "line": line_number,
                         "reason": "Duplicate original id",
                         "description": self._row_description(row),
-                        "row": row,
                     }
                 )
                 continue
@@ -1585,7 +1586,6 @@ class CSVImportService:
                         "line": line_number,
                         "reason": "Possible duplicate",
                         "description": self._row_description(row),
-                        "row": row,
                     }
                 )
                 continue
@@ -1597,22 +1597,19 @@ class CSVImportService:
                         "line": line_number,
                         "reason": "Duplicate transaction",
                         "description": self._row_description(row),
-                        "row": row,
                         "duplicate_transaction": self._duplicate_ref(duplicate),
                     }
                 )
                 continue
 
             transaction_obj, categorization = created_transaction
-            serialized = serialize_transaction(transaction_obj)
-            report["created"]["transactions"].append(serialized)
-
+            report["created"]["transaction_ids"].append(str(transaction_obj.id))
             if categorization.is_category_overlap:
-                report["created"]["category_overlaps"].append(serialized)
+                report["created"]["category_overlap_count"] += 1
             if categorization.is_uncategorized:
-                report["created"]["uncategorized"].append(serialized)
+                report["created"]["uncategorized_count"] += 1
 
-        report["created"]["count"] = len(report["created"]["transactions"])
+        report["created"]["count"] = len(report["created"]["transaction_ids"])
         csv_import.loaded_count = report["loaded"]
         csv_import.created_count = report["created"]["count"]
         csv_import.skipped_count = len(report["skipped"]["duplicates"])

@@ -609,6 +609,39 @@ class CSVImportServiceTests(FinanceTestCase):
             {"d-1": Decimal("50.00"), "d-2": Decimal("-30.00")},
         )
 
+    def test_import_reports_are_compact(self):
+        body = (
+            "ID,Date,Description,Amount\n"
+            "c-1,2026-01-02,Lunch,-120\n"
+            "c-2,2026-01-03,Dinner,-300\n"
+            "c-3,not-a-date,Broken,-1\n"
+        )
+        CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file("ID,Date,Description,Amount\nc-1,2026-01-02,Lunch,-120\n")
+        )
+
+        csv_import, report = CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file(body)
+        )
+
+        created = Transaction.objects.get(original_id="c-2")
+        self.assertEqual(
+            report["created"],
+            {
+                "count": 1,
+                "transaction_ids": [str(created.id)],
+                "category_overlap_count": 0,
+                "uncategorized_count": 1,
+            },
+        )
+        duplicate = report["skipped"]["duplicates"][0]
+        self.assertNotIn("row", duplicate)
+        self.assertEqual(duplicate["description"], "Lunch")
+        self.assertIn("duplicate_transaction", duplicate)
+        self.assertEqual(report["skipped"]["errors"][0]["row"]["ID"], "c-3")
+        csv_import.refresh_from_db()
+        self.assertEqual(csv_import.report, report)
+
     def test_identical_rows_without_ids_all_import_once(self):
         body = (
             "Date,Description,Amount\n"
@@ -1028,6 +1061,17 @@ class APITests(FinanceTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(json_body(response)["created"], 0)
         self.assertEqual(json_body(response)["skipped"], 1)
+
+    def test_import_list_leaves_reports_out(self):
+        CSVImportService(self.mapping, self.account).import_file(
+            self.csv_file("ID,Date,Description,Amount\nl-1,2026-01-02,Lunch,-120\n")
+        )
+
+        imports = json_body(self.client.get("/api/imports/"))
+
+        self.assertEqual(len(imports), 1)
+        self.assertNotIn("report", imports[0])
+        self.assertEqual(imports[0]["created_count"], 1)
 
     def test_app_shell_sets_csrf_cookie(self):
         csrf_client = Client(enforce_csrf_checks=True)
@@ -3850,7 +3894,8 @@ class SampleFlagMigrationTests(TransactionTestCase):
 
     def tearDown(self):
         # Leave the schema at the latest migration for the other tests.
-        MigrationExecutor(connection).migrate(self.after)
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
 
     def test_existing_sample_data_is_flagged(self):
         executor = MigrationExecutor(connection)
@@ -3873,4 +3918,62 @@ class SampleFlagMigrationTests(TransactionTestCase):
         self.assertEqual(
             dict(CSVImport.objects.values_list("source_filename", "is_sample")),
             {"Sample - initial demo data": True, "statement.csv": False},
+        )
+
+
+class CompactImportReportMigrationTests(TransactionTestCase):
+    before = [("finance", "0013_sample_flags")]
+    after = [("finance", "0014_compact_import_reports")]
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
+    def test_existing_reports_are_compacted(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.before)
+        old_import = executor.loader.project_state(self.before).apps.get_model(
+            "finance", "CSVImport"
+        )
+        legacy = old_import.objects.create(
+            source_filename="old.csv",
+            report={
+                "loaded": 3,
+                "created": {
+                    "count": 2,
+                    "transactions": [{"id": "a", "raw_data": {"x": 1}}, {"id": "b"}],
+                    "category_overlaps": [{"id": "a"}],
+                    "uncategorized": [{"id": "a"}, {"id": "b"}],
+                },
+                "skipped": {
+                    "duplicates": [
+                        {
+                            "line": 4,
+                            "row": {"x": 1},
+                            "duplicate_transaction": {"id": "z"},
+                        }
+                    ],
+                    "errors": [{"line": 5, "error": "bad", "row": {"x": 2}}],
+                },
+            },
+        )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate(self.after)
+
+        self.assertEqual(
+            CSVImport.objects.get(id=legacy.id).report,
+            {
+                "loaded": 3,
+                "created": {
+                    "count": 2,
+                    "transaction_ids": ["a", "b"],
+                    "category_overlap_count": 1,
+                    "uncategorized_count": 2,
+                },
+                "skipped": {
+                    "duplicates": [{"line": 4, "duplicate_transaction": {"id": "z"}}],
+                    "errors": [{"line": 5, "error": "bad", "row": {"x": 2}}],
+                },
+            },
         )

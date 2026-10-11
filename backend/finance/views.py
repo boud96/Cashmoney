@@ -1793,9 +1793,12 @@ class ImportTransactionsView(JsonView):
         limit = min(
             clean_int(request.GET.get("limit"), "limit", default=8, minimum=1), 25
         )
-        imports = CSVImport.objects.select_related(
-            "bank_account", "csv_mapping"
-        ).order_by("-created_at")[:limit]
+        # Reports stay out of the list; the import response carries the new one.
+        imports = (
+            CSVImport.objects.select_related("bank_account", "csv_mapping")
+            .defer("report")
+            .order_by("-created_at")[:limit]
+        )
         return json_response(
             [serialize_csv_import(csv_import) for csv_import in imports]
         )
