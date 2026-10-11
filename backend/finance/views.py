@@ -461,6 +461,15 @@ def id_list(value):
     return [item for item in str(value).split(",") if item]
 
 
+# SQLite caps the parameters of one statement (32,766, or 999 in older builds).
+ID_CHUNK_SIZE = 900
+
+
+def id_chunks(ids):
+    for start in range(0, len(ids), ID_CHUNK_SIZE):
+        yield ids[start : start + ID_CHUNK_SIZE]
+
+
 def filter_values(params, field_name):
     raw_values = (
         params.getlist(field_name)
@@ -1739,14 +1748,18 @@ class BulkAssignTransactionsView(JsonView):
         if not actions:
             raise APIValidationError("Choose at least one bulk assignment")
 
-        Transaction.objects.filter(id__in=transaction_ids).update(**update_values)
+        # The ID list is a snapshot on purpose: after the first update, the filters may
+        # no longer match these rows (e.g. "Uncategorized"), so a subquery would miss
+        # them in the tag steps. It goes in chunks to stay under SQLite's limit on
+        # parameters per statement.
+        for chunk in id_chunks(transaction_ids):
+            Transaction.objects.filter(id__in=chunk).update(**update_values)
 
         if tag_mode != "no_change":
             through_model = Transaction.tags.through
             if tag_mode in {"replace", "clear"}:
-                through_model.objects.filter(
-                    transaction_id__in=transaction_ids
-                ).delete()
+                for chunk in id_chunks(transaction_ids):
+                    through_model.objects.filter(transaction_id__in=chunk).delete()
             if tag_mode in {"add", "replace"}:
                 through_model.objects.bulk_create(
                     [

@@ -1993,6 +1993,42 @@ class APITests(FinanceTestCase):
         self.assertEqual(locked_transaction.subcategory, self.subcategory)
         self.assertFalse(locked_transaction.is_categorization_locked)
 
+    def test_bulk_assign_handles_more_rows_than_sqlite_parameters(self):
+        # SQLite allows 32,766 parameters per statement; every ID used to be one.
+        tag = Tag.objects.create(name="Reviewed")
+        Transaction.objects.bulk_create(
+            [
+                Transaction(
+                    bank_account=self.account,
+                    transaction_date=date(2026, 1, 2),
+                    description=f"Row {index}",
+                    amount=Decimal("-1.00"),
+                )
+                for index in range(32_800)
+            ],
+            batch_size=2000,
+        )
+
+        # Assigning a subcategory takes the rows out of the "uncategorized" filter;
+        # the tags must still reach all of them.
+        response = self.post_json(
+            "/api/transactions/bulk-assign/?category=__unassigned__",
+            {
+                "subcategory_id": str(self.subcategory.id),
+                "tag_mode": "add",
+                "tag_ids": [str(tag.id)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json_body(response)["updated"], 32_800)
+        self.assertEqual(
+            Transaction.objects.filter(subcategory=self.subcategory).count(), 32_800
+        )
+        self.assertEqual(
+            Transaction.tags.through.objects.filter(tag=tag).count(), 32_800
+        )
+
     def test_bulk_assign_transactions_updates_filtered_scope_and_locks(self):
         stale_tag = Tag.objects.create(name="Existing tag")
         assigned_tag = Tag.objects.create(name="Reviewed")
