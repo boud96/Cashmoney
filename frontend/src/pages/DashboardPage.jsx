@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
-import { DateField, HelpTooltip, LoadingButton, Spinner } from "../components.jsx";
+import { DateField, HelpTooltip, Tabs, tabPanelProps } from "../components.jsx";
 import {
   ANY_TAG,
   UNASSIGNED,
-  buildMetrics,
+  buildTotals,
   cloneFilters,
   countActiveFilters,
   formatCount,
@@ -31,10 +31,13 @@ import {
 } from "./dashboard/ActionDialogs.jsx";
 import { CheckboxFilterPanel, RelativeRangeForm, SavedFiltersPanel } from "./dashboard/FilterBar.jsx";
 import { ChartPanel, MonthlyChart, SunburstChart, TopExpenseChart, WniChart } from "./dashboard/OverviewCharts.jsx";
+import { TotalsRow } from "./dashboard/TotalsRow.jsx";
 import { TransactionGrid } from "./dashboard/TransactionGrid.jsx";
+import { TransactionToolbar } from "./dashboard/TransactionToolbar.jsx";
 
 export default function DashboardPage({
   confirmAction,
+  dashboardTab,
   deleteTransaction,
   filterDefaults,
   filters,
@@ -42,6 +45,7 @@ export default function DashboardPage({
   hideAmounts,
   importBusy,
   notify,
+  onDashboardTabChange,
   onFilterChange,
   recategorizeResult,
   refs,
@@ -56,10 +60,12 @@ export default function DashboardPage({
   updateTransaction,
 }) {
   const defaultCurrency = summary?.default_currency || refs.settings?.default_currency || "CZK";
-  const metrics = useMemo(
-    () => buildMetrics(summary, transactionPage, hideAmounts, defaultCurrency),
-    [defaultCurrency, hideAmounts, summary, transactionPage],
+  const totals = useMemo(
+    () => buildTotals(summary, hideAmounts, defaultCurrency),
+    [defaultCurrency, hideAmounts, summary],
   );
+  // From the summary, so the totals, the tab and the actions don't wait for the list.
+  const filteredCount = summary?.transaction_count ?? transactionPage.count ?? 0;
   const loadedTransactionCount = transactionPage.results?.length || 0;
   const filteredTransactionCount = transactionPage.count || 0;
   const transactionsAreCapped = loadedTransactionCount > 0 && filteredTransactionCount > loadedTransactionCount;
@@ -71,14 +77,6 @@ export default function DashboardPage({
     [recategorizeResult],
   );
   const [filtersOpen, setFiltersOpen] = useState(true);
-  // Charts mount after the first table load, so the rows render before Plotly's
-  // chunk (about half a second of script work) is evaluated.
-  const [chartsReady, setChartsReady] = useState(false);
-  useEffect(() => {
-    if (!chartsReady && summary && !transactionsBusy) {
-      setChartsReady(true);
-    }
-  }, [chartsReady, summary, transactionsBusy]);
   const [bulkAssignEditorOpen, setBulkAssignEditorOpen] = useState(false);
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
@@ -219,8 +217,13 @@ export default function DashboardPage({
     }
   }
 
+  function openUncategorizedReview() {
+    setUncategorizedReviewError("");
+    setUncategorizedReviewOpen(true);
+  }
+
   function openRecategorizeModal() {
-    if (!transactionPage.count) {
+    if (!filteredCount) {
       notify("No filtered transactions");
       return;
     }
@@ -236,7 +239,7 @@ export default function DashboardPage({
   }
 
   async function recategorize() {
-    if (!transactionPage.count) {
+    if (!filteredCount) {
       notify("No filtered transactions");
       return;
     }
@@ -779,86 +782,70 @@ export default function DashboardPage({
         )}
       </section>
 
-      <div className="dashboard-summary-row">
-        <section className="filter-panel dashboard-stats-section" aria-labelledby="dashboard-stats-title">
-          <div className="dashboard-section-header">
-            <h2 id="dashboard-stats-title" className="dashboard-section-title">Stats</h2>
-            {summaryBusy ? <span className="inline-status"><Spinner /> Updating stats and charts</span> : null}
-          </div>
-          <div className="metrics-grid">
-            {metrics.map(([label, value, tone, secondary], index) => (
-              <div className={`metric stats-metric stats-metric-${index + 1}`} key={label}>
-                <div className="metric-label">{label}</div>
-                <div className={`metric-value ${tone}`}>{value}</div>
-                {secondary && (
-                  <div className="metric-secondary">
-                    <span>Avg / month:</span>
-                    <strong className={secondary.tone}>{secondary.value}</strong>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </section>
+      <TotalsRow busy={summaryBusy} onReview={openUncategorizedReview} reviewDisabled={importBusy} totals={totals} />
+      {summary?.missing_conversions ? (
+        <div className="dashboard-warning">
+          {formatCount(summary.missing_conversions)} filtered transactions are missing exchange rates and are excluded from converted totals.
+        </div>
+      ) : null}
 
-        <section className="filter-panel dashboard-action-card" aria-labelledby="dashboard-actions-title">
-          <h2 id="dashboard-actions-title" className="dashboard-section-title">Actions</h2>
-          <div className="dashboard-action-section">
-            <div className="dashboard-action-grid">
-              <LoadingButton
-                busy={recategorizing}
-                busyLabel="Recategorizing"
-                className="link-button"
-                disabled={!transactionPage.count || importBusy}
-                onClick={openRecategorizeModal}
-                type="button"
-              >
-                Recategorize
-              </LoadingButton>
-              <button className="link-button" disabled={!transactionPage.count || importBusy} onClick={openBulkAssignEditor} type="button">
-                Bulk assign
-              </button>
-              <LoadingButton
-                busy={bulkDeleting}
-                busyLabel="Checking"
-                className="link-button"
-                disabled={!transactionPage.count || importBusy}
-                onClick={deleteFilteredTransactions}
-                type="button"
-              >
-                Delete
-              </LoadingButton>
-              <LoadingButton
-                busy={transferLoading && transferReviewOpen}
-                busyLabel="Scanning"
-                className="link-button"
-                disabled={!transactionPage.count || importBusy}
-                onClick={openTransferReview}
-                type="button"
-              >
-                Find transfers
-              </LoadingButton>
-              <LoadingButton
-                busy={uncategorizedSuggestionsLoading && uncategorizedReviewOpen}
-                busyLabel="Loading"
-                className="link-button"
-                disabled={importBusy}
-                onClick={() => {
-                  setUncategorizedReviewError("");
-                  setUncategorizedReviewOpen(true);
-                }}
-                type="button"
-              >
-                Review uncategorized
-              </LoadingButton>
-            </div>
-          </div>
-        </section>
+      <div className="dashboard-tab-row">
+        <Tabs
+          idPrefix="dashboard"
+          label="Dashboard view"
+          onChange={onDashboardTabChange}
+          tabs={[
+            { id: "overview", label: "Overview" },
+            { id: "transactions", label: "Transactions", badge: summary ? formatCount(summary.transaction_count) : "" },
+          ]}
+          value={dashboardTab}
+        />
+        {dashboardTab === "transactions" ? (
+          <TransactionToolbar
+            actionsDisabled={!filteredCount || importBusy}
+            busy={transactionsBusy}
+            countLabel={transactionCountLabel}
+            deleting={bulkDeleting}
+            findingTransfers={transferLoading && transferReviewOpen}
+            loadingReview={uncategorizedSuggestionsLoading && uncategorizedReviewOpen}
+            onBulkAssign={openBulkAssignEditor}
+            onDelete={deleteFilteredTransactions}
+            onFindTransfers={openTransferReview}
+            onRecategorize={openRecategorizeModal}
+            onReview={openUncategorizedReview}
+            recategorizing={recategorizing}
+            reviewDisabled={importBusy}
+          />
+        ) : null}
       </div>
+
+      {dashboardTab === "overview" ? (
+        <div className="dashboard-tab-panel" {...tabPanelProps("dashboard", "overview")}>
+          <div className="dashboard-charts">
+            <ChartPanel className="chart-panel-wide" ready={Boolean(summary)} title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
+            <ChartPanel ready={Boolean(summary)} title="Income Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.income_categories || []} /></ChartPanel>
+            <ChartPanel ready={Boolean(summary)} title="Expense Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
+            <ChartPanel ready={Boolean(summary)} title="Want / Need / Investment"><WniChart hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} /></ChartPanel>
+            <ChartPanel ready={Boolean(summary)} title="Top Expense Subcategories"><TopExpenseChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
+          </div>
+        </div>
+      ) : (
+        <div className="dashboard-tab-panel" {...tabPanelProps("dashboard", "transactions")}>
+          {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
+          {transactionsAreCapped ? (
+            <div className="transaction-cap-warning">
+              Showing the newest {formatCount(loadedTransactionCount)} of {formatCount(filteredTransactionCount)} filtered transactions.
+              Older matching transactions are omitted from the table. Totals and charts still use the full filtered set.
+            </div>
+          ) : null}
+          <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filterParams={filterParams} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+        </div>
+      )}
+
       {recategorizeModalOpen && (
         <RecategorizeModal
           busy={recategorizing}
-          count={transactionPage.count}
+          count={filteredCount}
           includeLocked={recategorizeIncludeLocked}
           onClose={closeRecategorizeModal}
           onIncludeLockedChange={setRecategorizeIncludeLocked}
@@ -926,7 +913,7 @@ export default function DashboardPage({
       {bulkAssignEditorOpen && (
         <BulkAssignMultiModal
           busy={bulkAssignBusy}
-          count={transactionPage.count}
+          count={filteredCount}
           draft={bulkAssignDraft}
           hasChanges={bulkAssignHasChanges()}
           onClose={closeBulkAssignEditor}
@@ -939,37 +926,6 @@ export default function DashboardPage({
           wniOptions={bulkWniOptions}
         />
       )}
-      {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
-      {summary?.missing_conversions ? (
-        <div className="dashboard-warning">
-          {formatCount(summary.missing_conversions)} filtered transactions are missing exchange rates and are excluded from converted totals.
-        </div>
-      ) : null}
-
-      <div className="dashboard-charts">
-        <ChartPanel className="chart-panel-wide" ready={chartsReady} title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
-        <ChartPanel ready={chartsReady} title="Income Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.income_categories || []} /></ChartPanel>
-        <ChartPanel ready={chartsReady} title="Expense Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
-        <ChartPanel ready={chartsReady} title="Want / Need / Investment"><WniChart hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} /></ChartPanel>
-        <ChartPanel ready={chartsReady} title="Top Expense Subcategories"><TopExpenseChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
-      </div>
-
-      <section className="panel transaction-panel">
-        <div className="panel-header">
-          <h2>Transactions</h2>
-          <div className="transaction-panel-status">
-            {transactionsBusy ? <span className="inline-status"><Spinner /> Updating table</span> : null}
-            <span className="muted">{transactionCountLabel}</span>
-          </div>
-        </div>
-        {transactionsAreCapped ? (
-          <div className="transaction-cap-warning">
-            Showing the newest {formatCount(loadedTransactionCount)} of {formatCount(filteredTransactionCount)} filtered transactions.
-            Older matching transactions are omitted from the table. Stats and charts still use the full filtered set.
-          </div>
-        ) : null}
-        <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filterParams={filterParams} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
-      </section>
     </>
   );
 }

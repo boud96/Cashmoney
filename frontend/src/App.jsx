@@ -10,6 +10,7 @@ import {
   applyAccent,
   applyTheme,
   buildFilterParams,
+  DASHBOARD_TAB_STORAGE_KEY,
   defaultAccentForTheme,
   defaultCategorizationFields,
   emptyFilters,
@@ -21,6 +22,8 @@ import {
   isChunkLoadError,
   normalizeHexColor,
   pages,
+  readStoredChoice,
+  storeChoice,
   syncChecklistFilters,
   toastDuration,
   todayInputValue,
@@ -34,6 +37,9 @@ const DASHBOARD_TRANSACTION_LOAD_DELAY_MS = 180;
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
+  const [dashboardTab, setDashboardTab] = useState(
+    () => readStoredChoice(DASHBOARD_TAB_STORAGE_KEY, ["overview", "transactions"], "overview"),
+  );
   const [theme, setTheme] = useState(getStoredTheme);
   const [accent, setAccent] = useState(getStoredAccent);
   const [hideAmounts, setHideAmounts] = useState(getStoredHideAmounts);
@@ -69,10 +75,13 @@ export default function App() {
   const confirmationResolver = useRef(null);
   const dashboardLoadSequence = useRef(0);
   const dashboardSummarySequence = useRef(0);
-  // The filter params of the last dashboard load, and whether another page changed
-  // data since (CR-27: no background reloads while the dashboard is hidden).
-  const loadedDashboardKey = useRef("");
-  const dashboardStale = useRef(false);
+  // The filter params of the last summary and transaction list loads, and whether data
+  // changed since (CR-27: no background reloads while the dashboard is hidden). The list
+  // loads only on the Transactions tab, so the two can be out of step.
+  const loadedSummaryKey = useRef("");
+  const summaryStale = useRef(false);
+  const loadedTransactionsKey = useRef("");
+  const transactionsStale = useRef(false);
 
   const toastTimer = useRef(null);
   const hideToastIn = useCallback((milliseconds) => {
@@ -178,51 +187,50 @@ export default function App() {
   const dashboardVisible = activePage === "dashboard";
   const dashboardBusy = loadingDashboardSummary || loadingDashboardTransactions;
 
-  const runDashboardLoad = useCallback(async (params, loadSequence, summarySequence) => {
+  const runSummaryLoad = useCallback(async (params, summarySequence) => {
+    if (summarySequence !== dashboardSummarySequence.current) {
+      return;
+    }
+    setLoadingDashboardSummary(true);
+    try {
+      const nextSummary = await apiGet("/dashboard/summary/", params);
+      if (summarySequence === dashboardSummarySequence.current) {
+        setSummary(nextSummary);
+      }
+    } catch (error) {
+      if (summarySequence === dashboardSummarySequence.current) {
+        notify(error.message);
+      }
+    } finally {
+      if (summarySequence === dashboardSummarySequence.current) {
+        setLoadingDashboardSummary(false);
+      }
+    }
+  }, [notify]);
+
+  const runTransactionsLoad = useCallback(async (params, loadSequence) => {
     if (loadSequence !== dashboardLoadSequence.current) {
       return;
     }
-    const summaryPromise = (async () => {
-      setLoadingDashboardSummary(true);
-      try {
-        const nextSummary = await apiGet("/dashboard/summary/", params);
-        if (summarySequence === dashboardSummarySequence.current) {
-          setSummary(nextSummary);
-        }
-      } catch (error) {
-        if (summarySequence === dashboardSummarySequence.current) {
-          notify(error.message);
-        }
-      } finally {
-        if (summarySequence === dashboardSummarySequence.current) {
-          setLoadingDashboardSummary(false);
-        }
+    setLoadingDashboardTransactions(true);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, DASHBOARD_TRANSACTION_LOAD_DELAY_MS));
+      if (loadSequence !== dashboardLoadSequence.current) {
+        return;
       }
-    })();
-
-    const transactionsPromise = (async () => {
-      setLoadingDashboardTransactions(true);
-      try {
-        await new Promise((resolve) => window.setTimeout(resolve, DASHBOARD_TRANSACTION_LOAD_DELAY_MS));
-        if (loadSequence !== dashboardLoadSequence.current) {
-          return;
-        }
-        const nextTransactions = await apiGet("/transactions/", { ...params, limit: 10000 });
-        if (loadSequence === dashboardLoadSequence.current) {
-          setTransactionPage(nextTransactions);
-        }
-      } catch (error) {
-        if (loadSequence === dashboardLoadSequence.current) {
-          notify(error.message);
-        }
-      } finally {
-        if (loadSequence === dashboardLoadSequence.current) {
-          setLoadingDashboardTransactions(false);
-        }
+      const nextTransactions = await apiGet("/transactions/", { ...params, limit: 10000 });
+      if (loadSequence === dashboardLoadSequence.current) {
+        setTransactionPage(nextTransactions);
       }
-    })();
-
-    await Promise.allSettled([summaryPromise, transactionsPromise]);
+    } catch (error) {
+      if (loadSequence === dashboardLoadSequence.current) {
+        notify(error.message);
+      }
+    } finally {
+      if (loadSequence === dashboardLoadSequence.current) {
+        setLoadingDashboardTransactions(false);
+      }
+    }
   }, [notify]);
 
   const loadDashboardSummary = useCallback(async () => {
@@ -245,18 +253,31 @@ export default function App() {
     }
   }, [filterParams, notify]);
 
+  // Data changed (an action or another page): reload what's shown, mark the rest stale.
   const loadDashboard = useCallback(async (params = filterParams) => {
     if (!dashboardVisible) {
       // Another page changed data; load when the dashboard is shown again.
-      dashboardStale.current = true;
+      summaryStale.current = true;
+      transactionsStale.current = true;
       return;
     }
-    const loadSequence = dashboardLoadSequence.current + 1;
     const summarySequence = dashboardSummarySequence.current + 1;
-    dashboardLoadSequence.current = loadSequence;
     dashboardSummarySequence.current = summarySequence;
-    await runDashboardLoad(params, loadSequence, summarySequence);
-  }, [dashboardVisible, filterParams, runDashboardLoad]);
+    const loads = [runSummaryLoad(params, summarySequence)];
+    if (dashboardTab === "transactions") {
+      const loadSequence = dashboardLoadSequence.current + 1;
+      dashboardLoadSequence.current = loadSequence;
+      loads.push(runTransactionsLoad(params, loadSequence));
+    } else {
+      transactionsStale.current = true;
+    }
+    await Promise.allSettled(loads);
+  }, [dashboardTab, dashboardVisible, filterParams, runSummaryLoad, runTransactionsLoad]);
+
+  const changeDashboardTab = useCallback((tab) => {
+    setDashboardTab(tab);
+    storeChoice(DASHBOARD_TAB_STORAGE_KEY, tab);
+  }, []);
 
   const loadMaintenance = useCallback(async () => {
     try {
@@ -278,26 +299,43 @@ export default function App() {
     applyAccent(accent);
   }, [accent]);
 
+  // The summary loads when the filters changed since its last load, or when another page
+  // asked for fresh data while the dashboard was hidden; not on every page switch.
   useEffect(() => {
     if (!(filterDefaults.to || filterDefaults.from) || !dashboardVisible) {
       return undefined;
     }
-    // Load when the filters changed since the last load, or when another page asked
-    // for fresh data while the dashboard was hidden; not on every page switch.
-    if (!dashboardStale.current && loadedDashboardKey.current === filterParamsKey) {
+    if (!summaryStale.current && loadedSummaryKey.current === filterParamsKey) {
+      return undefined;
+    }
+    const summarySequence = dashboardSummarySequence.current + 1;
+    dashboardSummarySequence.current = summarySequence;
+    const timeoutId = window.setTimeout(() => {
+      summaryStale.current = false;
+      loadedSummaryKey.current = filterParamsKey;
+      runSummaryLoad(filterParams, summarySequence);
+    }, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runSummaryLoad]);
+
+  // The transaction list loads the same way, but only while the Transactions tab is
+  // shown: the Overview needs just the summary, and the list is the heavy request.
+  useEffect(() => {
+    if (!(filterDefaults.to || filterDefaults.from) || !dashboardVisible || dashboardTab !== "transactions") {
+      return undefined;
+    }
+    if (!transactionsStale.current && loadedTransactionsKey.current === filterParamsKey) {
       return undefined;
     }
     const loadSequence = dashboardLoadSequence.current + 1;
-    const summarySequence = dashboardSummarySequence.current + 1;
     dashboardLoadSequence.current = loadSequence;
-    dashboardSummarySequence.current = summarySequence;
     const timeoutId = window.setTimeout(() => {
-      dashboardStale.current = false;
-      loadedDashboardKey.current = filterParamsKey;
-      runDashboardLoad(filterParams, loadSequence, summarySequence);
+      transactionsStale.current = false;
+      loadedTransactionsKey.current = filterParamsKey;
+      runTransactionsLoad(filterParams, loadSequence);
     }, 250);
     return () => window.clearTimeout(timeoutId);
-  }, [dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runDashboardLoad]);
+  }, [dashboardTab, dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runTransactionsLoad]);
 
   useEffect(() => {
     if (activePage === "maintenance") {
@@ -353,14 +391,14 @@ export default function App() {
     loadDashboardSummary();
   }, [loadDashboardSummary]);
 
-  const [title, kicker] = pages[activePage];
+  const title = pages[activePage];
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <SidebarAsciiPlay />
         <nav className="nav-tabs" aria-label="Primary">
-          {Object.entries(pages).map(([key, [label]]) => (
+          {Object.entries(pages).map(([key, label]) => (
             <button
               className={`nav-tab ${activePage === key ? "is-active" : ""}`}
               key={key}
@@ -406,10 +444,7 @@ export default function App() {
 
       <main className="main">
         <header className="topbar">
-          <div>
-            <h1>{title}</h1>
-            <p>{kicker}</p>
-          </div>
+          <h1>{title}</h1>
         </header>
         {status === "Backend offline" ? (
           <div className="backend-offline-banner" role="alert">
@@ -421,7 +456,9 @@ export default function App() {
         <PageErrorBoundary key={activePage}>
           {activePage === "dashboard" && (
             <DashboardPage
+              dashboardTab={dashboardTab}
               filterDefaults={filterDefaults}
+              onDashboardTabChange={changeDashboardTab}
               filters={filters}
               hideAmounts={hideAmounts}
               importBusy={dashboardBusy}

@@ -226,15 +226,7 @@ button {
 }
 
 .topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 22px;
-  min-width: 0;
-}
-
-.topbar > div {
+  margin-bottom: 14px;
   min-width: 0;
 }
 
@@ -245,26 +237,13 @@ p {
 }
 
 h1 {
-  font-size: 26px;
-  line-height: 1.15;
+  font-size: 22px;
+  line-height: 1.2;
 }
 
 h2 {
   font-size: 15px;
   line-height: 1.2;
-}
-
-.topbar p {
-  margin-top: 5px;
-  color: var(--muted);
-}
-
-.topbar-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  min-width: 0;
 }
 
 .primary-action,
@@ -1106,7 +1085,6 @@ h2 {
 
 .filter-panel,
 .panel,
-.dashboard-summary-row,
 .settings-grid,
 .definitions-grid {
   margin-bottom: 18px;
@@ -1947,14 +1925,123 @@ select option {
   padding: 8px 0;
 }
 
-.dashboard-summary-row {
+.totals-row {
   display: grid;
-  align-items: stretch;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-  gap: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin-top: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.total {
+  min-width: 0;
+  padding: 10px 14px;
+  /* Lines between cells, also when the row wraps (the box clips the outer ones). */
+  box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border);
+}
+
+.total-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.total-value {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.totals-row.is-busy .total-value {
+  opacity: 0.55;
+}
+
+.total-detail {
+  min-height: 18px;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.text-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--action);
+  font-weight: 700;
+}
+
+.text-button:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.text-button:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.text-button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+.dashboard-tab-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.dashboard-tab-panel {
+  padding-top: 14px;
+}
+
+.transaction-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: auto;
+  padding-bottom: 6px;
+}
+
+.transaction-toolbar .link-button {
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.transaction-toolbar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.danger-link {
+  border-color: color-mix(in srgb, var(--red) 45%, var(--border));
+  color: var(--red);
+}
+
+.transaction-toolbar-delete {
+  margin-left: 6px;
 }
 
 .dashboard-warning {
+  margin-top: 12px;
   border: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
   border-radius: 8px;
   background: color-mix(in srgb, var(--warning) 12%, var(--surface));
@@ -1974,44 +2061,15 @@ select option {
   padding: 10px 12px;
 }
 
-.dashboard-stats-section {
-  min-width: 0;
-}
-
 .dashboard-section-title {
   font-size: 15px;
   margin: 0;
-}
-
-.dashboard-section-header,
-.transaction-panel-status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  min-width: 0;
-}
-
-.dashboard-section-header {
-  justify-content: space-between;
-  margin-bottom: 12px;
 }
 
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
-}
-
-.stats-metric {
-  background: var(--field-bg);
-  box-shadow: none;
-  grid-column: span 2;
-}
-
-.stats-metric-4,
-.stats-metric-5 {
-  grid-column: span 3;
 }
 
 .metric {
@@ -2022,64 +2080,6 @@ select option {
   margin-top: 8px;
   font-size: 24px;
   font-weight: 760;
-}
-
-.metric-secondary {
-  margin-top: 4px;
-  color: var(--muted);
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.metric-secondary strong {
-  font-size: 13px;
-}
-
-.dashboard-action-card {
-  display: grid;
-  gap: 12px;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.dashboard-action-section {
-  display: grid;
-  align-content: stretch;
-  min-height: 0;
-  min-width: 0;
-}
-
-.dashboard-action-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  height: 100%;
-  min-height: 0;
-}
-
-.dashboard-action-grid button {
-  height: 100%;
-  min-height: 38px;
-  min-width: 0;
-  padding-inline: 10px;
-  width: 100%;
-}
-
-.bulk-assign-buttons {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.bulk-assign-button {
-  justify-content: center;
-  min-height: 36px;
-  min-width: 0;
-  padding-inline: 10px;
-  white-space: nowrap;
 }
 
 .positive,
@@ -4711,8 +4711,11 @@ td {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .totals-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .dashboard-charts,
-  .dashboard-summary-row,
   .help-grid,
   .help-hero,
   .uncategorized-review-layout,
@@ -4738,7 +4741,6 @@ td {
     padding: 16px;
   }
 
-  .topbar,
   .recategorize-body {
     align-items: stretch;
     flex-direction: column;
@@ -4779,18 +4781,10 @@ td {
     grid-template-columns: 1fr;
   }
 
-  .stats-metric,
-  .stats-metric-4,
-  .stats-metric-5 {
-    grid-column: auto;
+  .totals-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dashboard-action-section {
-    grid-template-columns: 1fr;
-  }
-
-  .bulk-assign-buttons,
-  .dashboard-action-grid,
   .transfer-review-controls,
   .transfer-pair-grid,
   .uncategorized-sample-header,
@@ -4801,10 +4795,6 @@ td {
 
   .raw-data-row {
     gap: 3px;
-  }
-
-  .dashboard-action-grid {
-    grid-template-rows: repeat(4, minmax(38px, 1fr));
   }
 
   .uncategorized-keyword-form .form-field:nth-child(2),
