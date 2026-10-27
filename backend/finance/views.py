@@ -1782,8 +1782,9 @@ class ImportTransactionsView(JsonView):
     atomic_writes = False  # rows commit one by one; the rate sync calls the network
 
     def get(self, request):
+        # The Import page lists the newest 8, or every import ("Show all").
         limit = min(
-            clean_int(request.GET.get("limit"), "limit", default=8, minimum=1), 25
+            clean_int(request.GET.get("limit"), "limit", default=8, minimum=1), 1000
         )
         # Reports stay out of the list; the import response carries the new one.
         imports = (
