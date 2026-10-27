@@ -4,8 +4,9 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 
-const { newSecret, provesInstance, rotateIfLarge } = require("./backend-support.js");
+const { newSecret, platformFiles, provesInstance, rotateIfLarge } = require("./backend-support.js");
 
+const PLATFORM_FILES = platformFiles();
 const BACKEND_PORT = app.isPackaged ? "8765" : "8000";
 const APP_URL = `http://127.0.0.1:${BACKEND_PORT}/`;
 const APP_USER_MODEL_ID = "local.cashmoney.desktop";
@@ -69,9 +70,12 @@ function openExternalUrl(url) {
 
 function appIconPath() {
   if (app.isPackaged) {
-    return path.join(process.resourcesPath, "favicon.ico");
+    return path.join(process.resourcesPath, PLATFORM_FILES.icon);
   }
-  return path.resolve(__dirname, "..", "backend", "finance", "static", "favicon.ico");
+  if (process.platform === "win32") {
+    return path.resolve(__dirname, "..", "backend", "finance", "static", PLATFORM_FILES.icon);
+  }
+  return path.resolve(__dirname, "assets", PLATFORM_FILES.icon);
 }
 
 function backendRoot() {
@@ -79,11 +83,11 @@ function backendRoot() {
 }
 
 function pythonPath() {
-  return path.resolve(__dirname, "..", ".venv", "Scripts", "python.exe");
+  return path.resolve(__dirname, "..", ".venv", ...PLATFORM_FILES.venvPython);
 }
 
 function packagedBackendPath() {
-  return path.join(process.resourcesPath, "backend", "cashmoney-backend.exe");
+  return path.join(process.resourcesPath, "backend", PLATFORM_FILES.backendExecutable);
 }
 
 function backendLogs() {
@@ -335,7 +339,9 @@ function waitForBackend(deadlineMs) {
 }
 
 // A backend left over from an earlier launch that ended abruptly would hold the port.
-// The single-instance lock means no other Cashmoney is running, so it can go.
+// The single-instance lock means no other Cashmoney is running, so it can go. On Linux
+// the backend exits by itself once the app is gone (CASHMONEY_APP_PID below and
+// packaged_backend.watch_parent), so there is nothing to end.
 function stopLeftoverBackend() {
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/IM", path.basename(packagedBackendPath()), "/F"], { stdio: "ignore", windowsHide: true });
@@ -361,6 +367,7 @@ async function startBackendIfNeeded() {
       {
         env: {
           ...process.env,
+          CASHMONEY_APP_PID: String(process.pid),
           CASHMONEY_DATA_DIR: app.getPath("userData"),
           CASHMONEY_INSTANCE_TOKEN: INSTANCE_TOKEN,
           CASHMONEY_PORT: BACKEND_PORT,
@@ -371,7 +378,7 @@ async function startBackendIfNeeded() {
     );
     showStartingPage();
   } else {
-    // Development: run_app.bat may already serve the app.
+    // Development: run_app.bat (run_app.sh on Linux) may already serve the app.
     try {
       await waitForBackend(1200);
       return;
