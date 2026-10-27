@@ -95,12 +95,13 @@ class PackagedBackendTests(SimpleTestCase):
                     root.addHandler(handler)
 
     def test_the_data_dir_follows_electron_on_linux(self):
-        # Electron's userData on Linux, where the desktop app keeps the database.
+        # Electron's userData on Linux, where the desktop app keeps the database. Electron
+        # names it after desktop/package.json's "name" (there is no top-level productName).
         with patch.dict(os.environ, {"XDG_CONFIG_HOME": "/home/u/.cfg"}):
             os.environ.pop("CASHMONEY_DATA_DIR", None)
             self.assertEqual(
                 packaged_backend.default_data_dir("linux"),
-                Path("/home/u/.cfg/Cashmoney"),
+                Path("/home/u/.cfg/cashmoney-desktop"),
             )
         with (
             patch.dict(os.environ),
@@ -110,7 +111,7 @@ class PackagedBackendTests(SimpleTestCase):
             os.environ.pop("XDG_CONFIG_HOME", None)
             self.assertEqual(
                 packaged_backend.default_data_dir("linux"),
-                Path("/home/u/.config/Cashmoney"),
+                Path("/home/u/.config/cashmoney-desktop"),
             )
 
     def test_the_data_dir_stays_in_appdata_on_windows(self):

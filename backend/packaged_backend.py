@@ -34,11 +34,12 @@ def default_data_dir(platform=sys.platform):
             return Path(appdata) / "Cashmoney"
         return Path.home() / "AppData" / "Roaming" / "Cashmoney"
 
-    # Electron's userData folder on Linux.
+    # Electron's userData folder on Linux. Electron names it after desktop/package.json's
+    # "name", as there is no top-level productName.
     config_home = os.environ.get("XDG_CONFIG_HOME")
     if config_home:
-        return Path(config_home) / "Cashmoney"
-    return Path.home() / ".config" / "Cashmoney"
+        return Path(config_home) / "cashmoney-desktop"
+    return Path.home() / ".config" / "cashmoney-desktop"
 
 
 def make_private(path):
