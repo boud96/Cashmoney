@@ -2730,6 +2730,9 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     valid = annotated.filter(_summary_amount__isnull=False)
     summary = {
         "default_currency": default_currency,
+        # The dashboard's totals and tab label show these without loading the list.
+        "transaction_count": base_queryset.count(),
+        "total_transaction_count": Transaction.objects.count(),
         "missing_conversions": annotated.filter(_summary_amount__isnull=True).count(),
         # Counted here, not from the table page, which is capped at 10 000 rows.
         "uncategorized_count": base_queryset.filter(
