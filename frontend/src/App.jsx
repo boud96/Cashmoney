@@ -2,6 +2,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 
 import { apiDelete, apiGet, apiPatch, BACKEND_REACHABILITY_EVENT } from "./api.js";
 import { ConfirmDialog, ModalShell, Spinner } from "./components.jsx";
+import { EyeIcon, EyeOffIcon, MoonIcon, SunIcon } from "./icons.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import SidebarAsciiPlay from "./SidebarAsciiPlay.jsx";
 import {
@@ -610,58 +611,6 @@ class PageErrorBoundary extends Component {
 
     return this.props.children;
   }
-}
-
-function IconSvg({ children }) {
-  return (
-    <svg aria-hidden="true" className="icon-svg" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
-      {children}
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <IconSvg>
-      <path d="M12 3a6.8 6.8 0 0 0 9 8.9A9 9 0 1 1 12 3Z" />
-    </IconSvg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <IconSvg>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2" />
-      <path d="M12 20v2" />
-      <path d="m4.93 4.93 1.41 1.41" />
-      <path d="m17.66 17.66 1.41 1.41" />
-      <path d="M2 12h2" />
-      <path d="M20 12h2" />
-      <path d="m6.34 17.66-1.41 1.41" />
-      <path d="m19.07 4.93-1.41 1.41" />
-    </IconSvg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <IconSvg>
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-    </IconSvg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <IconSvg>
-      <path d="m3 3 18 18" />
-      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-      <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.2 17.2 0 0 1-2.2 3.2" />
-      <path d="M6.2 6.5C3.5 8.2 2 12 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8" />
-    </IconSvg>
-  );
 }
 
 function PageFallback() {
