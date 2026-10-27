@@ -1,8 +1,10 @@
-"""Settings, the secret key, the packaged backend's entry point."""
+"""Settings, the secret key, the packaged backend's entry point and its build check."""
 
+import io
 import logging
 import os
 import tempfile
+from contextlib import redirect_stdout
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from unittest.mock import patch
@@ -14,6 +16,8 @@ from django.test import (
 )
 
 from cashmoney_backend.secret_key import load_or_create_secret_key
+from check_bundle import find_databases, is_database_name
+from check_bundle import main as check_bundle
 from packaged_backend import configure_environment, rotate_if_large
 
 
@@ -67,6 +71,67 @@ class PackagedBackendTests(SimpleTestCase):
                     handler.close()
                 for handler in handlers:
                     root.addHandler(handler)
+
+
+class BundleCheckTests(SimpleTestCase):
+    # PyInstaller's Django hook bundles any *.db / db.* file next to manage.py, such as
+    # the development database (CR-60); the build fails if one gets through.
+    def test_database_file_names(self):
+        for name in [
+            "db.sqlite3",
+            "db.sqlite3-journal",
+            "db.sqlite3-wal",
+            "cashmoney.db",
+            "db.json",
+        ]:
+            with self.subTest(name=name):
+                self.assertTrue(is_database_name(name))
+        for name in [
+            "db.py",
+            "db.pyc",
+            "base_library.zip",
+            "favicon.ico",
+            "dbutils.txt",
+        ]:
+            with self.subTest(name=name):
+                self.assertFalse(is_database_name(name))
+
+    def test_finds_databases_anywhere_in_a_bundle(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for relative in [
+                "_internal/db.sqlite3",
+                "_internal/x/old.db",
+                "_internal/finance/static/app.js",
+                "cashmoney-backend",
+            ]:
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_bytes(b"x")
+
+            found = find_databases(root)
+
+        self.assertEqual(
+            found,
+            [root / "_internal" / "db.sqlite3", root / "_internal" / "x" / "old.db"],
+        )
+
+    def test_the_check_fails_only_when_a_database_is_bundled(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            bundle = Path(temp_dir) / "cashmoney-backend"
+            (bundle / "_internal").mkdir(parents=True)
+            (bundle / "cashmoney-backend").write_bytes(b"x")
+            with redirect_stdout(io.StringIO()):
+                clean = check_bundle([str(bundle)])
+            (bundle / "_internal" / "db.sqlite3").write_bytes(b"x")
+            with redirect_stdout(io.StringIO()) as output:
+                leaky = check_bundle([str(bundle)])
+            with redirect_stdout(io.StringIO()):
+                missing = check_bundle([str(Path(temp_dir) / "missing")])
+
+        self.assertEqual(clean, 0)
+        self.assertEqual(leaky, 1)
+        self.assertIn("db.sqlite3", output.getvalue())
+        self.assertEqual(missing, 2)
 
 
 class DatabaseSettingsTests(TestCase):

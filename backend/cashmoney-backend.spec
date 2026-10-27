@@ -1,6 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+import sys
+
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+sys.path.insert(0, SPECPATH)
+from check_bundle import is_database_name  # noqa: E402
 
 
 datas = []
@@ -30,6 +36,14 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+# PyInstaller's Django hook adds every *.db / db.* file next to manage.py to the bundle
+# root, such as the development database (CR-60). Leave those out; the build scripts
+# then run check_bundle.py on the result.
+a.datas = [
+    entry
+    for entry in a.datas
+    if os.path.dirname(entry[0]) or not is_database_name(entry[0])
+]
 pyz = PYZ(a.pure)
 
 exe = EXE(
