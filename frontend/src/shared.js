@@ -21,6 +21,8 @@ export const THEME_STORAGE_KEY = "cashmoney-theme";
 export const ACCENT_STORAGE_KEY = "cashmoney-accent";
 export const HIDE_AMOUNTS_STORAGE_KEY = "cashmoney-hide-amounts";
 export const FILTER_PRESETS_STORAGE_KEY = "cashmoney-filter-presets";
+export const DASHBOARD_TAB_STORAGE_KEY = "cashmoney-dashboard-tab";
+export const DEFINITIONS_TAB_STORAGE_KEY = "cashmoney-definitions-tab";
 export const HIDDEN_AMOUNT = "----";
 export const accentPresets = [
   "#58a6ff",
@@ -313,6 +315,60 @@ export function storeFilterPresets(presets) {
   window.localStorage.setItem(FILTER_PRESETS_STORAGE_KEY, JSON.stringify(presets));
 }
 
+// A remembered choice, such as the open tab. Storage can be missing or throw (a private
+// window, blocked site data); then the fallback applies and nothing is remembered.
+export function readStoredChoice(key, allowed, fallback) {
+  try {
+    const value = window.localStorage.getItem(key);
+    return allowed.includes(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function storeChoice(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage is optional; the choice still holds while the app runs.
+  }
+}
+
+// A checklist filter's state for its button: "All", "None", the one chosen item, or
+// "2 of 3". The optional tag list reads "Any" when empty. Values that aren't offered
+// (deleted items) don't count.
+export function checklistSummary(selected, options, { optional = false } = {}) {
+  const chosen = options.filter(([value]) => (selected || []).includes(value));
+  if (optional) {
+    if (!chosen.length) {
+      return "Any";
+    }
+    return chosen.length === 1 ? chosen[0][1] : `${chosen.length} selected`;
+  }
+  if (!chosen.length) {
+    return "None";
+  }
+  if (chosen.length === options.length) {
+    return "All";
+  }
+  return chosen.length === 1 ? chosen[0][1] : `${chosen.length} of ${options.length}`;
+}
+
+// Whether a checklist leaves out something it offers, as countActiveFilters counts it.
+export function checklistNarrows(selected, options) {
+  const chosen = new Set(selected || []);
+  return options.some(([value]) => !chosen.has(value));
+}
+
+// The View button's text: how amounts are shown and which rows are included.
+export function viewSummary(filters) {
+  return [
+    filters.split_by_owners ? "Split by owners" : "Full amounts",
+    filters.include_ignored ? "+ ignored" : "",
+    filters.include_locked === false ? "no locked" : "",
+  ].filter(Boolean).join(", ");
+}
+
 
 export function buildFilterParams(filters) {
   const params = {};
@@ -359,6 +415,102 @@ export function buildMetrics(summary, transactionPage, hideAmounts = false, defa
     ["Transactions", `${formatCount(transactionPage.count)} / ${formatCount(transactionPage.total_count ?? transactionPage.count)}`, ""],
     ["Uncategorized", formatCount(uncategorized), ""],
   ];
+}
+
+const NO_VALUE = "–";
+
+// The dashboard's row of totals, from the summary alone (it doesn't wait for the
+// transaction list). Averages divide by every month in the range, empty ones too.
+export function buildTotals(summary, hideAmounts = false, currency = "") {
+  if (!summary) {
+    return [
+      ["income", "Income"],
+      ["expenses", "Expenses"],
+      ["net", "Net"],
+      ["transactions", "Transactions"],
+      ["uncategorized", "Uncategorized"],
+    ].map(([key, label]) => ({ key, label, value: NO_VALUE, tone: "", detail: "" }));
+  }
+  const unit = currency || summary.default_currency || "";
+  const monthly = summary.monthly || [];
+  const monthCount = completeMonthlyRows(monthly).length || 1;
+  const income = monthly.reduce((acc, row) => acc + Number(row.income || 0), 0);
+  const expense = monthly.reduce((acc, row) => acc + Number(row.expense || 0), 0);
+  const net = income - expense;
+  const amount = (value) => formatMoneyWithCurrency(value, unit, hideAmounts);
+  const average = (value) => `avg ${amount(value / monthCount)} / month`;
+  return [
+    { key: "income", label: "Income", value: amount(income), tone: "positive", detail: average(income) },
+    { key: "expenses", label: "Expenses", value: amount(expense), tone: "negative", detail: average(expense) },
+    { key: "net", label: "Net", value: amount(net), tone: "metric-blue", detail: average(net) },
+    {
+      key: "transactions",
+      label: "Transactions",
+      value: formatCount(summary.transaction_count),
+      tone: "",
+      detail: `of ${formatCount(summary.total_transaction_count)} in total`,
+    },
+    { key: "uncategorized", label: "Uncategorized", value: formatCount(summary.uncategorized_count), tone: "", detail: "" },
+  ];
+}
+
+// A side of the dashboard's category breakdown (the summary's category tree), largest
+// first, with each amount's share of the side's total. Subcategories without a colour
+// take their category's.
+export function rankCategories(tree) {
+  const categories = (tree || [])
+    .map((category) => ({
+      name: category.name,
+      color: normalizeHexColor(category.color),
+      amount: Number(category.amount || 0),
+      children: (category.children || []).map((child) => ({
+        name: child.name,
+        color: normalizeHexColor(child.color) || normalizeHexColor(category.color),
+        amount: Number(child.amount || 0),
+      })),
+    }))
+    .filter((category) => category.amount > 0);
+  const total = categories.reduce((acc, category) => acc + category.amount, 0);
+  const share = (amount) => (total > 0 ? amount / total : 0);
+  const byAmount = (left, right) => right.amount - left.amount;
+  const rows = categories.sort(byAmount).map((category) => ({
+    ...category,
+    share: share(category.amount),
+    children: category.children
+      .filter((child) => child.amount > 0)
+      .sort(byAmount)
+      .map((child) => ({ ...child, share: share(child.amount) })),
+  }));
+  return { total, rows };
+}
+
+// Categories that start open: one that makes up more than half of its side.
+export function autoOpenCategories(rows) {
+  return rows.filter((row) => row.share > 0.5).map((row) => row.name);
+}
+
+// Want / Need / Investment as parts of one bar, largest first, unassigned last.
+export function wniSplit(rows) {
+  const parts = (rows || [])
+    .map((row) => ({ name: String(row.name || "uncategorized").toLowerCase(), amount: Number(row.amount || 0) }))
+    .filter((part) => part.amount > 0);
+  const total = parts.reduce((acc, part) => acc + part.amount, 0);
+  return parts
+    .sort((left, right) => (
+      Number(left.name === "uncategorized") - Number(right.name === "uncategorized") || right.amount - left.amount
+    ))
+    .map((part) => ({ ...part, share: total > 0 ? part.amount / total : 0 }));
+}
+
+// Months between the Monthly flow chart's labels, so long ranges stay readable.
+export function monthlyTickStep(monthCount) {
+  if (monthCount <= 14) {
+    return "M1";
+  }
+  if (monthCount <= 36) {
+    return "M3";
+  }
+  return monthCount <= 72 ? "M6" : "M12";
 }
 
 export function baseLayout(extra = {}) {
@@ -638,7 +790,7 @@ export function money(value) {
 }
 
 export function amountNumber(value) {
-  return formatNumber(value, { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+  return formatNumber(value, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 }
 
 // The API sends money as decimal strings ("-12.50"), which would sort as text.
@@ -695,6 +847,7 @@ export function fileTooLargeMessage(file, maxBytes) {
   return `The file is too large (${formatBytes(file.size)}). The limit is ${Math.round(maxBytes / (1024 * 1024))} MB.`;
 }
 
+// Local time as YYYY-MM-DD HH:MM, like the dates elsewhere in the app.
 export function formatDateTime(value, fallback = "") {
   if (!value) {
     return fallback;
@@ -703,7 +856,12 @@ export function formatDateTime(value, fallback = "") {
   if (Number.isNaN(date.getTime())) {
     return String(value);
   }
-  return date.toLocaleString();
+  const time = [date.getHours(), date.getMinutes()].map((part) => String(part).padStart(2, "0")).join(":");
+  return `${formatDateInput(date)} ${time}`;
+}
+
+export function pluralize(count, singular, plural = `${singular}s`) {
+  return `${formatCount(count)} ${Number(count) === 1 ? singular : plural}`;
 }
 
 export function formatNumber(value, options = {}) {
@@ -835,6 +993,47 @@ export function calendarWeeks(year, month) {
   return Array.from({ length: 6 }, (_, week) => (
     Array.from({ length: 7 }, (_, day) => addDays(start, week * 7 + day))
   ));
+}
+
+export const QUICK_RANGES = [
+  ["this-month", "This month"],
+  ["last-month", "Last month"],
+  ["3-months", "3 months"],
+  ["12-months", "12 months"],
+  ["this-year", "This year"],
+  ["all", "All"],
+];
+
+// The dates a quick pick sets. Month ranges are whole calendar months up to today
+// ("12 months" is this month and the 11 before it), so the monthly chart shows whole
+// months. "All" starts at the oldest transaction.
+export function quickDateRange(id, today, oldest) {
+  const end = parseDateInput(today) || new Date();
+  const to = formatDateInput(end);
+  const monthStart = (monthsBack) => formatDateInput(new Date(end.getFullYear(), end.getMonth() - monthsBack, 1));
+  switch (id) {
+    case "this-month":
+      return { from: monthStart(0), to };
+    case "last-month":
+      return { from: monthStart(1), to: formatDateInput(new Date(end.getFullYear(), end.getMonth(), 0)) };
+    case "3-months":
+      return { from: monthStart(2), to };
+    case "12-months":
+      return { from: monthStart(11), to };
+    case "this-year":
+      return { from: formatDateInput(new Date(end.getFullYear(), 0, 1)), to };
+    default:
+      return { from: oldest || "", to };
+  }
+}
+
+// The quick pick whose range the dates are exactly, or "".
+export function activeQuickRange(dateFrom, dateTo, today, oldest) {
+  const match = QUICK_RANGES.find(([id]) => {
+    const range = quickDateRange(id, today, oldest);
+    return range.from === dateFrom && range.to === dateTo;
+  });
+  return match ? match[0] : "";
 }
 
 export function subtractRelativeDate(date, amount, unit) {
