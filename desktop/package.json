@@ -3,16 +3,20 @@
   "version": "0.9.0",
   "private": true,
   "description": "Electron shell for the Cashmoney app.",
+  "homepage": "https://github.com/boud96/Cashmoney",
+  "desktopName": "cashmoney.desktop",
   "main": "main.js",
   "scripts": {
     "dist": "electron-builder --win --x64",
+    "dist:linux": "electron-builder --linux --x64",
     "pack": "electron-builder --dir --win --x64",
+    "pack:linux": "electron-builder --dir --linux --x64",
     "start": "electron .",
     "test": "node --test"
   },
   "devDependencies": {
     "electron": "^42.3.3",
-    "electron-builder": "^26.0.12"
+    "electron-builder": "^26.17.0"
   },
   "build": {
     "appId": "local.cashmoney.desktop",
@@ -33,8 +37,15 @@
       {
         "from": "../backend/finance/static/favicon.ico",
         "to": "favicon.ico"
+      },
+      {
+        "from": "assets/cashmoney.png",
+        "to": "cashmoney.png"
       }
     ],
+    "toolsets": {
+      "appimage": "1.0.3"
+    },
     "win": {
       "icon": "../backend/finance/static/favicon.ico",
       "target": [
@@ -47,6 +58,23 @@
       "allowToChangeInstallationDirectory": true,
       "installerIcon": "../backend/finance/static/favicon.ico",
       "uninstallerIcon": "../backend/finance/static/favicon.ico"
+    },
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "executableName": "cashmoney",
+      "icon": "assets/cashmoney.png",
+      "category": "Office",
+      "synopsis": "Local-first personal finance",
+      "description": "Import bank statements, sort transactions with keyword rules, and see where the money went. Everything stays on your computer.",
+      "maintainer": "Adam Boudník <91267565+boud96@users.noreply.github.com>",
+      "syncDesktopName": true
+    },
+    "deb": {
+      "packageName": "cashmoney",
+      "artifactName": "cashmoney_${version}_${arch}.${ext}"
     }
   }
 }
