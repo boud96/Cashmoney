@@ -1,4 +1,4 @@
-name: Build Windows App
+name: Build App
 
 on:
   workflow_dispatch:
@@ -120,10 +120,6 @@ jobs:
           Copy-Item -LiteralPath $portable.FullName -Destination $portableDir
           Copy-Item -LiteralPath $portable.FullName -Destination (Join-Path $releaseDir "Cashmoney-Portable.exe")
 
-          Get-FileHash (Join-Path $releaseDir "Cashmoney-Setup.exe"), (Join-Path $releaseDir "Cashmoney-Portable.exe") |
-            ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
-            Set-Content -Path (Join-Path $releaseDir "checksums.txt") -Encoding ascii
-
           if (!(Test-Path -LiteralPath "$dist/win-unpacked")) {
             throw "Unpacked app folder was not found in $dist."
           }
@@ -154,13 +150,140 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: cashmoney-release
+          name: cashmoney-release-windows
           path: artifacts/release/**
+          if-no-files-found: error
+
+  build-linux:
+    name: Build Linux packages
+    # Pinned, never ubuntu-latest: the PyInstaller backend only runs where glibc is at
+    # least as new as on the build machine (24.04: glibc 2.39).
+    runs-on: ubuntu-24.04
+    env:
+      VITE_CASHMONEY_DONATION_URL: ${{ vars.VITE_CASHMONEY_DONATION_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-build.txt
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      - name: Install Linux tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck xvfb xauth
+
+      - name: Install dependencies
+        run: ./setup_dev.sh
+
+      - name: Check shell scripts
+        run: shellcheck ./*.sh
+
+      - name: Test backend
+        working-directory: backend
+        run: ../.venv/bin/python manage.py test finance
+
+      # The frontend lint and tests run in the Windows job; they don't depend on the platform.
+      - name: Test desktop helpers
+        working-directory: desktop
+        run: npm test
+
+      - name: Build packages
+        run: ./build_packaged_app.sh
+
+      # Stock Ubuntu 24.04+ desktops block unprivileged user namespaces (AppArmor), which
+      # Chromium's sandbox needs. The .deb must still start with the sandbox (its AppArmor
+      # profile), and the AppImage must still start (its launcher adds --no-sandbox there).
+      - name: Block user namespaces like a stock Ubuntu desktop
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
+
+      # The installed app under Xvfb: it must start its backend, prove the launch token
+      # and load every page without console errors (ui-smoke attaches to its window).
+      - name: Check the .deb
+        run: |
+          set -euo pipefail
+          show_logs() { cat "$RUNNER_TEMP/app-deb.log" ~/.config/cashmoney-desktop/backend.log || true; }
+          trap 'pkill -x cashmoney || true' EXIT
+          sudo apt-get install -y ./desktop/dist/cashmoney_*_amd64.deb
+          xvfb-run -a cashmoney --remote-debugging-port=9333 > "$RUNNER_TEMP/app-deb.log" 2>&1 &
+          CHROME_DEBUG_PORT=9333 node frontend/scripts/ui-smoke.mjs || { show_logs; exit 1; }
+          mode=$(stat -c %a ~/.config/cashmoney-desktop)
+          [ "$mode" = 700 ] || { echo "The data folder is $mode, not 700."; exit 1; }
+          # A killed app must not leave its backend behind (packaged_backend.watch_parent).
+          kill -9 "$(pgrep -o -x cashmoney)"
+          for _ in $(seq 1 10); do
+            pgrep -f resources/backend/cashmoney-backend > /dev/null || exit 0
+            sleep 0.5
+          done
+          echo "The backend kept running 5 s after the app was killed."
+          show_logs
+          exit 1
+
+      - name: Check the AppImage
+        run: |
+          set -euo pipefail
+          trap 'pkill -x cashmoney || true' EXIT
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a desktop/dist/Cashmoney-*.AppImage --remote-debugging-port=9333 > "$RUNNER_TEMP/app-appimage.log" 2>&1 &
+          CHROME_DEBUG_PORT=9333 node frontend/scripts/ui-smoke.mjs || {
+            cat "$RUNNER_TEMP/app-appimage.log" ~/.config/cashmoney-desktop/backend.log || true
+            exit 1
+          }
+
+      - name: Prepare Linux artifacts
+        run: |
+          set -euo pipefail
+          debs=(desktop/dist/*.deb)
+          images=(desktop/dist/*.AppImage)
+          if [ "${#debs[@]}" -ne 1 ] || [ ! -f "${debs[0]}" ] || [ "${#images[@]}" -ne 1 ] || [ ! -f "${images[0]}" ]; then
+            echo "Expected exactly one .deb and one AppImage in desktop/dist."
+            ls -la desktop/dist
+            exit 1
+          fi
+          mkdir -p artifacts/linux
+          cp "${debs[0]}" artifacts/linux/Cashmoney-amd64.deb
+          cp "${images[0]}" artifacts/linux/Cashmoney-x86_64.AppImage
+
+      - name: Upload .deb
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cashmoney-linux-deb
+          path: artifacts/linux/Cashmoney-amd64.deb
+          if-no-files-found: error
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cashmoney-linux-appimage
+          path: artifacts/linux/Cashmoney-x86_64.AppImage
+          if-no-files-found: error
+
+      - name: Upload release files
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cashmoney-release-linux
+          path: artifacts/linux/**
           if-no-files-found: error
 
   publish-release:
     name: Publish GitHub release
-    needs: build-windows
+    needs: [build-windows, build-linux]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -170,8 +293,14 @@ jobs:
       - name: Download release files
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: cashmoney-release
+          pattern: cashmoney-release-*
+          merge-multiple: true
           path: release
+
+      # One checksums file for every platform's files, made from what gets published.
+      - name: Write checksums
+        working-directory: release
+        run: sha256sum Cashmoney-Setup.exe Cashmoney-Portable.exe Cashmoney-amd64.deb Cashmoney-x86_64.AppImage > checksums.txt
 
       - name: Publish GitHub release
         env:
@@ -179,7 +308,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          assets=(release/Cashmoney-Setup.exe release/Cashmoney-Portable.exe release/checksums.txt)
+          assets=(release/Cashmoney-Setup.exe release/Cashmoney-Portable.exe release/Cashmoney-amd64.deb release/Cashmoney-x86_64.AppImage release/checksums.txt)
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else

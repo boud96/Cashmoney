@@ -1,4 +1,4 @@
-# Keeps the commit-pinned actions in build-windows.yml current. Updates arrive as one
+# Keeps the commit-pinned actions in build.yml current. Updates arrive as one
 # monthly pull request into develop, where CI builds them, and wait two weeks after a
 # release before they are proposed.
 version: 2

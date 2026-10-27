@@ -6,7 +6,11 @@
 // Expects a backend on 127.0.0.1:$CASHMONEY_PORT (default 8765) with sample data.
 // CASHMONEY_INSTANCE_TOKEN: when set, the backend must prove it on /api/health/, as the
 //   desktop app requires (desktop/backend-support.js).
-// CHROME_PATH: defaults to Chrome's usual Windows location.
+// CHROME_PATH: defaults to Chrome's usual Windows location, or google-chrome elsewhere.
+// CHROME_DEBUG_PORT: attach to an app already listening on this DevTools port (the
+//   desktop app started with --remote-debugging-port) instead of starting Chrome. The
+//   app must load the page from the backend by itself, which means it proved its launch
+//   token; it keeps running afterwards.
 import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -18,8 +22,14 @@ const { newSecret, provesInstance } = require("../../desktop/backend-support.js"
 const { version } = JSON.parse(readFileSync(new URL("../../desktop/package.json", import.meta.url), "utf8"));
 
 const base = `http://127.0.0.1:${process.env.CASHMONEY_PORT || "8765"}`;
-const chromePath = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
-const debugPort = 9333;
+const defaultChrome = process.platform === "win32"
+  ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  : "google-chrome";
+const chromePath = process.env.CHROME_PATH || defaultChrome;
+const attachPort = process.env.CHROME_DEBUG_PORT;
+const debugPort = attachPort ? Number(attachPort) : 9333;
+// The installed app waits up to 120 s for its backend (the first start migrates).
+const startLimitMs = attachPort ? 120000 : 60000;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const problems = [];
 
@@ -92,7 +102,7 @@ async function connect(webSocketUrl) {
   return { errors, evaluate, send, warnings, close: () => ws.close() };
 }
 
-await waitUntil(async () => (await fetch(`${base}/api/health/`)).ok, "the backend");
+await waitUntil(async () => (await fetch(`${base}/api/health/`)).ok, "the backend", startLimitMs);
 const token = process.env.CASHMONEY_INSTANCE_TOKEN;
 if (token) {
   const nonce = newSecret(16);
@@ -102,23 +112,28 @@ if (token) {
   }
 }
 
-const profile = mkdtempSync(join(tmpdir(), "cashmoney-smoke-"));
-const chrome = spawn(chromePath, [
-  "--headless=new",
-  `--remote-debugging-port=${debugPort}`,
-  `--user-data-dir=${profile}`,
-  "--no-first-run",
-  "--no-default-browser-check",
-  "--disable-extensions",
-  "--window-size=1440,900",
-  "about:blank",
-], { stdio: "ignore" });
+let profile = null;
+let chrome = null;
+if (!attachPort) {
+  profile = mkdtempSync(join(tmpdir(), "cashmoney-smoke-"));
+  chrome = spawn(chromePath, [
+    "--headless=new",
+    `--remote-debugging-port=${debugPort}`,
+    `--user-data-dir=${profile}`,
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-extensions",
+    "--window-size=1440,900",
+    "about:blank",
+  ], { stdio: "ignore" });
+}
 
 try {
+  // An attached app shows its "Starting Cashmoney…" page first; wait until it loads the app.
   const target = await waitUntil(async () => {
     const targets = await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json();
-    return targets.find((item) => item.type === "page");
-  }, "Chrome");
+    return targets.find((item) => item.type === "page" && (!attachPort || item.url.startsWith(`${base}/`)));
+  }, attachPort ? "the app's window to load the app" : "Chrome", startLimitMs);
   const page = await connect(target.webSocketDebuggerUrl);
   await page.send("Page.navigate", { url: `${base}/` });
   await waitUntil(() => page.evaluate("document.querySelectorAll('.ag-center-cols-container .ag-row').length > 0"), "the transaction table", 60000);
@@ -144,12 +159,14 @@ try {
   page.warnings.forEach((text) => console.log(`Console warning (not a failure): ${text}`));
   page.close();
 } finally {
-  chrome.kill();
-  await sleep(1000);
-  try {
-    rmSync(profile, { recursive: true, force: true });
-  } catch {
-    // Chrome may still hold a file; the temp folder gets cleaned up anyway.
+  if (chrome) {
+    chrome.kill();
+    await sleep(1000);
+    try {
+      rmSync(profile, { recursive: true, force: true });
+    } catch {
+      // Chrome may still hold a file; the temp folder gets cleaned up anyway.
+    }
   }
 }
 
