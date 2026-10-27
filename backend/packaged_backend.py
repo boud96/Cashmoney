@@ -3,6 +3,8 @@
 import logging
 import os
 import sys
+import threading
+import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -21,16 +23,61 @@ def rotate_if_large(path, max_bytes=LOG_MAX_BYTES):
         pass  # no file yet, or in use: keep appending
 
 
-def default_data_dir():
+def default_data_dir(platform=sys.platform):
     base = os.environ.get("CASHMONEY_DATA_DIR")
     if base:
         return Path(base)
 
-    appdata = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
-    if appdata:
-        return Path(appdata) / "Cashmoney"
+    if platform == "win32":
+        appdata = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA")
+        if appdata:
+            return Path(appdata) / "Cashmoney"
+        return Path.home() / "AppData" / "Roaming" / "Cashmoney"
 
-    return Path.home() / "AppData" / "Roaming" / "Cashmoney"
+    # Electron's userData folder on Linux.
+    config_home = os.environ.get("XDG_CONFIG_HOME")
+    if config_home:
+        return Path(config_home) / "Cashmoney"
+    return Path.home() / ".config" / "Cashmoney"
+
+
+def make_private(path):
+    """Keep the data folder (finances, backups, secret key) to its owner on Linux."""
+    if os.name == "posix":
+        try:
+            os.chmod(path, 0o700)
+        except OSError:
+            logging.warning("Could not make %s private", path, exc_info=True)
+
+
+def stop_backend():
+    logging.info("The Cashmoney app is gone; stopping the backend.")
+    os._exit(0)
+
+
+def watch_parent(parent_pid, *, interval=1.0, get_ppid=os.getppid, on_gone=None):
+    """Wait until parent_pid is no longer this process's parent, then call on_gone.
+
+    If the app that started the backend dies without quitting (a crash, kill -9,
+    logout), the backend gets a new parent; without this it would keep port 8765 busy
+    for the next start. On Windows the app ends a leftover backend instead.
+    """
+    while get_ppid() == parent_pid:
+        time.sleep(interval)
+    (on_gone or stop_backend)()
+
+
+def app_pid_to_watch(environ, os_name=os.name):
+    """The PID of the desktop app that started this backend, on Linux; else None.
+
+    The app passes it (CASHMONEY_APP_PID) instead of the backend reading its parent
+    at startup: if the app died during the start, that parent would already be
+    someone else.
+    """
+    app_pid = environ.get("CASHMONEY_APP_PID")
+    if os_name != "posix" or not app_pid:
+        return None
+    return int(app_pid)
 
 
 def configure_environment():
@@ -59,11 +106,16 @@ def configure_environment():
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
+    make_private(data_dir)
     logging.info("Starting Cashmoney backend with data dir %s", data_dir)
 
 
 def main():
     configure_environment()
+    app_pid = app_pid_to_watch(os.environ)
+    if app_pid:
+        # Started by the desktop app: stop when it's gone.
+        threading.Thread(target=watch_parent, args=(app_pid,), daemon=True).start()
     port = os.environ.get("CASHMONEY_PORT", "8000")
 
     import django

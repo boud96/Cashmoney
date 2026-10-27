@@ -3,11 +3,13 @@
 import io
 import logging
 import os
+import stat
 import tempfile
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from unittest.mock import patch
+from unittest import skipUnless
+from unittest.mock import Mock, patch
 
 from django.db import connection
 from django.test import (
@@ -15,10 +17,30 @@ from django.test import (
     TestCase,
 )
 
+import packaged_backend
 from cashmoney_backend.secret_key import load_or_create_secret_key
 from check_bundle import find_databases, is_database_name
 from check_bundle import main as check_bundle
 from packaged_backend import configure_environment, rotate_if_large
+
+
+@contextmanager
+def fresh_root_logging():
+    """Let configure_environment() set up logging without leaking its handlers."""
+    root = logging.getLogger()
+    handlers = list(root.handlers)
+    level = root.level
+    for handler in handlers:
+        root.removeHandler(handler)
+    try:
+        yield
+    finally:
+        for handler in list(root.handlers):
+            root.removeHandler(handler)
+            handler.close()
+        for handler in handlers:
+            root.addHandler(handler)
+        root.setLevel(level)
 
 
 class SecretKeyTests(TestCase):
@@ -71,6 +93,83 @@ class PackagedBackendTests(SimpleTestCase):
                     handler.close()
                 for handler in handlers:
                     root.addHandler(handler)
+
+    def test_the_data_dir_follows_electron_on_linux(self):
+        # Electron's userData on Linux, where the desktop app keeps the database.
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": "/home/u/.cfg"}):
+            os.environ.pop("CASHMONEY_DATA_DIR", None)
+            self.assertEqual(
+                packaged_backend.default_data_dir("linux"),
+                Path("/home/u/.cfg/Cashmoney"),
+            )
+        with (
+            patch.dict(os.environ),
+            patch.object(packaged_backend.Path, "home", return_value=Path("/home/u")),
+        ):
+            os.environ.pop("CASHMONEY_DATA_DIR", None)
+            os.environ.pop("XDG_CONFIG_HOME", None)
+            self.assertEqual(
+                packaged_backend.default_data_dir("linux"),
+                Path("/home/u/.config/Cashmoney"),
+            )
+
+    def test_the_data_dir_stays_in_appdata_on_windows(self):
+        with patch.dict(os.environ, {"APPDATA": r"C:\Users\u\AppData\Roaming"}):
+            os.environ.pop("CASHMONEY_DATA_DIR", None)
+            self.assertEqual(
+                packaged_backend.default_data_dir("win32"),
+                Path(r"C:\Users\u\AppData\Roaming") / "Cashmoney",
+            )
+
+    def test_cashmoney_data_dir_wins_everywhere(self):
+        environ = {
+            "CASHMONEY_DATA_DIR": "/data/cm",
+            "XDG_CONFIG_HOME": "/x",
+            "APPDATA": "/y",
+        }
+        with patch.dict(os.environ, environ):
+            for platform in ["linux", "win32"]:
+                with self.subTest(platform=platform):
+                    self.assertEqual(
+                        packaged_backend.default_data_dir(platform), Path("/data/cm")
+                    )
+
+    @skipUnless(os.name == "posix", "file modes are POSIX-only")
+    def test_the_data_dir_is_private(self):
+        # The folder holds the finances, backups and secret key: other accounts on the
+        # same Linux PC must not read it.
+        with tempfile.TemporaryDirectory() as temp_dir, fresh_root_logging():
+            data_dir = Path(temp_dir) / "Cashmoney"
+            data_dir.mkdir()
+            data_dir.chmod(0o755)
+            with patch.dict(os.environ, {"CASHMONEY_DATA_DIR": str(data_dir)}):
+                configure_environment()
+
+            self.assertEqual(stat.S_IMODE(data_dir.stat().st_mode), 0o700)
+
+    def test_the_backend_stops_when_the_app_is_gone(self):
+        # Once the desktop app that started it is gone (a crash, kill -9), the backend
+        # sees a new parent and exits, so it can't hold port 8765 for the next start.
+        ppids = iter([4242, 4242, 1])
+        on_gone = Mock()
+
+        packaged_backend.watch_parent(
+            4242, interval=0, get_ppid=lambda: next(ppids), on_gone=on_gone
+        )
+
+        on_gone.assert_called_once_with()
+        self.assertIsNone(next(ppids, None))
+
+    def test_the_backend_watches_the_app_that_started_it(self):
+        # The app passes its own PID, so a backend whose app died while it was still
+        # starting (already reparented) stops at once instead of watching its new parent.
+        started_by_app = {"CASHMONEY_APP_PID": "4242"}
+
+        self.assertEqual(
+            packaged_backend.app_pid_to_watch(started_by_app, "posix"), 4242
+        )
+        self.assertIsNone(packaged_backend.app_pid_to_watch({}, "posix"))
+        self.assertIsNone(packaged_backend.app_pid_to_watch(started_by_app, "nt"))
 
 
 class BundleCheckTests(SimpleTestCase):
