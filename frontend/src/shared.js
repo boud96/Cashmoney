@@ -11,11 +11,11 @@ export const CHECKLIST_FILTER_KEYS = [
 ];
 export const OPTIONAL_CHECKLIST_FILTER_KEYS = ["tag"];
 export const pages = {
-  dashboard: ["Dashboard", "Monthly flow, category mix, and transaction review."],
-  import: ["Import", "Load bank statements (CSV or camt.053 XML) into the local transaction database."],
-  settings: ["Definitions", "Manage accounts, mappings, categories, tags, and keyword rules."],
-  maintenance: ["Maintenance", "Database snapshot and destructive cleanup tools."],
-  help: ["Help", "Usage guide for importing, categorizing, reviewing, and maintaining your finance data."],
+  dashboard: "Dashboard",
+  import: "Import",
+  settings: "Definitions",
+  maintenance: "Maintenance",
+  help: "Help",
 };
 export const THEME_STORAGE_KEY = "cashmoney-theme";
 export const ACCENT_STORAGE_KEY = "cashmoney-accent";
@@ -396,25 +396,6 @@ export function buildFilterParams(filters) {
     params.split_by_owners = "true";
   }
   return params;
-}
-
-export function buildMetrics(summary, transactionPage, hideAmounts = false, defaultCurrency = "") {
-  const monthly = summary?.monthly || [];
-  const currency = defaultCurrency || summary?.default_currency || "";
-  // Months without transactions still count, so sparse periods don't inflate the averages.
-  const monthCount = completeMonthlyRows(monthly).length || 1;
-  const income = monthly.reduce((acc, row) => acc + Number(row.income || 0), 0);
-  const expense = monthly.reduce((acc, row) => acc + Number(row.expense || 0), 0);
-  const net = income - expense;
-  const uncategorized = summary?.uncategorized_count
-    ?? (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
-  return [
-    ["Incomes", formatMoneyWithCurrency(income, currency, hideAmounts), "positive", { value: formatMoneyWithCurrency(income / monthCount, currency, hideAmounts), tone: "positive" }],
-    ["Expenses", formatMoneyWithCurrency(expense, currency, hideAmounts), "negative", { value: formatMoneyWithCurrency(expense / monthCount, currency, hideAmounts), tone: "negative" }],
-    ["Net", formatMoneyWithCurrency(net, currency, hideAmounts), "metric-blue", { value: formatMoneyWithCurrency(net / monthCount, currency, hideAmounts), tone: "metric-blue" }],
-    ["Transactions", `${formatCount(transactionPage.count)} / ${formatCount(transactionPage.total_count ?? transactionPage.count)}`, ""],
-    ["Uncategorized", formatCount(uncategorized), ""],
-  ];
 }
 
 const NO_VALUE = "–";
