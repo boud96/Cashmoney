@@ -310,12 +310,22 @@ export default function App() {
     }
     const summarySequence = dashboardSummarySequence.current + 1;
     dashboardSummarySequence.current = summarySequence;
+    // Busy from the moment a load is due. A load cancelled before it starts clears the flag:
+    // the new sequence has nothing running, and an older request can't clear it any more.
+    setLoadingDashboardSummary(true);
+    let started = false;
     const timeoutId = window.setTimeout(() => {
+      started = true;
       summaryStale.current = false;
       loadedSummaryKey.current = filterParamsKey;
       runSummaryLoad(filterParams, summarySequence);
     }, 250);
-    return () => window.clearTimeout(timeoutId);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (!started) {
+        setLoadingDashboardSummary(false);
+      }
+    };
   }, [dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runSummaryLoad]);
 
   // The transaction list loads the same way, but only while the Transactions tab is
@@ -329,12 +339,22 @@ export default function App() {
     }
     const loadSequence = dashboardLoadSequence.current + 1;
     dashboardLoadSequence.current = loadSequence;
+    // As for the summary: busy once due; a load cancelled before it starts (a newer change,
+    // or the Overview tab opened meanwhile) clears the flag.
+    setLoadingDashboardTransactions(true);
+    let started = false;
     const timeoutId = window.setTimeout(() => {
+      started = true;
       transactionsStale.current = false;
       loadedTransactionsKey.current = filterParamsKey;
       runTransactionsLoad(filterParams, loadSequence);
     }, 250);
-    return () => window.clearTimeout(timeoutId);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (!started) {
+        setLoadingDashboardTransactions(false);
+      }
+    };
   }, [dashboardTab, dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runTransactionsLoad]);
 
   useEffect(() => {
