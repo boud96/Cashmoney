@@ -223,8 +223,15 @@ jobs:
           sudo apt-get install -y ./desktop/dist/cashmoney_*_amd64.deb
           xvfb-run -a cashmoney --remote-debugging-port=9333 > "$RUNNER_TEMP/app-deb.log" 2>&1 &
           CHROME_DEBUG_PORT=9333 node frontend/scripts/ui-smoke.mjs || { show_logs; exit 1; }
+          # It runs with Chromium's sandbox, through the AppArmor profile the package installed.
+          procs=$(pgrep -a -x cashmoney)
+          if grep -q -- --no-sandbox <<< "$procs"; then
+            echo "The .deb app runs without Chromium's sandbox."; show_logs; exit 1
+          fi
+          profiles=$(sudo aa-status)
+          grep -q -E '^\s+cashmoney$' <<< "$profiles" || { echo "The cashmoney AppArmor profile isn't loaded."; exit 1; }
           mode=$(stat -c %a ~/.config/cashmoney-desktop)
-          [ "$mode" = 700 ] || { echo "The data folder is $mode, not 700."; exit 1; }
+          [ "$mode" = 700 ] || { echo "The data folder is $mode, not 700."; show_logs; exit 1; }
           # A killed app must not leave its backend behind (packaged_backend.watch_parent).
           pid=$(pgrep -o -x cashmoney) || { echo "The app wasn't running for the kill check."; show_logs; exit 1; }
           kill -9 "$pid"
@@ -239,12 +246,14 @@ jobs:
       - name: Check the AppImage
         run: |
           set -euo pipefail
+          show_logs() { cat "$RUNNER_TEMP/app-appimage.log" ~/.config/cashmoney-desktop/backend.log || true; }
           trap 'pkill -x cashmoney || true' EXIT
           APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a desktop/dist/Cashmoney-*.AppImage --remote-debugging-port=9333 > "$RUNNER_TEMP/app-appimage.log" 2>&1 &
-          CHROME_DEBUG_PORT=9333 node frontend/scripts/ui-smoke.mjs || {
-            cat "$RUNNER_TEMP/app-appimage.log" ~/.config/cashmoney-desktop/backend.log || true
-            exit 1
-          }
+          CHROME_DEBUG_PORT=9333 node frontend/scripts/ui-smoke.mjs || { show_logs; exit 1; }
+          # Where user namespaces are blocked, the AppImage's launcher starts it without the
+          # sandbox, as the README says; if that ever changes, the README needs updating.
+          procs=$(pgrep -a -x cashmoney)
+          grep -q -- --no-sandbox <<< "$procs" || { echo "The AppImage kept the sandbox here; update the README."; exit 1; }
 
       - name: Prepare Linux artifacts
         run: |
