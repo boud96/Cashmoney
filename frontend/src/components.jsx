@@ -5,6 +5,7 @@ import {
   addDays,
   addMonths,
   calendarWeeks,
+  formatBytes,
   formatDateInput,
   parseDateInput,
   tagToggleStyle,
@@ -281,11 +282,33 @@ export function useFillHeight(ref, { bottomGap = 24, min = 360 } = {}) {
   }, [bottomGap, min, ref]);
 }
 
-// A file input in the app's style: the chosen file's name and a button. The native
-// input stays in the Tab order (visually hidden), so the keyboard still works.
-export function FilePicker({ accept, buttonLabel = "Choose…", disabled = false, file, inputRef, label, onChange }) {
+// A file input in the app's style: the chosen file's name and size and a button; a file
+// can also be dropped on it. The native input stays in the Tab order (visually hidden),
+// so the keyboard still works.
+export function FilePicker({ accept, buttonLabel = "Choose…", disabled = false, emptyLabel = "No file chosen", file, inputRef, label, onChange }) {
+  const [dragging, setDragging] = useState(false);
+
+  function dragOver(event) {
+    event.preventDefault();
+    setDragging(!disabled);
+  }
+
+  function drop(event) {
+    event.preventDefault();
+    setDragging(false);
+    if (!disabled && event.dataTransfer.files?.length) {
+      onChange(event.dataTransfer.files[0]);
+    }
+  }
+
   return (
-    <label className={`file-picker ${disabled ? "is-disabled" : ""}`.trim()}>
+    <label
+      className={["file-picker", dragging && "is-dragging", disabled && "is-disabled"].filter(Boolean).join(" ")}
+      onDragEnter={dragOver}
+      onDragLeave={(event) => !event.currentTarget.contains(event.relatedTarget) && setDragging(false)}
+      onDragOver={dragOver}
+      onDrop={drop}
+    >
       <input
         accept={accept}
         aria-label={label}
@@ -296,7 +319,8 @@ export function FilePicker({ accept, buttonLabel = "Choose…", disabled = false
         type="file"
       />
       <FileIcon />
-      <span className={`file-picker-name ${file ? "" : "is-empty"}`.trim()}>{file ? file.name : "No file chosen"}</span>
+      <span className={`file-picker-name ${file ? "" : "is-empty"}`.trim()}>{file ? file.name : emptyLabel}</span>
+      {file ? <span className="file-picker-size">{formatBytes(file.size)}</span> : null}
       <span className="file-picker-button">{buttonLabel}</span>
     </label>
   );
