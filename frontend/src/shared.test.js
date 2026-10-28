@@ -34,11 +34,9 @@ import {
   quickDateRange,
   rankCategories,
   tagToggleStyle,
-  sunburstData,
   syncChecklistFilters,
   tagTitle,
   toastDuration,
-  topExpenseSubcategories,
   viewSummary,
   wniSplit,
 } from "./shared.js";
@@ -54,18 +52,6 @@ describe("money from the API (decimal strings)", () => {
     expect([...amounts].sort(compareAmounts)).toEqual([null, "-100.00", "-20.00", "9.00", "10.00"]);
   });
 
-  it("gives charts numbers, with a category covering its children", () => {
-    const { values } = sunburstData([
-      { name: "Food", amount: "6.66", color: "", children: [
-        { name: "Coffee", amount: "3.33", color: "" },
-        { name: "Groceries", amount: "3.33", color: "" },
-      ] },
-    ]);
-    expect(values).toEqual([6.66, 3.33, 3.33]);
-    // Plotly's branchvalues "total" drops a parent below the sum of its children.
-    expect(values[0]).toBeGreaterThanOrEqual((values[1] + values[2]) * (1 - 1e-9));
-  });
-
   it("adds monthly rows as numbers and fills in missing months", () => {
     const rows = completeMonthlyRows([
       { month: "2026-01", income: "100.10", expense: "0.20" },
@@ -76,12 +62,6 @@ describe("money from the API (decimal strings)", () => {
     expect(rows[2]).toMatchObject({ income: 0, expense: 50, net: -50 });
   });
 
-  it("orders the top expenses by amount, not as text", () => {
-    const rows = topExpenseSubcategories([
-      { name: "A", children: [{ name: "x", amount: "9.00" }, { name: "y", amount: "10.00" }] },
-    ]);
-    expect(rows.map((row) => row.amount)).toEqual([9, 10]);
-  });
 });
 
 describe("tag pills", () => {

@@ -2880,8 +2880,8 @@ def _category_tree(grouped_amounts):
             }
             for subcategory_name, subcategory_data in sorted(subcategories.items())
         ]
-        # The category is the sum of its rounded subcategories: the sunburst chart
-        # (branchvalues "total") drops a category that is a cent short of them.
+        # The category is the sum of its rounded subcategories, so its amount and
+        # share always cover theirs in the dashboard's category breakdown.
         category_amount = sum(
             (Decimal(child["amount"]) for child in children), Decimal("0")
         )

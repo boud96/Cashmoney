@@ -550,42 +550,6 @@ export function wniColor(value) {
   return colors[String(value || "uncategorized").toLowerCase()] || colors.uncategorized;
 }
 
-export function sunburstData(rows) {
-  const colors = [];
-  const ids = [];
-  const labels = [];
-  const parents = [];
-  const values = [];
-  rows.forEach((category) => {
-    const categoryId = `category:${category.name}`;
-    ids.push(categoryId);
-    labels.push(category.name);
-    parents.push("");
-    values.push(Number(category.amount || 0));
-    colors.push(normalizeHexColor(category.color) || cssVar("--muted", "#667481"));
-    (category.children || []).forEach((child) => {
-      ids.push(`${categoryId}:${child.name}`);
-      labels.push(child.name);
-      parents.push(categoryId);
-      values.push(Number(child.amount || 0));
-      colors.push(normalizeHexColor(child.color) || normalizeHexColor(category.color) || cssVar("--surface-2", "#eef3f6"));
-    });
-  });
-  return { colors, ids, labels, parents, values };
-}
-
-export function topExpenseSubcategories(rows) {
-  return rows
-    .flatMap((category) => (category.children || []).map((child) => ({
-      amount: Number(child.amount || 0),
-      label: `${category.name} / ${child.name}`,
-    })))
-    .filter((row) => row.amount > 0)
-    .sort((left, right) => right.amount - left.amount)
-    .slice(0, 8)
-    .reverse();
-}
-
 export function completeMonthlyRows(rows) {
   const cleanRows = rows
     .map((row) => ({
