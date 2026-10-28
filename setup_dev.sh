@@ -12,7 +12,7 @@ PY="$ROOT/.venv/bin/python"
 # A Windows checkout opened from WSL has a Windows .venv; creating a Linux one in its
 # place would break it for Windows.
 if [ -e "$ROOT/.venv/Scripts/python.exe" ]; then
-    echo ".venv is a Windows virtual environment. Use a clone inside Linux (not under /mnt/), or remove .venv first." >&2
+    echo ".venv is a Windows virtual environment (a Windows checkout seen from WSL). Clone the repository inside Linux and run setup_dev.sh there." >&2
     exit 1
 fi
 
