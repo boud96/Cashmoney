@@ -2740,8 +2740,9 @@ select option {
   border-radius: 8px;
 }
 
+/* useFillHeight sets the height: the table fills the window below it. */
 .transaction-grid {
-  height: 620px;
+  min-height: 360px;
   width: 100%;
 }
 
@@ -2982,12 +2983,23 @@ select option {
   font-weight: 700;
 }
 
+.transaction-grid .ag-cell.amount-column {
+  justify-content: flex-end;
+}
+
+.transaction-grid .amount-header .ag-header-cell-label {
+  justify-content: flex-end;
+}
+
 .transaction-grid .amount-cell {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  height: 100%;
-  line-height: 1.25;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .transaction-grid .amount-original {
@@ -3007,19 +3019,6 @@ select option {
   outline-offset: -3px;
 }
 
-.transaction-grid .ag-cell:has(.color-cell) {
-  align-items: stretch;
-  padding: 0;
-}
-
-.transaction-grid .ag-cell:has(.color-cell) .ag-cell-wrapper,
-.transaction-grid .ag-cell:has(.color-cell) .ag-cell-value {
-  align-self: stretch;
-  display: flex;
-  min-height: 100%;
-  width: 100%;
-}
-
 .transaction-grid .ag-cell:has(.tag-edit-cell) {
   align-items: stretch;
 }
@@ -3032,37 +3031,97 @@ select option {
   width: 100%;
 }
 
-.color-cell {
+.dot-cell {
+  display: inline-flex;
   align-items: center;
-  display: flex;
-  font-weight: 700;
-  height: 100%;
-  line-height: 1.2;
+  gap: 7px;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
-  padding: 0 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  width: 100%;
 }
 
-.color-cell-label {
+.cell-dot {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+.dot-cell-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.color-cell-muted {
-  background: transparent;
+.dot-cell.is-muted {
   color: var(--muted);
-  font-weight: 600;
 }
 
-.conflict-cell {
-  background: color-mix(in srgb, var(--red) 18%, var(--surface));
-  color: var(--red);
-  font-weight: 800;
+.dot-cell.is-conflict {
+  color: var(--warning);
+  font-weight: 700;
+}
+
+/* Rows are one line: text columns end in an ellipsis (the description has a tooltip),
+   and the controls inside cells fit the 30 px rows. */
+.transaction-grid .ag-cell[col-id="transaction_date"],
+.transaction-grid .ag-cell[col-id="description"],
+.transaction-grid .ag-cell[col-id="account_id"] {
+  overflow: hidden;
+}
+
+.transaction-grid .ag-cell[col-id="transaction_date"] .ag-cell-wrapper,
+.transaction-grid .ag-cell[col-id="description"] .ag-cell-wrapper,
+.transaction-grid .ag-cell[col-id="account_id"] .ag-cell-wrapper {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.transaction-grid .ag-cell[col-id="transaction_date"] .ag-cell-value,
+.transaction-grid .ag-cell[col-id="description"] .ag-cell-value,
+.transaction-grid .ag-cell[col-id="account_id"] .ag-cell-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-grid .lock-cell-button,
+.transaction-grid .raw-data-button {
+  width: 26px;
+  height: 26px;
+}
+
+.transaction-grid .tag-cell-button {
+  min-height: 0;
+  padding: 2px 4px;
+}
+
+.transaction-grid .tag-cloud .pill {
+  display: inline-block;
+  flex-shrink: 1;
+  min-width: 0;
+  min-height: 18px;
+  overflow: hidden;
+  padding: 1px 7px;
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The row's bin shows on the row under the pointer or with keyboard focus in the row. */
+.transaction-grid .delete-cell-button {
+  opacity: 0;
+}
+
+.transaction-grid .ag-row:hover .delete-cell-button,
+.transaction-grid .ag-row:focus-within .delete-cell-button,
+.transaction-grid .ag-row.ag-row-focus .delete-cell-button {
+  opacity: 1;
 }
 
 .pill {

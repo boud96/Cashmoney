@@ -7,26 +7,27 @@ import {
   ClientSideRowModelModule,
   CustomEditorModule,
   ModuleRegistry,
-  RowAutoHeightModule,
   SelectEditorModule,
   themeQuartz,
   TooltipModule,
 } from "ag-grid-community";
 
 import { apiGet } from "../../api.js";
-import { LoadingButton, Spinner } from "../../components.jsx";
+import { LoadingButton, Spinner, useFillHeight } from "../../components.jsx";
 import {
   colorPillStyle,
   compareAmounts,
+  formatAmountValue,
   formatAmountWithCurrency,
   formatCount,
+  normalizeHexColor,
   normalizeName,
   subLabel,
   tagTitle,
   titleCase,
   wniColor,
 } from "../../shared.js";
-import { TrashIcon, LockIcon, InfoIcon } from "../../icons.jsx";
+import { InfoIcon, LockIcon, TrashIcon, WarningIcon } from "../../icons.jsx";
 
 // Only the grid features this page uses (CR-30). A missing module can fail silently,
 // so after changing a grid, register ValidationModule while checking it: it names
@@ -37,10 +38,11 @@ ModuleRegistry.registerModules([
   TooltipModule,  // tooltipValueGetter
   CustomEditorModule,  // the subcategory editor
   SelectEditorModule,  // agSelectCellEditor for Want/Need/Investment
-  RowAutoHeightModule,  // autoHeight
 ]);
 
+// One-line rows in a smaller font, so about 20 rows fit and every column fits at 1440 px.
 const transactionGridTheme = themeQuartz
+  .withParams({ cellHorizontalPaddingScale: 0.6, fontSize: 13, headerFontSize: 12.5 })
   .withParams({
     accentColor: "var(--action)",
     backgroundColor: "var(--bg)",
@@ -82,6 +84,8 @@ const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filte
 
 export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filterParams, hideAmounts, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
+  const gridRef = useRef(null);
+  useFillHeight(gridRef, { min: 360 });
   const [rawDataLoadingId, setRawDataLoadingId] = useState("");
   const [filterRetainedCells, setFilterRetainedCells] = useState({});
   const rawDataCacheRef = useRef(new Map());
@@ -252,28 +256,31 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
       headerName: "",
       resizable: false,
       sortable: false,
-      width: 52,
+      width: 32,
     },
-    { field: "transaction_date", headerName: "Date", width: 120, initialSort: "desc" },
-    { field: "description", headerName: "Description", flex: 2, minWidth: 260, wrapText: true, autoHeight: true },
+    { field: "transaction_date", headerName: "Date", width: 90, initialSort: "desc" },
+    { field: "description", headerName: "Description", flex: 1, minWidth: 220, tooltipField: "description" },
     {
-      cellClass: (params) => (Number(params.value) >= 0 ? "amount-income" : "amount-expense"),
+      cellClass: (params) => `amount-column ${Number(params.value) >= 0 ? "amount-income" : "amount-expense"}`,
       cellRenderer: (params) => <AmountCell data={params.data} hideAmounts={hideAmounts} text={params.valueFormatted} />,
       comparator: compareAmounts,
       field: "converted_amount",
-      headerName: "Amount",
+      headerClass: "amount-header",
+      // The column names the currency; each row shows just the number.
+      headerName: `Amount (${defaultCurrency})`,
       valueFormatter: (params) => (
         params.value === null || params.value === undefined
           ? "Missing rate"
-          : formatAmountWithCurrency(params.value, params.data?.converted_currency || defaultCurrency, hideAmounts)
+          : formatAmountValue(params.value, hideAmounts)
       ),
-      width: 150,
+      width: 108,
     },
     {
       field: "account_id",
       headerName: "Account",
+      tooltipValueGetter: (params) => params.valueFormatted,
       valueFormatter: (params) => accountLookup.get(params.value) || "",
-      width: 180,
+      width: 102,
     },
     {
       field: "category",
@@ -283,11 +290,12 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
           return <ConflictCell />;
         }
         const category = categoryLookup.get(params.value?.id);
-        return <ColorCell color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
+        return <DotCell color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
       },
       valueFormatter: (params) => params.value?.name || "Unassigned",
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
-      width: 150,
+      tooltipValueGetter: (params) => params.valueFormatted,
+      width: 100,
     },
     {
       cellEditor: SubcategorySelectEditor,
@@ -301,15 +309,15 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
           return <ConflictCell />;
         }
         const subcategory = subcategoryLookup.get(params.value);
-        return <ColorCell color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
+        return <DotCell color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
       },
       valueFormatter: (params) => {
         const subcategory = subcategoryLookup.get(params.value);
         return subcategory?.name || "Unassigned";
       },
       cellClass: (params) => retainedCellClass(params, `editable-cell ${!params.value ? "muted-cell" : ""}`),
-      tooltipValueGetter: retainedCellTooltip,
-      width: 170,
+      tooltipValueGetter: (params) => retainedCellTooltip(params) || params.valueFormatted,
+      width: 116,
     },
     {
       cellEditor: "agSelectCellEditor",
@@ -322,7 +330,7 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
       valueFormatter: (params) => (params.value ? titleCase(params.value) : "Unassigned"),
       cellClass: (params) => retainedCellClass(params, `editable-cell ${!params.value ? "muted-cell" : ""}`),
       tooltipValueGetter: retainedCellTooltip,
-      width: 135,
+      width: 88,
     },
     {
       field: "tags",
@@ -341,12 +349,10 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
       cellClass: retainedCellClass,
       tooltipValueGetter: retainedCellTooltip,
       sortable: false,
-      flex: 1,
-      minWidth: 240,
+      width: 78,
     },
     {
       field: "is_ignored",
-      headerClass: "editable-header",
       headerName: "Ignored",
       cellRenderer: (params) => (
         <input
@@ -364,7 +370,7 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
       ),
       cellClass: retainedCellClass,
       tooltipValueGetter: retainedCellTooltip,
-      width: 110,
+      width: 70,
     },
     {
       cellClass: (params) => retainedCellClass(params, "lock-cell"),
@@ -395,7 +401,7 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
       },
       valueFormatter: (params) => (params.value ? "Locked" : "Unlocked"),
       tooltipValueGetter: retainedCellTooltip,
-      width: 96,
+      width: 64,
     },
     {
       cellClass: "lock-cell",
@@ -417,7 +423,7 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
       headerName: "",
       resizable: false,
       sortable: false,
-      width: 56,
+      width: 32,
     },
   ], [accountLookup, categoryLookup, defaultCurrency, hideAmounts, notify, rawDataLoadingId, refs.tags, removeTransaction, retainedCellClass, retainedCellTooltip, saveTransaction, subcategoryLookup, subcategoryOptions, toggleRawDataPopover]);
 
@@ -438,7 +444,7 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
   }
 
   return (
-    <div className="transaction-grid">
+    <div className="transaction-grid" ref={gridRef}>
       <AgGridReact
         columnDefs={columnDefs}
         defaultColDef={{ resizable: true, sortable: true }}
@@ -446,8 +452,9 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
         ensureDomOrder
         getRowId={(params) => params.data.id}
         onCellValueChanged={onCellValueChanged}
+        headerHeight={34}
         rowData={rowData}
-        rowHeight={48}
+        rowHeight={30}
         stopEditingWhenCellsLoseFocus
         suppressScrollOnNewData
         theme={transactionGridTheme}
@@ -516,11 +523,11 @@ function joinClassNames(...classNames) {
   return classNames.filter(Boolean).join(" ");
 }
 
-// The amount in the default currency; a row in another currency also shows its
-// original amount, with the rate in the tooltip.
+// The amount in the default currency, right-aligned; a row in another currency shows its
+// original amount before it on the same line, with the rate in the tooltip.
 function AmountCell({ data, hideAmounts, text }) {
   if (!data?.currency || !data.converted_currency || data.currency === data.converted_currency) {
-    return text;
+    return <span className="amount-cell"><span className="amount-value">{text}</span></span>;
   }
   const original = formatAmountWithCurrency(data.amount, data.currency, hideAmounts);
   const rate = Number(data.conversion_rate);
@@ -529,28 +536,40 @@ function AmountCell({ data, hideAmounts, text }) {
     : "No exchange rate yet";
   return (
     <span className="amount-cell" title={hideAmounts ? undefined : `Original amount ${original}. ${rateText}.`}>
-      <span>{text}</span>
       <span className="amount-original">{original}</span>
+      <span className="amount-value">{text}</span>
     </span>
   );
 }
 
 function ConflictCell() {
-  return <span className="color-cell conflict-cell"><span className="color-cell-label">Conflict</span></span>;
+  return (
+    <span className="dot-cell is-conflict">
+      <WarningIcon />
+      <span className="dot-cell-label">Conflict</span>
+    </span>
+  );
 }
 
-function ColorCell({ color, label, muted = false }) {
+// A category, subcategory or WNI value: its colour as a dot before the name.
+function DotCell({ color, label, muted = false }) {
   if (muted) {
-    return <span className="color-cell color-cell-muted"><span className="color-cell-label">{label}</span></span>;
+    return <span className="dot-cell is-muted"><span className="dot-cell-label">{label}</span></span>;
   }
-  return <span className="color-cell" style={colorPillStyle(color)}><span className="color-cell-label">{label}</span></span>;
+  const dotColor = normalizeHexColor(color);
+  return (
+    <span className="dot-cell">
+      <span aria-hidden="true" className="cell-dot" style={dotColor ? { background: dotColor } : undefined} />
+      <span className="dot-cell-label">{label}</span>
+    </span>
+  );
 }
 
 function WniCell({ value }) {
   if (!value) {
-    return <span className="color-cell color-cell-muted"><span className="color-cell-label">Unassigned</span></span>;
+    return <DotCell label="Unassigned" muted />;
   }
-  return <span className="color-cell" style={colorPillStyle(wniColor(value))}><span className="color-cell-label">{titleCase(value)}</span></span>;
+  return <DotCell color={wniColor(value)} label={titleCase(value)} />;
 }
 
 function RawDataButton({ hasRawData, loading = false, onToggle }) {
