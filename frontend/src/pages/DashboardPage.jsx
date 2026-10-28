@@ -70,6 +70,12 @@ export default function DashboardPage({
   const filteredCount = summary?.transaction_count ?? transactionPage.count ?? 0;
   // Until the first rows arrive the table says it's loading, not that nothing matches.
   const tableLoading = !transactionPage.results.length && (transactionsBusy || !summary || filteredCount > 0);
+  // Once opened, the table stays mounted and is only hidden on the Overview, so a trip there
+  // keeps its sort, scroll and the highlight of rows edited out of the filters.
+  const [tableMounted, setTableMounted] = useState(dashboardTab === "transactions");
+  if (dashboardTab === "transactions" && !tableMounted) {
+    setTableMounted(true);
+  }
   const loadedTransactionCount = transactionPage.results?.length || 0;
   const filteredTransactionCount = transactionPage.count || 0;
   const transactionsAreCapped = loadedTransactionCount > 0 && filteredTransactionCount > loadedTransactionCount;
@@ -718,8 +724,9 @@ export default function DashboardPage({
         <div className="dashboard-tab-panel" {...tabPanelProps("dashboard", "overview")}>
           <OverviewCharts currency={defaultCurrency} hideAmounts={hideAmounts} summary={summary} />
         </div>
-      ) : (
-        <div className="dashboard-tab-panel" {...tabPanelProps("dashboard", "transactions")}>
+      ) : null}
+      {tableMounted ? (
+        <div className="dashboard-tab-panel" hidden={dashboardTab !== "transactions"} {...tabPanelProps("dashboard", "transactions")}>
           {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
           {transactionsAreCapped ? (
             <div className="transaction-cap-warning">
@@ -729,7 +736,7 @@ export default function DashboardPage({
           ) : null}
           <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filterParams={filterParams} hideAmounts={hideAmounts} loading={tableLoading} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
         </div>
-      )}
+      ) : null}
 
       {recategorizeModalOpen && (
         <RecategorizeModal
