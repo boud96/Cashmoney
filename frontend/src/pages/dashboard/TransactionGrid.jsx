@@ -14,13 +14,12 @@ import {
 } from "ag-grid-community";
 
 import { apiGet } from "../../api.js";
-import { LoadingButton, Spinner, useFillHeight } from "../../components.jsx";
+import { DotLabel, LoadingButton, Spinner, useFillHeight } from "../../components.jsx";
 import {
   colorPillStyle,
   compareAmounts,
   formatAmountValue,
   formatAmountWithCurrency,
-  normalizeHexColor,
   normalizeName,
   pluralize,
   subLabel,
@@ -295,7 +294,7 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
           return <ConflictCell />;
         }
         const category = categoryLookup.get(params.value?.id);
-        return <DotCell color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
+        return <DotLabel color={category?.color} label={params.value?.name || "Unassigned"} muted={!params.value} />;
       },
       valueFormatter: (params) => params.value?.name || "Unassigned",
       cellClass: (params) => (!params.value ? "muted-cell" : ""),
@@ -314,7 +313,7 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
           return <ConflictCell />;
         }
         const subcategory = subcategoryLookup.get(params.value);
-        return <DotCell color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
+        return <DotLabel color={subcategory?.color} label={subcategory?.name || "Unassigned"} muted={!subcategory} />;
       },
       valueFormatter: (params) => {
         const subcategory = subcategoryLookup.get(params.value);
@@ -558,25 +557,11 @@ function ConflictCell() {
   );
 }
 
-// A category, subcategory or WNI value: its colour as a dot before the name.
-function DotCell({ color, label, muted = false }) {
-  if (muted) {
-    return <span className="dot-cell is-muted"><span className="dot-cell-label">{label}</span></span>;
-  }
-  const dotColor = normalizeHexColor(color);
-  return (
-    <span className="dot-cell">
-      <span aria-hidden="true" className="cell-dot" style={dotColor ? { background: dotColor } : undefined} />
-      <span className="dot-cell-label">{label}</span>
-    </span>
-  );
-}
-
 function WniCell({ value }) {
   if (!value) {
-    return <DotCell label="Unassigned" muted />;
+    return <DotLabel label="Unassigned" muted />;
   }
-  return <DotCell color={wniColor(value)} label={titleCase(value)} />;
+  return <DotLabel color={wniColor(value)} label={titleCase(value)} />;
 }
 
 function RawDataButton({ hasRawData, loading = false, onToggle }) {

@@ -7,6 +7,7 @@ import {
   calendarWeeks,
   formatBytes,
   formatDateInput,
+  normalizeHexColor,
   parseDateInput,
   tagToggleStyle,
   todayInputValue,
@@ -48,6 +49,21 @@ export function LoadingButton({ busy = false, busyLabel = "Working", children, c
 
 export function Spinner() {
   return <span aria-hidden="true" className="loading-spinner" />;
+}
+
+// A category, subcategory or WNI value (also a keyword's subcategory in Definitions): its
+// colour as a dot before the name; muted, without a dot, for "Unassigned".
+export function DotLabel({ color, label, muted = false }) {
+  if (muted) {
+    return <span className="dot-cell is-muted"><span className="dot-cell-label">{label}</span></span>;
+  }
+  const dotColor = normalizeHexColor(color);
+  return (
+    <span className="dot-cell">
+      <span aria-hidden="true" className="cell-dot" style={dotColor ? { background: dotColor } : undefined} />
+      <span className="dot-cell-label">{label}</span>
+    </span>
+  );
 }
 
 export function HelpTooltip({ text }) {

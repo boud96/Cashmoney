@@ -15,7 +15,7 @@ import {
 } from "ag-grid-community";
 
 import { apiDelete, apiFetch, apiGet, apiPatch, apiPost, readJson } from "../api.js";
-import { CloseButton, HelpTooltip, LoadingButton, ModalEscape, Select, Tabs, TagToggleList, tabPanelProps, useFillHeight } from "../components.jsx";
+import { CloseButton, DotLabel, HelpTooltip, LoadingButton, ModalEscape, Select, Tabs, TagToggleList, tabPanelProps, useFillHeight } from "../components.jsx";
 import { PencilIcon, TrashIcon } from "../icons.jsx";
 import {
   DEFINITIONS_TAB_STORAGE_KEY,
@@ -517,17 +517,6 @@ function DefinitionGrid({ className, columnDefs, quickFilterText, rowData }) {
         theme={definitionGridTheme}
       />
     </div>
-  );
-}
-
-// A coloured dot before a label, like the dashboard table's category cells.
-function DotLabel({ color, label }) {
-  const dotColor = normalizeHexColor(color);
-  return (
-    <span className="dot-cell">
-      <span aria-hidden="true" className="cell-dot" style={dotColor ? { background: dotColor } : undefined} />
-      <span className="dot-cell-label">{label}</span>
-    </span>
   );
 }
 
