@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiDelete, apiGet, apiPost } from "../api.js";
-import { DateField, HelpTooltip, Tabs, tabPanelProps } from "../components.jsx";
+import { Tabs, tabPanelProps } from "../components.jsx";
 import {
-  ANY_TAG,
   UNASSIGNED,
   buildTotals,
   cloneFilters,
   countActiveFilters,
+  emptyFilters,
   formatCount,
   getStoredFilterPresets,
+  initialChecklistFilters,
   normalizeTagSelection,
   offeredSubcategories,
   storeFilterPresets,
@@ -29,7 +30,7 @@ import {
   keywordDraftFromSuggestion,
   textLines,
 } from "./dashboard/ActionDialogs.jsx";
-import { CheckboxFilterPanel, RelativeRangeForm, SavedFiltersPanel } from "./dashboard/FilterBar.jsx";
+import { FilterBar } from "./dashboard/FilterBar.jsx";
 import { ChartPanel, MonthlyChart, SunburstChart, TopExpenseChart, WniChart } from "./dashboard/OverviewCharts.jsx";
 import { TotalsRow } from "./dashboard/TotalsRow.jsx";
 import { TransactionGrid } from "./dashboard/TransactionGrid.jsx";
@@ -76,7 +77,6 @@ export default function DashboardPage({
     () => new Set(recategorizeResult?.conflict_transaction_ids || []),
     [recategorizeResult],
   );
-  const [filtersOpen, setFiltersOpen] = useState(true);
   const [bulkAssignEditorOpen, setBulkAssignEditorOpen] = useState(false);
   const [bulkAssignDraft, setBulkAssignDraft] = useState(emptyBulkAssignDraft);
   const [bulkAssignBusy, setBulkAssignBusy] = useState(false);
@@ -215,6 +215,18 @@ export default function DashboardPage({
     } finally {
       setSavedFiltersBusy(false);
     }
+  }
+
+  // Back to the filters the app starts with: everything offered, any tag, the full date
+  // range, no search, the default View options.
+  function clearFilters() {
+    setRecategorizeResult(null);
+    setFilters({
+      ...emptyFilters(),
+      ...initialChecklistFilters(refs),
+      date_from: filterDefaults.from,
+      date_to: filterDefaults.to,
+    });
   }
 
   function openUncategorizedReview() {
@@ -641,146 +653,25 @@ export default function DashboardPage({
 
   return (
     <>
-      <section className="filter-panel">
-        <button
-          aria-expanded={filtersOpen}
-          className="filter-panel-toggle"
-          onClick={() => setFiltersOpen((current) => !current)}
-          type="button"
-        >
-          <span>
-            <strong>Filters</strong>
-            <span>{activeFilterCount ? `${activeFilterCount} active` : "No filters active"}</span>
-          </span>
-          <span aria-hidden="true">{filtersOpen ? "Hide" : "Show"}</span>
-        </button>
-        {filtersOpen && (
-          <div className="filter-layout">
-            <div className="filter-side-stack">
-              <div className="filter-card date-filter-card">
-                <div className="filter-card-header">
-                  <span className="filter-label">Date range</span>
-                </div>
-                <div className="date-filter-stack">
-                  {[["From", "date_from"], ["To", "date_to"]].map(([label, name]) => (
-                    <DateField
-                      firstYear={Number(filterDefaults.from.slice(0, 4)) || undefined}
-                      key={name}
-                      label={label}
-                      name={name}
-                      onChange={onFilterChange}
-                      rangeFrom={filters.date_from}
-                      rangeTo={filters.date_to}
-                      value={filters[name]}
-                    />
-                  ))}
-                </div>
-                <RelativeRangeForm setFilters={setFilters} />
-              </div>
-              <SavedFiltersPanel
-                busy={savedFiltersBusy}
-                name={savedFilterName}
-                onDelete={deleteFilterPreset}
-                onLoad={loadFilterPreset}
-                onNameChange={setSavedFilterName}
-                onSave={saveCurrentFilterPreset}
-                dateDefaults={filterDefaults}
-                presets={savedFilters}
-                refs={refs}
-              />
-            </div>
-            <div className="filter-main-stack">
-              <div className="filter-card filter-basics-card">
-                <label className="filter-search-field">
-                  <span>Search</span>
-                  <input onChange={(event) => onFilterChange("q", event.target.value)} placeholder="Description, note, counterparty" type="search" value={filters.q} />
-                </label>
-              </div>
-              <div className="filter-card filter-display-card">
-                <div className="filter-card-header">
-                  <span className="filter-label">Display</span>
-                </div>
-                <div className="filter-display-options">
-                  <div className="check-row">
-                    <label className="check-row-label">
-                      <input checked={filters.split_by_owners} onChange={(event) => onFilterChange("split_by_owners", event.target.checked)} type="checkbox" />
-                      <span>Divide by account owner count</span>
-                    </label>
-                    <HelpTooltip text="Divides account amounts by that account's owner count for dashboard totals and displayed transaction amounts." />
-                  </div>
-                  <div className="check-row">
-                    <label className="check-row-label">
-                      <input checked={filters.include_ignored} onChange={(event) => onFilterChange("include_ignored", event.target.checked)} type="checkbox" />
-                      <span>Ignored</span>
-                    </label>
-                    <HelpTooltip text="Includes transactions marked as ignored in the dashboard, charts, and transaction table." />
-                  </div>
-                  <div className="check-row">
-                    <label className="check-row-label">
-                      <input checked={filters.include_locked} onChange={(event) => onFilterChange("include_locked", event.target.checked)} type="checkbox" />
-                      <span>Locked</span>
-                    </label>
-                    <HelpTooltip text="Includes transactions whose categorization is locked and protected from automatic recategorization." />
-                  </div>
-                </div>
-              </div>
-              <div className="filter-group filter-category-group">
-                <div className="filter-group-header">
-                  <span className="filter-label">Categorization</span>
-                </div>
-                <div className="filter-category-row">
-                  <CheckboxFilterPanel
-                    className="filter-category"
-                    label="Category"
-                    name="category"
-                    onChange={onFilterChange}
-                    options={[[UNASSIGNED, "Unassigned category"], ...refs.categories.map((item) => [item.id, item.name])]}
-                    value={filters.category}
-                  />
-                  <CheckboxFilterPanel
-                    className="filter-subcategory"
-                    label="Subcategory"
-                    name="subcategory"
-                    onChange={onFilterChange}
-                    options={subcategoryFilterOptions}
-                    value={filters.subcategory}
-                  />
-                  <CheckboxFilterPanel
-                    className="filter-wni"
-                    label="WNI"
-                    name="want_need_investment"
-                    onChange={onFilterChange}
-                    options={[...wniOptions, [UNASSIGNED, "Unassigned"]]}
-                    value={filters.want_need_investment}
-                  />
-                </div>
-              </div>
-              <div className="filter-support-row">
-                <CheckboxFilterPanel className="filter-account" label="Account" name="bank_account" onChange={onFilterChange} options={refs.accounts.map((item) => [item.id, item.name])} value={filters.bank_account} />
-                <CheckboxFilterPanel
-                  className="filter-direction"
-                  label="Direction"
-                  name="direction"
-                  onChange={onFilterChange}
-                  options={[["income", "Incomes"], ["expense", "Expenses"]]}
-                  searchable={false}
-                  value={filters.direction}
-                />
-                <CheckboxFilterPanel
-                  className="filter-tag"
-                  label="Tag"
-                  name="tag"
-                  onChange={onFilterChange}
-                  optional
-                  options={[[UNASSIGNED, "Untagged"], [ANY_TAG, "Tagged"], ...refs.tags.map((item) => [item.id, item.name])]}
-                  tags={refs.tags}
-                  value={filters.tag}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-      </section>
+      <FilterBar
+        activeFilterCount={activeFilterCount}
+        filterDefaults={filterDefaults}
+        filters={filters}
+        onClearFilters={clearFilters}
+        onFilterChange={onFilterChange}
+        presets={{
+          busy: savedFiltersBusy,
+          items: savedFilters,
+          name: savedFilterName,
+          onDelete: deleteFilterPreset,
+          onLoad: loadFilterPreset,
+          onNameChange: setSavedFilterName,
+          onSave: saveCurrentFilterPreset,
+        }}
+        refs={refs}
+        setFilters={setFilters}
+        subcategoryOptions={subcategoryFilterOptions}
+      />
 
       <TotalsRow busy={summaryBusy} onReview={openUncategorizedReview} reviewDisabled={importBusy} totals={totals} />
       {summary?.missing_conversions ? (

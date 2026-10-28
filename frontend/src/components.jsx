@@ -166,7 +166,7 @@ export function tabPanelProps(idPrefix, id) {
 // outside closes it; Escape closes it and returns focus to the button. children can be
 // a function that receives close(). The panel flips to the button's right edge when it
 // would leave the window.
-export function PopoverButton({ active = false, children, className = "", content, label, popoverClassName = "" }) {
+export function PopoverButton({ active = false, buttonProps = {}, children, className = "", content, label, popoverClassName = "" }) {
   const [open, setOpen] = useState(false);
   const [alignEnd, setAlignEnd] = useState(false);
   const anchorRef = useRef(null);
@@ -190,13 +190,23 @@ export function PopoverButton({ active = false, children, className = "", conten
         setOpen(false);
       }
     }
+    // Escape closes it from anywhere: focus can drop to the page while the panel is
+    // open (a button inside it gets disabled while it saves).
+    function closeOnEscape(event) {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        close(true);
+      }
+    }
     document.addEventListener("pointerdown", closeIfOutside);
     document.addEventListener("focusin", closeIfOutside);
+    document.addEventListener("keydown", closeOnEscape);
     return () => {
       document.removeEventListener("pointerdown", closeIfOutside);
       document.removeEventListener("focusin", closeIfOutside);
+      document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [open]);
+  }, [close, open]);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -209,17 +219,10 @@ export function PopoverButton({ active = false, children, className = "", conten
     }
   }, [open]);
 
-  function closeOnEscape(event) {
-    if (open && event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      close(true);
-    }
-  }
-
   return (
-    <div className="popover-anchor" onKeyDown={closeOnEscape} ref={anchorRef}>
+    <div className="popover-anchor" ref={anchorRef}>
       <button
+        {...buttonProps}
         aria-controls={open ? popoverId : undefined}
         aria-expanded={open}
         aria-haspopup="dialog"
