@@ -19,9 +19,9 @@ import {
   compareAmounts,
   formatAmountValue,
   formatAmountWithCurrency,
-  formatCount,
   normalizeHexColor,
   normalizeName,
+  pluralize,
   subLabel,
   tagTitle,
   titleCase,
@@ -621,8 +621,8 @@ const RawDataPopover = forwardRef(function RawDataPopover({ entries, position },
       style={{ left: position.left, top: position.top }}
     >
       <div className="raw-data-popover-header">
-        <strong>Original Data</strong>
-        <span>{formatCount(entries.length)} fields</span>
+        <strong>Original data</strong>
+        <span>{pluralize(entries.length, "field")}</span>
       </div>
       <dl className="raw-data-list">
         {entries.map((entry) => (

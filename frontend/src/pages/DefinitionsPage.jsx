@@ -38,6 +38,7 @@ import {
   mappingFileFormats,
   normalizeHexColor,
   parsingSettingsFromMapping,
+  pluralize,
   readStoredChoice,
   sanitizeColumnMap,
   storeChoice,
@@ -265,10 +266,8 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
     setSyncingRates(true);
     try {
       const result = await apiPost("/exchange-rates/sync/");
-      const createdRates = formatCount(result.created_rates);
-      const recalculated = formatCount(result.recalculation?.updated);
       if (showNotification) {
-        notify(`${createdRates} rates downloaded, ${recalculated} transactions recalculated`);
+        notify(`${pluralize(result.created_rates, "rate")} downloaded, ${pluralize(result.recalculation?.updated, "transaction")} recalculated`);
       }
       await refreshAfterCurrencyChange();
       return result;
@@ -303,7 +302,7 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
       if (nextDefaultCurrency !== previousDefaultCurrency) {
         try {
           const result = await syncExchangeRates(false);
-          notify(`${formatCount(result.created_rates)} rates downloaded, default currency changed to ${nextDefaultCurrency}`);
+          notify(`${pluralize(result.created_rates, "rate")} downloaded, default currency changed to ${nextDefaultCurrency}`);
         } catch (error) {
           notify(`Settings saved, but rate sync failed: ${error.message}`);
           await refreshAfterCurrencyChange();
@@ -321,7 +320,7 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
 
   return (
     <form className="compact-form app-settings-form" onSubmit={submit}>
-      <FormField label="Default Currency">
+      <FormField label="Default currency">
         <Select
           name="default_currency"
           onChange={(event) => setDefaultCurrency(normalizeCurrencyCode(event.target.value))}
@@ -341,7 +340,7 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
         />
         <span>Set transactions as ignored that mention another configured bank account automatically</span>
       </label>
-      <FormField label="Internal Transfer Subcategory">
+      <FormField label="Internal transfer subcategory">
         <Select
           blank="No automatic subcategory"
           name="internal_transfer_subcategory_id"
@@ -361,7 +360,7 @@ function SettingsForm({ notify, refs, reloadAll, reloadDashboard, settings }) {
         <strong>{formatExchangeRateStatus(rateStatus)}</strong>
         {missingRateCount ? (
           <span className="warning-text">
-            {formatCount(missingRateCount)} transactions need rates
+            {pluralize(missingRateCount, "transaction")} {missingRateCount === 1 ? "needs" : "need"} rates
           </span>
         ) : currencyOptionsFallback ? (
           <span className="warning-text">Currency list is using fallback options.</span>
@@ -711,7 +710,7 @@ function DeleteButton({ confirmAction, endpoint, iconOnly = false, name, notify,
       confirmLabel: "Delete",
       danger: true,
       message: effects.length ? `Delete ${name}?\n\n${effects.join("\n")}` : `Delete ${name}?`,
-      title: "Delete Record",
+      title: "Delete record",
     });
     if (!confirmed) {
       return;
@@ -822,7 +821,7 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
           <form aria-labelledby="account-modal-title" aria-modal="true" className="definition-modal" key={editingItem?.id || "new-account"} onSubmit={submit} role="dialog">
             <div className="definition-modal-header">
               <div>
-                <h3 id="account-modal-title">{isEditing ? "Edit Bank Account" : "Add Bank Account"}</h3>
+                <h3 id="account-modal-title">{isEditing ? "Edit bank account" : "Add bank account"}</h3>
                 <span>{editingItem?.name || "New bank account"}</span>
               </div>
               <CloseButton disabled={saving} onClick={closeAccountModal} />
@@ -830,17 +829,17 @@ function AccountForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
             <div className="definition-modal-body">
               <div className="compact-form">
                 <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Account name" required /></FormField>
-                <FormField label="Account Number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Optional account number" /></FormField>
+                <FormField label="Account number"><input defaultValue={editingItem?.account_number || ""} name="account_number" placeholder="Optional account number" /></FormField>
                 <FormField label="Bank"><input defaultValue={editingItem?.bank_name || ""} name="bank_name" placeholder="Bank name" /></FormField>
                 <FormField label="Currency"><input defaultValue={editingItem?.currency || "CZK"} maxLength="3" name="currency" pattern="[A-Za-z]{3}" placeholder="CZK" required title="Three-letter currency code, e.g. CZK or EUR" /></FormField>
                 <FormField label="Owners"><input defaultValue={editingItem?.owners || "1"} min="1" name="owners" required type="number" /></FormField>
-                <FormField label="Default Import Mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
+                <FormField label="Default import mapping"><Select blank="No default mapping" defaultValue={editingItem?.default_csv_mapping?.id || ""} name="default_csv_mapping_id" options={refs.mappings.map((item) => [item.id, item.name])} /></FormField>
               </div>
             </div>
             <div className="definition-modal-actions">
               <button className="link-button modal-action-cancel" disabled={saving} onClick={closeAccountModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
-                {isEditing ? "Save Account" : "Create Account"}
+                {isEditing ? "Save account" : "Create account"}
               </LoadingButton>
             </div>
           </form>
@@ -1113,7 +1112,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
                 value={mappingDetails.name}
               />
             </FormField>
-            <FormField label="Default Currency">
+            <FormField label="Default currency">
               <input
                 maxLength="3"
                 name="default_currency"
@@ -1151,14 +1150,14 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
         <div className="mapping-wizard-step-panel">
           <div className="advanced-settings-grid mapping-wizard-parsing-grid">
             <FormField label="Delimiter"><input maxLength="1" name="delimiter" onChange={(event) => updateParsingSetting("delimiter", event.target.value)} placeholder="," value={parsingSettings.delimiter} /></FormField>
-            <FormField label="Date Format"><input name="date_format" onChange={(event) => updateParsingSetting("date_format", event.target.value)} placeholder="%Y-%m-%d" value={parsingSettings.date_format} /></FormField>
+            <FormField label="Date format"><input name="date_format" onChange={(event) => updateParsingSetting("date_format", event.target.value)} placeholder="%Y-%m-%d" value={parsingSettings.date_format} /></FormField>
             <FormField label="Encoding"><input name="encoding" onChange={(event) => updateParsingSetting("encoding", event.target.value)} placeholder="utf-8-sig" value={parsingSettings.encoding} /></FormField>
-            <FormField label="Header Row"><input min="0" name="header_row" onChange={(event) => updateParsingSetting("header_row", event.target.value)} placeholder="0" type="number" value={parsingSettings.header_row} /></FormField>
-            <FormField label="Quote Character"><input maxLength="1" name="quotechar" onChange={(event) => updateParsingSetting("quotechar", event.target.value)} placeholder={'"'} value={parsingSettings.quotechar} /></FormField>
+            <FormField label="Header row"><input min="0" name="header_row" onChange={(event) => updateParsingSetting("header_row", event.target.value)} placeholder="0" type="number" value={parsingSettings.header_row} /></FormField>
+            <FormField label="Quote character"><input maxLength="1" name="quotechar" onChange={(event) => updateParsingSetting("quotechar", event.target.value)} placeholder={'"'} value={parsingSettings.quotechar} /></FormField>
             {/* No thousands-separator field: parsing treats the other mark as the only grouping mark and ignores spaces (CR-59). */}
-            <FormField label="Decimal Separator"><input maxLength="1" name="decimal_separator" onChange={(event) => updateParsingSetting("decimal_separator", event.target.value)} placeholder="." value={parsingSettings.decimal_separator} /></FormField>
+            <FormField label="Decimal separator"><input maxLength="1" name="decimal_separator" onChange={(event) => updateParsingSetting("decimal_separator", event.target.value)} placeholder="." value={parsingSettings.decimal_separator} /></FormField>
             <div className="mapping-parser-action">
-              <LoadingButton busy={detecting} busyLabel="Detecting" className="link-button mapping-detect-button" disabled={saving} onClick={detectColumns} type="button">Detect Columns</LoadingButton>
+              <LoadingButton busy={detecting} busyLabel="Detecting" className="link-button mapping-detect-button" disabled={saving} onClick={detectColumns} type="button">Detect columns</LoadingButton>
               {draft.detected ? <span className="mapping-detection-status">{draft.detected.headers?.length || 0} columns detected</span> : null}
             </div>
           </div>
@@ -1204,7 +1203,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
           )}
           <DefinitionCheckboxField
             className="mapping-categorization-field"
-            label="Categorization Fields"
+            label="Categorization fields"
             helpText="Keywords and recategorization build their matching text from these transaction fields. Select every field that can contain useful merchant, counterparty, note, symbol, or transaction-type text."
             onChange={(next) => setDraft((current) => ({ ...current, categorization_fields: next }))}
             options={categorizationFieldOptions}
@@ -1252,7 +1251,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
           <form aria-labelledby="mapping-wizard-title" aria-modal="true" className="mapping-wizard-modal" key={editingItem?.id || "new-mapping"} onSubmit={submit} ref={formRef} role="dialog">
             <div className="mapping-wizard-header">
               <div>
-                <h3 id="mapping-wizard-title">{isEditing ? "Edit Import Mapping" : "Add Import Mapping"}</h3>
+                <h3 id="mapping-wizard-title">{isEditing ? "Edit import mapping" : "Add import mapping"}</h3>
                 <span>{mappingDetails.name || "New mapping"}</span>
               </div>
               <CloseButton disabled={saving || detecting} onClick={closeWizard} />
@@ -1277,7 +1276,7 @@ function MappingForm({ clearEditing, draft, editingItem, notify, refs, reloadAll
                 <button className="primary-action" disabled={saving || detecting} onClick={goNext} type="button">Next</button>
               ) : (
                 <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" disabled={detecting} type="submit">
-                  {isEditing ? "Save Mapping" : "Create Mapping"}
+                  {isEditing ? "Save mapping" : "Create mapping"}
                 </LoadingButton>
               )}
             </div>
@@ -1411,7 +1410,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record
           <form aria-labelledby={`${endpoint.replace(/\W/g, "")}-modal-title`} aria-modal="true" className="definition-modal" key={editingItem?.id || `${endpoint}-new`} onSubmit={submit} role="dialog">
             <div className="definition-modal-header">
               <div>
-                <h3 id={`${endpoint.replace(/\W/g, "")}-modal-title`}>{isEditing ? `Edit ${entityLabel}` : `Add ${entityLabel}`}</h3>
+                <h3 id={`${endpoint.replace(/\W/g, "")}-modal-title`}>{isEditing ? `Edit ${entityLabel.toLowerCase()}` : `Add ${entityLabel.toLowerCase()}`}</h3>
                 <span>{editingItem?.name || `New ${entityLabel.toLowerCase()}`}</span>
               </div>
               <CloseButton disabled={saving} onClick={closeItemModal} />
@@ -1428,7 +1427,7 @@ function SimpleForm({ clearEditing, editingItem, endpoint, entityLabel = "Record
             <div className="definition-modal-actions">
               <button className="link-button modal-action-cancel" disabled={saving} onClick={closeItemModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
-                {isEditing ? `Save ${entityLabel}` : `Create ${entityLabel}`}
+                {isEditing ? `Save ${entityLabel.toLowerCase()}` : `Create ${entityLabel.toLowerCase()}`}
               </LoadingButton>
             </div>
           </form>
@@ -1504,7 +1503,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
           <form aria-labelledby="subcategory-modal-title" aria-modal="true" className="definition-modal" key={editingItem?.id || "new-subcategory"} onSubmit={submit} role="dialog">
             <div className="definition-modal-header">
               <div>
-                <h3 id="subcategory-modal-title">{isEditing ? "Edit Subcategory" : "Add Subcategory"}</h3>
+                <h3 id="subcategory-modal-title">{isEditing ? "Edit subcategory" : "Add subcategory"}</h3>
                 <span>{editingItem?.name || "New subcategory"}</span>
               </div>
               <CloseButton disabled={saving} onClick={closeSubcategoryModal} />
@@ -1519,7 +1518,7 @@ function SubcategoryForm({ clearEditing, editingItem, notify, refs, reloadAll })
             <div className="definition-modal-actions">
               <button className="link-button modal-action-cancel" disabled={saving} onClick={closeSubcategoryModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" type="submit">
-                {isEditing ? "Save Subcategory" : "Create Subcategory"}
+                {isEditing ? "Save subcategory" : "Create subcategory"}
               </LoadingButton>
             </div>
           </form>
@@ -1734,7 +1733,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
           <form aria-labelledby="keyword-modal-title" aria-modal="true" className="definition-modal keyword-modal" key={editingItem?.id || "new-keyword"} onSubmit={submit} role="dialog">
             <div className="definition-modal-header">
               <div>
-                <h3 id="keyword-modal-title">{isEditing ? "Edit Keyword" : "Add Keyword"}</h3>
+                <h3 id="keyword-modal-title">{isEditing ? "Edit keyword" : "Add keyword"}</h3>
                 <span>{editingItem?.name || "New keyword"}</span>
               </div>
               <CloseButton disabled={saving || previewing} onClick={closeKeywordModal} />
@@ -1742,16 +1741,16 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
             <div className="definition-modal-body">
               <div className="compact-form keyword-form">
                 <FormField label="Name"><input defaultValue={editingItem?.name || ""} name="name" placeholder="Keyword name" required /></FormField>
-                <FormField label="Include Terms"><textarea defaultValue={(editingItem?.include_terms || []).join("\n")} name="include_terms" placeholder="One term per line" required rows="3" /></FormField>
-                <FormField label="Exclude Terms"><textarea defaultValue={(editingItem?.exclude_terms || []).join("\n")} name="exclude_terms" placeholder="One term per line" rows="3" /></FormField>
+                <FormField label="Include terms"><textarea defaultValue={(editingItem?.include_terms || []).join("\n")} name="include_terms" placeholder="One term per line" required rows="3" /></FormField>
+                <FormField label="Exclude terms"><textarea defaultValue={(editingItem?.exclude_terms || []).join("\n")} name="exclude_terms" placeholder="One term per line" rows="3" /></FormField>
                 <FormField label="Subcategory"><Select blank="No subcategory" defaultValue={editingItem?.subcategory?.id || ""} name="subcategory_id" options={refs.subcategories.map((item) => [item.id, subLabel(item)])} /></FormField>
                 <FormField label="Want / Need / Investment"><Select blank="No WNI" defaultValue={editingItem?.want_need_investment || ""} name="want_need_investment" options={wniOptions} /></FormField>
                 <DefinitionCheckboxField label="Tags" onChange={setTagIds} options={refs.tags.map((item) => [item.id, item.name])} placeholder="No tags selected" tags={refs.tags} value={tagIds} />
                 <FormField label="Priority"><input defaultValue={editingItem?.priority ?? "0"} name="priority" type="number" /></FormField>
                 <label className="check-row"><input defaultChecked={Boolean(editingItem?.is_ignored)} name="is_ignored" type="checkbox" /><span>Ignore matches</span></label>
                 <div className="keyword-preview-panel">
-                  <FormField label="Preview Text"><textarea onChange={(event) => setPreviewText(event.target.value)} placeholder="Paste transaction text" rows="2" value={previewText} /></FormField>
-                  <LoadingButton busy={previewing} busyLabel="Previewing" className="link-button" onClick={previewKeywordMatch} type="button">Preview Matches</LoadingButton>
+                  <FormField label="Preview text"><textarea onChange={(event) => setPreviewText(event.target.value)} placeholder="Paste transaction text" rows="2" value={previewText} /></FormField>
+                  <LoadingButton busy={previewing} busyLabel="Previewing" className="link-button" onClick={previewKeywordMatch} type="button">Preview matches</LoadingButton>
                   {previewResult && (
                     <div className="keyword-preview-result">
                       <div className={`keyword-preview-status status-${previewResult.categorization.status}`}>
@@ -1769,7 +1768,7 @@ function KeywordForm({ clearEditing, editingItem, notify, refs, reloadAll }) {
             <div className="definition-modal-actions">
               <button className="link-button modal-action-cancel" disabled={saving || previewing} onClick={closeKeywordModal} type="button">Cancel</button>
               <LoadingButton busy={saving} busyLabel="Saving" className="primary-action" disabled={previewing} type="submit">
-                {isEditing ? "Save Keyword" : "Create Keyword"}
+                {isEditing ? "Save keyword" : "Create keyword"}
               </LoadingButton>
             </div>
           </form>

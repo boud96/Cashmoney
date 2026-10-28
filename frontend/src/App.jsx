@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 
 import { apiDelete, apiGet, apiPatch, BACKEND_REACHABILITY_EVENT } from "./api.js";
 import { ConfirmDialog, ModalShell, Spinner } from "./components.jsx";
-import { EyeIcon, EyeOffIcon, MoonIcon, SunIcon } from "./icons.jsx";
+import { CloseIcon, EyeIcon, EyeOffIcon, MoonIcon, SunIcon } from "./icons.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import SidebarAsciiPlay from "./SidebarAsciiPlay.jsx";
 import {
@@ -118,7 +118,7 @@ export default function App() {
         confirmLabel: options.confirmLabel || "Confirm",
         danger: Boolean(options.danger),
         message: options.message || "",
-        title: options.title || "Confirm Action",
+        title: options.title || "Confirm action",
       });
     });
   }, []);
@@ -541,7 +541,7 @@ export default function App() {
         {toast ? (
           <>
             <span className="toast-message">{toast}</span>
-            <button aria-label="Dismiss message" className="toast-close" onClick={dismissToast} type="button">×</button>
+            <button aria-label="Dismiss message" className="toast-close" onClick={dismissToast} type="button"><CloseIcon size={16} /></button>
           </>
         ) : null}
       </div>

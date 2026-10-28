@@ -488,7 +488,7 @@ export function ConfirmDialog({
   message,
   onCancel,
   onConfirm,
-  title = "Confirm Action",
+  title = "Confirm action",
 }) {
   const cancelButtonRef = useRef(null);
   const dialogRef = useRef(null);

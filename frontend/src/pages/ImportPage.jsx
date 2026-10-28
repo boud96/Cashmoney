@@ -493,7 +493,7 @@ function DuplicateList({ duplicates, hideAmounts }) {
         </table>
       </div>
       {duplicates.length > shown.length ? (
-        <p className="muted import-note">+{formatCount(duplicates.length - shown.length)} more duplicates</p>
+        <p className="muted import-note">+{pluralize(duplicates.length - shown.length, "more duplicate")}</p>
       ) : null}
     </div>
   );
@@ -525,7 +525,7 @@ function ErrorList({ errorCount, errors }) {
         </table>
       </div>
       {errorCount > shown.length ? (
-        <p className="muted import-note">+{formatCount(errorCount - shown.length)} more errors</p>
+        <p className="muted import-note">+{pluralize(errorCount - shown.length, "more error")}</p>
       ) : null}
     </div>
   );

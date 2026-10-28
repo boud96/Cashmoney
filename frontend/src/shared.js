@@ -49,20 +49,20 @@ export const definitionHelp = {
 };
 export const mappingFields = [
   ["original_id", "Original ID"],
-  ["transaction_date", "Transaction Date"],
-  ["posted_date", "Posted Date"],
+  ["transaction_date", "Transaction date"],
+  ["posted_date", "Posted date"],
   ["description", "Description"],
   ["amount", "Amount"],
   ["currency", "Currency"],
-  ["counterparty_name", "Counterparty Name"],
-  ["counterparty_account_number", "Counterparty Account"],
-  ["transaction_type", "Transaction Type"],
-  ["variable_symbol", "Variable Symbol"],
-  ["specific_symbol", "Specific Symbol"],
-  ["constant_symbol", "Constant Symbol"],
-  ["counterparty_note", "Counterparty Note"],
-  ["my_note", "My Note"],
-  ["other_note", "Other Note"],
+  ["counterparty_name", "Counterparty name"],
+  ["counterparty_account_number", "Counterparty account"],
+  ["transaction_type", "Transaction type"],
+  ["variable_symbol", "Variable symbol"],
+  ["specific_symbol", "Specific symbol"],
+  ["constant_symbol", "Constant symbol"],
+  ["counterparty_note", "Counterparty note"],
+  ["my_note", "My note"],
+  ["other_note", "Other note"],
 ];
 export const categorizationFieldOptions = mappingFields.filter(
   ([key]) => !["original_id", "transaction_date", "posted_date", "amount", "currency"].includes(key),
@@ -619,7 +619,7 @@ export function validateRequiredFields(form, names, notify) {
 
 export function validateRequiredColumnMap(columnMap, notify) {
   const requiredFields = [
-    ["transaction_date", "Transaction Date"],
+    ["transaction_date", "Transaction date"],
     ["amount", "Amount"],
   ];
   for (const [key, label] of requiredFields) {

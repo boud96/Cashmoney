@@ -7,6 +7,7 @@ import {
   formatAmountValue,
   formatCount,
   formatDateTime,
+  pluralize,
   subLabel,
   titleCase,
   wniOptions,
@@ -79,7 +80,7 @@ export function RecategorizeModal({
       titleId="recategorize-modal-title"
     >
         <div className="bulk-assign-warning">
-          Current filters show {formatCount(count)} transactions.
+          Current filters show {pluralize(count, "transaction")}.
         </div>
         <label className="check-row recategorize-modal-toggle">
           <input checked={includeLocked} disabled={busy} onChange={(event) => onIncludeLockedChange(event.target.checked)} type="checkbox" />
@@ -120,9 +121,9 @@ export function BulkAssignMultiModal({
       className="bulk-assign-modal"
       closeDisabled={busy}
       closeLabel="Close bulk assign modal"
-      description={`This will update ${formatCount(count)} currently filtered transactions. Subcategory, tags, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.`}
+      description={`This will update ${pluralize(count, "currently filtered transaction")}. Subcategory, tags, WNI, or ignored changes will lock categorization unless you explicitly set Locked to No.`}
       onClose={onClose}
-      title="Bulk Assign"
+      title="Bulk assign"
       titleId="bulk-assign-modal-title"
     >
         <div className="bulk-assign-form">
@@ -226,7 +227,7 @@ export function InternalTransferReviewPanel({
       description="Find matching outgoing and incoming transactions across your accounts in the current filter scope, or review and undo pairs already matched."
       headerClassName="transfer-review-modal-header"
       onClose={onClose}
-      title="Find Transfers"
+      title="Find transfers"
       titleId="transfer-review-title"
     >
         <div className="transfer-review-layout">
@@ -246,7 +247,7 @@ export function InternalTransferReviewPanel({
           ) : (
             <>
               <div className="bulk-assign-warning transfer-review-summary">
-                {formatCount(meta.count)} candidates. {formatCount(meta.high_confidence_count)} high confidence, {formatCount(meta.ambiguous_count)} ambiguous.
+                {pluralize(meta.count, "candidate")}. {formatCount(meta.high_confidence_count)} high confidence, {formatCount(meta.ambiguous_count)} ambiguous.
               </div>
               <div className="transfer-review-controls">
                 <label className="form-field">
@@ -432,13 +433,13 @@ export function UncategorizedReviewPanel({
       description="Review uncategorized transaction groups and create a keyword rule from the selected suggestion."
       headerClassName="uncategorized-review-modal-header"
       onClose={onClose}
-      title="Review Uncategorized"
+      title="Review uncategorized"
       titleId="uncategorized-review-title"
     >
         <div className="uncategorized-review-layout">
           <div className="bulk-assign-warning uncategorized-review-summary">
-            {formatCount(meta.transaction_count)} transactions in{" "}
-            {formatCount(meta.count)} groups
+            {pluralize(meta.transaction_count, "transaction")} in{" "}
+            {pluralize(meta.count, "group")}
           </div>
           {error ? <div className="uncategorized-review-error">{error}</div> : null}
           <div className="uncategorized-suggestion-list">
@@ -456,7 +457,7 @@ export function UncategorizedReviewPanel({
               >
                 <span className="suggestion-card-title">{suggestion.sample_description}</span>
                 <span className="suggestion-card-meta">
-                  {suggestion.reason} | {formatCount(suggestion.transaction_count)} transactions
+                  {suggestion.reason} | {pluralize(suggestion.transaction_count, "transaction")}
                 </span>
                 <span className="suggestion-card-amount">
                   {formatAmountWithCurrency(
@@ -742,7 +743,7 @@ function ConflictDetailList({ details, total = 0 }) {
           <KeywordMatchList matches={detail.categorization.top_matched_keywords || []} />
         </article>
       ))}
-      {hidden > 0 ? <div className="muted">+{formatCount(hidden)} more conflicts</div> : null}
+      {hidden > 0 ? <div className="muted">+{pluralize(hidden, "more conflict")}</div> : null}
     </div>
   );
 }
