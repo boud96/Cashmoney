@@ -50,10 +50,6 @@ export function Spinner() {
   return <span aria-hidden="true" className="loading-spinner" />;
 }
 
-export function Metric({ label, tone = "", value }) {
-  return <div className="metric"><div className="metric-label">{label}</div><div className={`metric-value ${tone}`}>{value}</div></div>;
-}
-
 export function HelpTooltip({ text }) {
   return (
     <span className="help-tooltip">
