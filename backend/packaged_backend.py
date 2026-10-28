@@ -78,7 +78,11 @@ def app_pid_to_watch(environ, os_name=os.name):
     app_pid = environ.get("CASHMONEY_APP_PID")
     if os_name != "posix" or not app_pid:
         return None
-    return int(app_pid)
+    try:
+        return int(app_pid)
+    except ValueError:
+        logging.warning("Ignoring CASHMONEY_APP_PID=%r: not a process id", app_pid)
+        return None
 
 
 def configure_environment():

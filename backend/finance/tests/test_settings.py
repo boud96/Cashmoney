@@ -160,6 +160,16 @@ class PackagedBackendTests(SimpleTestCase):
         self.assertIsNone(packaged_backend.app_pid_to_watch({}, "posix"))
         self.assertIsNone(packaged_backend.app_pid_to_watch(started_by_app, "nt"))
 
+    def test_a_garbled_app_pid_doesnt_stop_the_start(self):
+        # Only a hand-set variable can be garbled; the backend then runs without the watch.
+        with self.assertLogs(level="WARNING") as logs:
+            pid = packaged_backend.app_pid_to_watch(
+                {"CASHMONEY_APP_PID": "abc"}, "posix"
+            )
+
+        self.assertIsNone(pid)
+        self.assertIn("CASHMONEY_APP_PID", logs.output[0])
+
 
 class BundleCheckTests(SimpleTestCase):
     # PyInstaller's Django hook bundles any *.db / db.* file next to manage.py, such as
