@@ -13,6 +13,7 @@ import {
   initialChecklistFilters,
   normalizeTagSelection,
   offeredSubcategories,
+  pluralize,
   storeFilterPresets,
   subLabel,
   wniOptions,
@@ -266,7 +267,7 @@ export default function DashboardPage({
       const result = await apiPost("/transactions/recategorize/", { include_locked: recategorizeIncludeLocked }, params);
       setRecategorizeResult(result);
       setRecategorizeModalOpen(false);
-      notify(`${formatCount(result.updated)} transactions updated`);
+      notify(`${pluralize(result.updated, "transaction")} updated`);
       await reloadDashboard();
     } catch (error) {
       notify(error.message);
@@ -453,8 +454,8 @@ export default function DashboardPage({
     }
     const confirmed = await confirmAction({
       confirmLabel: "Apply",
-      message: `Mark ${formatCount(selectedTransferIds.length)} selected transfer pairs as internal transfers? Both sides will be ignored and locked.`,
-      title: "Apply Internal Transfers",
+      message: `Mark ${pluralize(selectedTransferIds.length, "selected transfer pair")} as internal transfers? Both sides will be ignored and locked.`,
+      title: "Apply internal transfers",
     });
     if (!confirmed) {
       return;
@@ -473,8 +474,8 @@ export default function DashboardPage({
       );
       notify(
         result.skipped
-          ? `${formatCount(result.created)} transfer pairs applied, ${formatCount(result.skipped)} skipped because they were already matched or no longer qualify`
-          : `${formatCount(result.created)} transfer pairs applied`
+          ? `${pluralize(result.created, "transfer pair")} applied, ${formatCount(result.skipped)} skipped because they were already matched or no longer qualify`
+          : `${pluralize(result.created, "transfer pair")} applied`
       );
       setSelectedTransferIds([]);
       await Promise.all([reloadDashboard(), loadTransferCandidates()]);
@@ -581,7 +582,7 @@ export default function DashboardPage({
     setBulkAssignBusy(true);
     try {
       const result = await apiPost("/transactions/bulk-assign/", payload, filterParams);
-      notify(`${formatCount(result.updated)} transactions updated`);
+      notify(`${pluralize(result.updated, "transaction")} updated`);
       setBulkAssignEditorOpen(false);
       setBulkAssignDraft(emptyBulkAssignDraft);
       await reloadDashboard();
@@ -638,7 +639,7 @@ export default function DashboardPage({
           transaction_ids: selectedSuggestion.transaction_ids || [],
         });
         setRecategorizeResult(result);
-        notify(`${formatCount(result.updated)} transactions updated`);
+        notify(`${pluralize(result.updated, "transaction")} updated`);
         await Promise.all([reloadDashboard(), loadUncategorizedSuggestions()]);
       } else {
         notify("Keyword added");
@@ -676,7 +677,8 @@ export default function DashboardPage({
       <TotalsRow busy={summaryBusy} onReview={openUncategorizedReview} reviewDisabled={importBusy} totals={totals} />
       {summary?.missing_conversions ? (
         <div className="dashboard-warning">
-          {formatCount(summary.missing_conversions)} filtered transactions are missing exchange rates and are excluded from converted totals.
+          {pluralize(summary.missing_conversions, "filtered transaction")}{" "}
+          {summary.missing_conversions === 1 ? "is missing an exchange rate and is" : "are missing exchange rates and are"} excluded from converted totals.
         </div>
       ) : null}
 
