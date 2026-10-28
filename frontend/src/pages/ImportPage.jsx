@@ -356,8 +356,8 @@ function ImportPreview({ fileName, hideAmounts, preview }) {
       {preview.loaded > rows.length ? (
         <p className="muted import-note">Showing the first {formatCount(rows.length)} of {formatCount(preview.loaded)} rows. The counts above cover the whole file.</p>
       ) : null}
-      <div className="import-table-wrap">
-        <table className="import-table import-preview-table">
+      <div className="data-table-wrap">
+        <table className="data-table import-preview-table">
           <thead>
             <tr>
               <th className="is-number">Line</th>
@@ -375,9 +375,9 @@ function ImportPreview({ fileName, hideAmounts, preview }) {
                 <tr key={`${row.line || index}-${index}`}>
                   <td className="is-number muted">{row.line || NO_VALUE}</td>
                   <td>{display.date}</td>
-                  <td className="import-table-text" title={display.description}>{display.description}</td>
+                  <td className="data-table-text" title={display.description}>{display.description}</td>
                   <td className="is-number">{display.amount}</td>
-                  <td className={`import-table-text import-row-status is-${status.tone}`} title={status.text}>{status.text}</td>
+                  <td className={`data-table-text import-row-status is-${status.tone}`} title={status.text}>{status.text}</td>
                 </tr>
               );
             })}
@@ -468,8 +468,8 @@ function DuplicateList({ duplicates, hideAmounts }) {
   return (
     <div className="import-report-section">
       <h3>Skipped duplicates</h3>
-      <div className="import-table-wrap">
-        <table className="import-table import-report-table">
+      <div className="data-table-wrap">
+        <table className="data-table import-report-table">
           <thead>
             <tr>
               <th className="is-number">Line</th>
@@ -484,8 +484,8 @@ function DuplicateList({ duplicates, hideAmounts }) {
               return (
                 <tr key={`${duplicate.line || index}-${index}`}>
                   <td className="is-number muted">{duplicate.line || "?"}</td>
-                  <td className="import-table-text" title={description}>{description}</td>
-                  <td className="import-table-text" title={existing || duplicate.reason || ""}>{existing || duplicate.reason || "Duplicate transaction"}</td>
+                  <td className="data-table-text" title={description}>{description}</td>
+                  <td className="data-table-text" title={existing || duplicate.reason || ""}>{existing || duplicate.reason || "Duplicate transaction"}</td>
                 </tr>
               );
             })}
@@ -504,8 +504,8 @@ function ErrorList({ errorCount, errors }) {
   return (
     <div className="import-report-section">
       <h3>Rows with errors</h3>
-      <div className="import-table-wrap">
-        <table className="import-table import-report-table">
+      <div className="data-table-wrap">
+        <table className="data-table import-report-table">
           <thead>
             <tr>
               <th className="is-number">Line</th>
@@ -517,8 +517,8 @@ function ErrorList({ errorCount, errors }) {
             {shown.map((error, index) => (
               <tr key={`${error.line || index}-${index}`}>
                 <td className="is-number muted">{error.line || "File"}</td>
-                <td className="import-table-text" title={error.description || ""}>{error.description || "No description"}</td>
-                <td className="import-table-text import-row-status is-error" title={error.error || ""}>{error.error || "Could not import this row"}</td>
+                <td className="data-table-text" title={error.description || ""}>{error.description || "No description"}</td>
+                <td className="data-table-text import-row-status is-error" title={error.error || ""}>{error.error || "Could not import this row"}</td>
               </tr>
             ))}
           </tbody>
@@ -547,8 +547,8 @@ function RecentImports({ busyId, deletingId, imports, onDelete, onShowReport, re
     return <p className="muted">No imports yet.</p>;
   }
   return (
-    <div className="import-table-wrap">
-      <table className="import-table recent-imports-table">
+    <div className="data-table-wrap">
+      <table className="data-table recent-imports-table">
         <thead>
           <tr>
             <th>File</th>
@@ -565,13 +565,13 @@ function RecentImports({ busyId, deletingId, imports, onDelete, onShowReport, re
             const fileName = item.source_filename || "Import";
             return (
               <tr key={item.id}>
-                <td className="import-table-text" title={fileName}>{fileName}</td>
-                <td className="import-table-text">{item.bank_account?.name || "No account"}</td>
-                <td className="import-table-time">{formatDateTime(item.created_at)}</td>
+                <td className="data-table-text" title={fileName}>{fileName}</td>
+                <td className="data-table-text">{item.bank_account?.name || "No account"}</td>
+                <td className="data-table-time">{formatDateTime(item.created_at)}</td>
                 <td className="is-number">{formatCount(item.created_count)}</td>
                 <td className="is-number">{formatCount(item.skipped_count)}</td>
                 <td className={`is-number ${item.error_count ? "import-row-status is-error" : ""}`.trim()}>{formatCount(item.error_count)}</td>
-                <td className="import-table-actions">
+                <td className="data-table-actions">
                   <LoadingButton
                     busy={reportId === item.id}
                     busyLabel="Loading"
