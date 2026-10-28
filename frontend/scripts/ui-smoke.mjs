@@ -136,8 +136,12 @@ try {
   }, attachPort ? "the app's window to load the app" : "Chrome", startLimitMs);
   const page = await connect(target.webSocketDebuggerUrl);
   await page.send("Page.navigate", { url: `${base}/` });
+  // The Dashboard opens on the tab used last: check the Overview, then the Transactions tab.
+  await waitUntil(() => page.evaluate("!!document.querySelector('#dashboard-tab-overview')"), "the dashboard tabs", 60000);
+  await page.evaluate("document.querySelector('#dashboard-tab-overview').click()");
+  await waitUntil(() => page.evaluate("document.querySelectorAll('.js-plotly-plot').length >= 1 && document.querySelectorAll('.category-ranking-list .category-ranking-row').length > 0"), "the charts", 60000);
+  await page.evaluate("document.querySelector('#dashboard-tab-transactions').click()");
   await waitUntil(() => page.evaluate("document.querySelectorAll('.ag-center-cols-container .ag-row').length > 0"), "the transaction table", 60000);
-  await waitUntil(() => page.evaluate("document.querySelectorAll('.js-plotly-plot').length >= 3"), "the charts", 60000);
 
   const labels = await page.evaluate("[...document.querySelectorAll('.nav-tab')].map((button) => button.textContent.trim())");
   for (const label of labels) {
