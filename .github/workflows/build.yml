@@ -226,7 +226,8 @@ jobs:
           mode=$(stat -c %a ~/.config/cashmoney-desktop)
           [ "$mode" = 700 ] || { echo "The data folder is $mode, not 700."; exit 1; }
           # A killed app must not leave its backend behind (packaged_backend.watch_parent).
-          kill -9 "$(pgrep -o -x cashmoney)"
+          pid=$(pgrep -o -x cashmoney) || { echo "The app wasn't running for the kill check."; show_logs; exit 1; }
+          kill -9 "$pid"
           for _ in $(seq 1 10); do
             pgrep -f resources/backend/cashmoney-backend > /dev/null || exit 0
             sleep 0.5
