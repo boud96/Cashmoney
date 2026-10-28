@@ -68,6 +68,8 @@ export default function DashboardPage({
   );
   // From the summary, so the totals, the tab and the actions don't wait for the list.
   const filteredCount = summary?.transaction_count ?? transactionPage.count ?? 0;
+  // Until the first rows arrive the table says it's loading, not that nothing matches.
+  const tableLoading = !transactionPage.results.length && (transactionsBusy || !summary || filteredCount > 0);
   const loadedTransactionCount = transactionPage.results?.length || 0;
   const filteredTransactionCount = transactionPage.count || 0;
   const transactionsAreCapped = loadedTransactionCount > 0 && filteredTransactionCount > loadedTransactionCount;
@@ -725,7 +727,7 @@ export default function DashboardPage({
               Older matching transactions are omitted from the table. Totals and charts still use the full filtered set.
             </div>
           ) : null}
-          <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filterParams={filterParams} hideAmounts={hideAmounts} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
+          <TransactionGrid confirmAction={confirmAction} conflictIds={conflictIds} defaultCurrency={defaultCurrency} deleteTransaction={deleteTransaction} filterParams={filterParams} hideAmounts={hideAmounts} loading={tableLoading} notify={notify} refs={refs} rows={transactionPage.results} updateTransaction={updateTransaction} />
         </div>
       )}
 
