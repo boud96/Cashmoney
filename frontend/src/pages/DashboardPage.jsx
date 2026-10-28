@@ -213,12 +213,31 @@ export default function DashboardPage({
     }));
   }
 
-  async function deleteFilterPreset(presetId) {
+  async function deleteFilterPreset(preset) {
+    const index = savedFilters.findIndex((item) => item.id === preset.id);
     setSavedFiltersBusy(true);
     try {
-      await apiDelete(`/saved-filters/${presetId}/`);
-      setSavedFilters((current) => current.filter((preset) => preset.id !== presetId));
-      notify("Filter preset deleted");
+      await apiDelete(`/saved-filters/${preset.id}/`);
+      setSavedFilters((current) => current.filter((item) => item.id !== preset.id));
+      notify(`Deleted "${preset.name}"`, { action: { label: "Undo", onClick: () => restoreFilterPreset(preset, index) } });
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      setSavedFiltersBusy(false);
+    }
+  }
+
+  // Undo for a deleted saved filter: save it again under its name, back in its place.
+  async function restoreFilterPreset(preset, index) {
+    setSavedFiltersBusy(true);
+    try {
+      const restored = await apiPost("/saved-filters/", { name: preset.name, filters: cloneFilters(preset.filters) });
+      setSavedFilters((current) => {
+        const next = current.filter((item) => item.id !== restored.id && item.name.toLowerCase() !== restored.name.toLowerCase());
+        next.splice(index < 0 ? next.length : Math.min(index, next.length), 0, restored);
+        return next;
+      });
+      notify(`Restored "${restored.name}"`);
     } catch (error) {
       notify(error.message);
     } finally {

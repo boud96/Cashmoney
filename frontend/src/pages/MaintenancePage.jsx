@@ -307,12 +307,8 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
         </ul>
       </section>
 
-      <section aria-labelledby="maintenance-backups-title" className="panel maintenance-backups">
-        <div className="panel-header">
-          <div className="maintenance-backups-heading">
-            <h2 id="maintenance-backups-title">Backups</h2>
-            <span>Export or restore the complete local SQLite database.</span>
-          </div>
+      <MaintenanceSection
+        actions={(
           <div className="maintenance-backups-actions">
             <LoadingButton
               busy={safeBusy === "save"}
@@ -335,7 +331,13 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
               Export
             </LoadingButton>
           </div>
-        </div>
+        )}
+        className="maintenance-backups"
+        defaultExpanded
+        storageId="backups"
+        subtitle="Export or restore the complete local SQLite database."
+        title="Backups"
+      >
         {backupsLoading ? (
           <p className="muted maintenance-backups-empty">Loading backups…</p>
         ) : backups.length ? (
@@ -432,7 +434,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
             Restore database
           </LoadingButton>
         </form>
-      </section>
+      </MaintenanceSection>
 
       <MaintenanceSection
         storageId="sample-data"
@@ -573,13 +575,15 @@ function readStoredMaintenancePanelState(storageId, defaultExpanded) {
   }
 }
 
-// A foldable section: the whole header row is the toggle. Whether it is open is stored.
-function MaintenanceSection({ children, danger = false, defaultExpanded = false, storageId, subtitle, title }) {
+// A foldable section: the whole header row is the toggle, apart from any actions beside it
+// (they stay in reach while it's folded). Whether it is open is stored.
+function MaintenanceSection({ actions = null, children, className = "", danger = false, defaultExpanded = false, storageId, subtitle, title }) {
   const [expanded, setExpanded] = useState(() => readStoredMaintenancePanelState(storageId, defaultExpanded));
   const bodyId = `maintenance-section-${storageId}`;
   const sectionClassName = [
     "panel",
     "maintenance-section",
+    className,
     danger ? "is-danger" : "",
     expanded ? "is-expanded" : "is-collapsed",
   ].filter(Boolean).join(" ");
@@ -596,21 +600,25 @@ function MaintenanceSection({ children, danger = false, defaultExpanded = false,
     });
   }
 
+  const heading = (
+    <h2 className="maintenance-section-heading">
+      <button
+        aria-controls={bodyId}
+        aria-expanded={expanded}
+        className="maintenance-section-toggle"
+        onClick={toggleExpanded}
+        type="button"
+      >
+        <ChevronIcon open={expanded} />
+        <span className="maintenance-section-title">{title}</span>
+        {subtitle ? <span className="maintenance-section-subtitle">{subtitle}</span> : null}
+      </button>
+    </h2>
+  );
+
   return (
     <section className={sectionClassName}>
-      <h2 className="maintenance-section-heading">
-        <button
-          aria-controls={bodyId}
-          aria-expanded={expanded}
-          className="maintenance-section-toggle"
-          onClick={toggleExpanded}
-          type="button"
-        >
-          <ChevronIcon open={expanded} />
-          <span className="maintenance-section-title">{title}</span>
-          {subtitle ? <span className="maintenance-section-subtitle">{subtitle}</span> : null}
-        </button>
-      </h2>
+      {actions ? <div className="maintenance-section-header">{heading}{actions}</div> : heading}
       <div className="maintenance-section-body" hidden={!expanded} id={bodyId}>
         {children}
       </div>

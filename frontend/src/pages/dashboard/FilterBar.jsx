@@ -212,7 +212,7 @@ function SavedFiltersMenu({ busy, dateDefaults, items, name, onDelete, onLoad, o
                     aria-label={`Delete ${preset.name}`}
                     className="icon-button saved-filter-delete"
                     disabled={busy}
-                    onClick={() => onDelete(preset.id)}
+                    onClick={() => onDelete(preset)}
                     title={`Delete ${preset.name}`}
                     type="button"
                   >
