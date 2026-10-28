@@ -16,6 +16,7 @@ from urllib.request import Request, urlopen
 from django.db import IntegrityError, transaction
 from django.db.models import (
     Case,
+    Count,
     DecimalField,
     ExpressionWrapper,
     F,
@@ -2728,13 +2729,21 @@ def build_dashboard_summary(queryset, split_by_owners=False, default_currency=No
     )
     annotated = base_queryset.annotate(_summary_amount=amount)
     valid = annotated.filter(_summary_amount__isnull=False)
+    # Every count in one pass over the filtered rows: with a search filter each pass
+    # folds every row's text, so separate queries cost seconds.
+    counts = annotated.aggregate(
+        transactions=Count("id"),
+        missing=Count("id", filter=Q(_summary_amount__isnull=True)),
+        # Counted here, not from the table page, which is capped at 10 000 rows.
+        uncategorized=Count("id", filter=Q(subcategory__isnull=True, is_ignored=False)),
+    )
     summary = {
         "default_currency": default_currency,
-        "missing_conversions": annotated.filter(_summary_amount__isnull=True).count(),
-        # Counted here, not from the table page, which is capped at 10 000 rows.
-        "uncategorized_count": base_queryset.filter(
-            subcategory__isnull=True, is_ignored=False
-        ).count(),
+        # The dashboard's totals and tab label show these without loading the list.
+        "transaction_count": counts["transactions"],
+        "total_transaction_count": Transaction.objects.count(),
+        "missing_conversions": counts["missing"],
+        "uncategorized_count": counts["uncategorized"],
         "monthly": [],
         "income_categories": [],
         "expense_categories": [],
@@ -2871,8 +2880,8 @@ def _category_tree(grouped_amounts):
             }
             for subcategory_name, subcategory_data in sorted(subcategories.items())
         ]
-        # The category is the sum of its rounded subcategories: the sunburst chart
-        # (branchvalues "total") drops a category that is a cent short of them.
+        # The category is the sum of its rounded subcategories, so its amount and
+        # share always cover theirs in the dashboard's category breakdown.
         category_amount = sum(
             (Decimal(child["amount"]) for child in children), Decimal("0")
         )

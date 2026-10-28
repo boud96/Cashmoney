@@ -555,6 +555,19 @@ class ImportAPITests(FinanceTestCase):
         self.assertEqual(payload[0]["skipped_count"], 1)
         self.assertNotEqual(payload[0]["id"], str(older.id))
 
+    def test_imports_api_lists_every_import_when_asked(self):
+        for index in range(30):
+            CSVImport.objects.create(
+                bank_account=self.account,
+                csv_mapping=self.mapping,
+                source_filename=f"file-{index}.csv",
+            )
+        default = json_body(self.client.get("/api/imports/"))
+        everything = json_body(self.client.get("/api/imports/", {"limit": "1000"}))
+
+        self.assertEqual(len(default), 8)
+        self.assertEqual(len(everything), 30)
+
     def test_deleting_an_import_removes_the_transactions_it_created(self):
         body = "ID,Date,Description,Amount\nimp-1,2026-01-02,Lunch,-120\n"
         old_import, _report = CSVImportService(self.mapping, self.account).import_file(

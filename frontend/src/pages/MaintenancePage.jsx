@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 import { apiDelete, apiFetch, apiGet, apiPost, readJson } from "../api.js";
-import { LoadingButton, Metric } from "../components.jsx";
+import { FilePicker, LoadingButton } from "../components.jsx";
+import { ChevronIcon, TrashIcon } from "../icons.jsx";
 import { MAX_BACKUP_FILE_BYTES, fileTooLargeMessage, formatBytes, formatCount, formatDateTime } from "../shared.js";
 
 function maintenanceDeleteMessage(title, payload) {
@@ -57,14 +58,15 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
     counts.sample_tags,
     counts.sample_keywords,
   ].reduce((total, value) => total + Number(value || 0), 0);
+  // [count, singular, plural]
   const snapshot = [
-    ["Transactions", counts.transactions],
-    ["Transfer Matches", counts.internal_transfer_matches],
-    ["Imports", counts.imports],
-    ["Definitions", definitionObjectCount],
-    ["Exchange Rates", counts.exchange_rates],
-    ["Saved Filters", counts.saved_filters],
-    ["Sample Data", sampleObjectCount],
+    [counts.transactions, "transaction", "transactions"],
+    [counts.imports, "import", "imports"],
+    [definitionObjectCount, "definition", "definitions"],
+    [counts.internal_transfer_matches, "transfer match", "transfer matches"],
+    [counts.exchange_rates, "exchange rate", "exchange rates"],
+    [counts.saved_filters, "saved filter", "saved filters"],
+    [sampleObjectCount, "sample record", "sample records"],
   ];
   const transactionObjectCount = Number(counts.transactions || 0) + Number(counts.internal_transfer_matches || 0) + Number(counts.imports || 0);
   const sampleDataAction = {
@@ -195,7 +197,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
       confirmLabel: "Restore",
       danger: true,
       message: `Restore ${backup.filename}?\n\nThis replaces the current local database. A pre-restore backup will be saved automatically.`,
-      title: "Restore Backup",
+      title: "Restore backup",
     });
     if (!confirmed) {
       return;
@@ -221,7 +223,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
       confirmLabel: "Delete",
       danger: true,
       message: `Delete ${backup.filename}?\n\nThis removes the saved backup file. The current database is not changed.`,
-      title: "Delete Backup",
+      title: "Delete backup",
     });
     if (!confirmed) {
       return;
@@ -255,7 +257,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
       confirmLabel: "Restore",
       danger: true,
       message: "Restore database backup?\n\nThis replaces the current local database. A pre-restore backup will be saved automatically.",
-      title: "Restore Database",
+      title: "Restore database",
     });
     if (!confirmed) {
       return;
@@ -297,148 +299,147 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
 
   return (
     <>
-      <section className="panel maintenance-snapshot">
-        <div className="panel-header">
-          <h2>Database Snapshot</h2>
-          <span className="muted">Current local database totals.</span>
-        </div>
-        <div className="maintenance-counts">
-          {snapshot.map(([label, value]) => (
-            <Metric key={label} label={label} value={formatCount(value)} />
+      <section aria-label="Database snapshot" className="maintenance-snapshot">
+        <ul>
+          {snapshot.map(([value, singular, plural]) => (
+            <li key={plural}><b>{formatCount(value)}</b> {Number(value) === 1 ? singular : plural}</li>
           ))}
-        </div>
+        </ul>
       </section>
 
       <MaintenanceSection
+        actions={(
+          <div className="maintenance-backups-actions">
+            <LoadingButton
+              busy={safeBusy === "save"}
+              busyLabel="Saving"
+              className="link-button"
+              disabled={backupBusy}
+              onClick={saveBackup}
+              type="button"
+            >
+              Save backup
+            </LoadingButton>
+            <LoadingButton
+              busy={safeBusy === "backup"}
+              busyLabel="Exporting"
+              className="primary-action"
+              disabled={backupBusy}
+              onClick={exportBackup}
+              type="button"
+            >
+              Export
+            </LoadingButton>
+          </div>
+        )}
+        className="maintenance-backups"
         defaultExpanded
         storageId="backups"
         subtitle="Export or restore the complete local SQLite database."
         title="Backups"
       >
-        <div className="maintenance-backup-list">
-          <article className="maintenance-backup-row is-current">
-            <div>
-              <h3>Current database</h3>
-              <p>The live local database state.</p>
-              <div className="backup-meta">Current</div>
-            </div>
-            <div className="backup-actions">
-              <LoadingButton
-                busy={safeBusy === "save"}
-                busyLabel="Saving"
-                className="link-button"
-                disabled={backupBusy}
-                onClick={saveBackup}
-                type="button"
-              >
-                Save backup
-              </LoadingButton>
-              <LoadingButton
-                busy={safeBusy === "backup"}
-                busyLabel="Exporting"
-                className="primary-action"
-                disabled={backupBusy}
-                onClick={exportBackup}
-                type="button"
-              >
-                Export
-              </LoadingButton>
-            </div>
-          </article>
-          {backupsLoading ? (
-            <div className="backup-empty-state">Loading backups...</div>
-          ) : backups.length ? (
-            backups.map((backup) => (
-              <article className="maintenance-backup-row" key={backup.filename}>
-                <div>
-                  <h3>{backup.filename}</h3>
-                  <p>{backup.label || "Backup"}</p>
-                  <div className="backup-meta">
-                    {formatDateTime(backup.modified_at, "Unknown date")} | {formatBytes(backup.size_bytes, "0 B")}
-                  </div>
-                </div>
-                <div className="backup-actions">
-                  <LoadingButton
-                    busy={backupAction === `restore:${backup.filename}`}
-                    busyLabel="Restoring"
-                    className="danger-button"
-                    disabled={backupBusy}
-                    onClick={() => restoreSavedBackup(backup)}
-                    type="button"
-                  >
-                    Restore
-                  </LoadingButton>
-                  <LoadingButton
-                    busy={backupAction === `export:${backup.filename}`}
-                    busyLabel="Exporting"
-                    className="link-button"
-                    disabled={backupBusy}
-                    onClick={() => exportSavedBackup(backup)}
-                    type="button"
-                  >
-                    Export
-                  </LoadingButton>
-                  <LoadingButton
-                    busy={backupAction === `delete:${backup.filename}`}
-                    busyLabel="Deleting"
-                    className="danger-button"
-                    disabled={backupBusy}
-                    onClick={() => deleteSavedBackup(backup)}
-                    type="button"
-                  >
-                    Delete
-                  </LoadingButton>
-                </div>
-              </article>
-            ))
-          ) : (
-            <div className="backup-empty-state">
-              No saved backups yet. Save backup keeps one here; safety backups appear after a database restore or a
-              "Delete all" action.
-            </div>
-          )}
-        </div>
+        {backupsLoading ? (
+          <p className="muted maintenance-backups-empty">Loading backups…</p>
+        ) : backups.length ? (
+          <div className="data-table-wrap">
+            <table className="data-table maintenance-backups-table">
+              <thead>
+                <tr>
+                  <th>Saved backup</th>
+                  <th>Kind</th>
+                  <th>Saved</th>
+                  <th className="is-number">Size</th>
+                  <th><span className="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {backups.map((backup) => (
+                  <tr key={backup.filename}>
+                    <td className="data-table-text" title={backup.filename}>{backup.filename}</td>
+                    <td>{backup.label || "Backup"}</td>
+                    <td className="data-table-time">{formatDateTime(backup.modified_at, "Unknown date")}</td>
+                    <td className="is-number">{formatBytes(backup.size_bytes, "0 B")}</td>
+                    <td className="data-table-actions">
+                      <LoadingButton
+                        aria-label={`Restore ${backup.filename}`}
+                        busy={backupAction === `restore:${backup.filename}`}
+                        busyLabel="Restoring"
+                        className="text-button"
+                        disabled={backupBusy}
+                        onClick={() => restoreSavedBackup(backup)}
+                        type="button"
+                      >
+                        Restore
+                      </LoadingButton>
+                      <LoadingButton
+                        aria-label={`Download ${backup.filename}`}
+                        busy={backupAction === `export:${backup.filename}`}
+                        busyLabel="Downloading"
+                        className="text-button"
+                        disabled={backupBusy}
+                        onClick={() => exportSavedBackup(backup)}
+                        type="button"
+                      >
+                        Download
+                      </LoadingButton>
+                      <LoadingButton
+                        aria-label={`Delete ${backup.filename}`}
+                        busy={backupAction === `delete:${backup.filename}`}
+                        busyLabel=""
+                        className="icon-action icon-action-danger"
+                        disabled={backupBusy}
+                        onClick={() => deleteSavedBackup(backup)}
+                        title={`Delete ${backup.filename}`}
+                        type="button"
+                      >
+                        <TrashIcon size={16} />
+                      </LoadingButton>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted maintenance-backups-empty">
+            No saved backups yet. Save backup keeps one here; safety backups appear after a database restore or a
+            "Delete all" action.
+          </p>
+        )}
         <p className="maintenance-backup-note">
           The app keeps the newest 10 safety backups of each kind and every one from the last 90 days, and deletes
           older ones when it saves a new one. Backups you save here (Manual) and exports you download are never
           deleted.
         </p>
-        <div className="maintenance-tool-grid">
-          <article className="maintenance-tool-card restore-card">
-            <div>
-              <h3>Restore database backup</h3>
-              <p>
-                Replace the current local database from a Cashmoney SQLite backup.
-                The app saves a pre-restore backup first.
-              </p>
-            </div>
-            <form className="restore-form" onSubmit={restoreDatabase}>
-              <label>
-                <span>Backup file</span>
-                <input
-                  accept=".sqlite3,.db,application/x-sqlite3"
-                  onChange={(event) => setRestoreFile(event.target.files?.[0] || null)}
-                  type="file"
-                />
-              </label>
-              <LoadingButton
-                busy={safeBusy === "restore"}
-                busyLabel="Restoring"
-                className="danger-button"
-                disabled={backupBusy || !restoreFile}
-                type="submit"
-              >
-                Restore Database
-              </LoadingButton>
-            </form>
-          </article>
-        </div>
+        <form className="maintenance-restore" onSubmit={restoreDatabase}>
+          <div className="maintenance-restore-text">
+            <strong>Restore from a file</strong>
+            <span>Replace the current database with a Cashmoney SQLite backup. The app saves a pre-restore backup first.</span>
+          </div>
+          <FilePicker
+            accept=".sqlite3,.db,application/x-sqlite3"
+            buttonLabel={restoreFile ? "Change" : "Choose…"}
+            disabled={backupBusy}
+            file={restoreFile}
+            label="Backup file to restore"
+            onChange={setRestoreFile}
+          />
+          <LoadingButton
+            busy={safeBusy === "restore"}
+            busyLabel="Restoring"
+            className="danger-button"
+            disabled={backupBusy || !restoreFile}
+            type="submit"
+          >
+            Restore database
+          </LoadingButton>
+        </form>
       </MaintenanceSection>
 
       <MaintenanceSection
         storageId="sample-data"
         subtitle="Recreate or remove the demo records used for first-run exploration."
-        title="Sample Data"
+        title="Sample data"
       >
         <div className="maintenance-tool-grid">
           <article className="maintenance-tool-card">
@@ -454,7 +455,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
               onClick={recreateSampleData}
               type="button"
             >
-              Recreate Samples
+              Recreate samples
             </LoadingButton>
           </article>
           <article className="maintenance-tool-card danger-tool-card">
@@ -471,7 +472,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
               onClick={() => deleteMaintenanceData(sampleDataAction)}
               type="button"
             >
-              Delete Samples
+              Delete samples
             </LoadingButton>
           </article>
         </div>
@@ -481,7 +482,7 @@ export default function MaintenancePage({ confirmAction, notify, reloadAll, relo
         danger
         storageId="danger-zone"
         subtitle="Permanent cleanup."
-        title="Danger Zone"
+        title="Danger zone"
       >
         <div className="maintenance-tool-grid">
           {dangerActions.map((action) => (
@@ -574,13 +575,16 @@ function readStoredMaintenancePanelState(storageId, defaultExpanded) {
   }
 }
 
-function MaintenanceSection({ children, danger = false, defaultExpanded = false, storageId, subtitle, title }) {
+// A foldable section: the whole header row is the toggle, apart from any actions beside it
+// (they stay in reach while it's folded). Whether it is open is stored.
+function MaintenanceSection({ actions = null, children, className = "", danger = false, defaultExpanded = false, storageId, subtitle, title }) {
   const [expanded, setExpanded] = useState(() => readStoredMaintenancePanelState(storageId, defaultExpanded));
-  const panelClassName = [
+  const bodyId = `maintenance-section-${storageId}`;
+  const sectionClassName = [
     "panel",
-    "definition-panel",
     "maintenance-section",
-    danger ? "danger-maintenance-section" : "",
+    className,
+    danger ? "is-danger" : "",
     expanded ? "is-expanded" : "is-collapsed",
   ].filter(Boolean).join(" ");
 
@@ -596,25 +600,26 @@ function MaintenanceSection({ children, danger = false, defaultExpanded = false,
     });
   }
 
+  const heading = (
+    <h2 className="maintenance-section-heading">
+      <button
+        aria-controls={bodyId}
+        aria-expanded={expanded}
+        className="maintenance-section-toggle"
+        onClick={toggleExpanded}
+        type="button"
+      >
+        <ChevronIcon open={expanded} />
+        <span className="maintenance-section-title">{title}</span>
+        {subtitle ? <span className="maintenance-section-subtitle">{subtitle}</span> : null}
+      </button>
+    </h2>
+  );
+
   return (
-    <section className={panelClassName}>
-      <div className="definition-panel-header">
-        <button
-          aria-expanded={expanded}
-          className="definition-panel-toggle"
-          onClick={toggleExpanded}
-          type="button"
-        >
-          <span className="definition-panel-heading">
-            <span className="definition-panel-title-line">
-              <span className="definition-panel-title">{title}</span>
-            </span>
-            {subtitle ? <span className="definition-panel-subtitle">{subtitle}</span> : null}
-          </span>
-          <span aria-hidden="true" className="definition-panel-state">{expanded ? "Hide" : "Show"}</span>
-        </button>
-      </div>
-      <div className="definition-panel-body">
+    <section className={sectionClassName}>
+      {actions ? <div className="maintenance-section-header">{heading}{actions}</div> : heading}
+      <div className="maintenance-section-body" hidden={!expanded} id={bodyId}>
         {children}
       </div>
     </section>

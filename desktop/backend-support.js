@@ -35,4 +35,13 @@ function rotateIfLarge(filePath, maxBytes = LOG_MAX_BYTES) {
   }
 }
 
-module.exports = { LOG_MAX_BYTES, healthProof, newSecret, provesInstance, rotateIfLarge };
+// The files the app runs and shows on each platform. Electron on Linux can't use an
+// .ico as the window icon, so Linux gets a PNG.
+function platformFiles(platform = process.platform) {
+  if (platform === "win32") {
+    return { backendExecutable: "cashmoney-backend.exe", venvPython: ["Scripts", "python.exe"], icon: "favicon.ico" };
+  }
+  return { backendExecutable: "cashmoney-backend", venvPython: ["bin", "python"], icon: "cashmoney.png" };
+}
+
+module.exports = { LOG_MAX_BYTES, healthProof, newSecret, platformFiles, provesInstance, rotateIfLarge };

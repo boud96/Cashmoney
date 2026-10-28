@@ -4,7 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { test } = require("node:test");
 
-const { healthProof, newSecret, provesInstance, rotateIfLarge } = require("./backend-support.js");
+const { healthProof, newSecret, platformFiles, provesInstance, rotateIfLarge } = require("./backend-support.js");
 
 test("only a backend that knows the launch token proves it", () => {
   const token = newSecret();
@@ -34,6 +34,23 @@ test("a log past the limit starts fresh and keeps one old copy", () => {
   assert.equal(fs.existsSync(log), false);
   assert.equal(fs.readFileSync(`${log}.1`, "utf8").length, 2000);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("Windows runs cashmoney-backend.exe, Scripts\\python.exe and the .ico", () => {
+  assert.deepEqual(platformFiles("win32"), {
+    backendExecutable: "cashmoney-backend.exe",
+    venvPython: ["Scripts", "python.exe"],
+    icon: "favicon.ico",
+  });
+});
+
+test("Linux runs cashmoney-backend, bin/python and the PNG icon", () => {
+  // Electron on Linux can't use an .ico as the window icon.
+  assert.deepEqual(platformFiles("linux"), {
+    backendExecutable: "cashmoney-backend",
+    venvPython: ["bin", "python"],
+    icon: "cashmoney.png",
+  });
 });
 
 test("a small or missing log is left alone", () => {

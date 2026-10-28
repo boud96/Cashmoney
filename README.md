@@ -1,8 +1,8 @@
 # Cashmoney
 
-Cashmoney is a local-first personal finance app for Windows. You import your bank
-statements, rules sort the transactions into categories, and a dashboard shows where
-the money went.
+Cashmoney is a local-first personal finance app for Windows and Linux. You import your
+bank statements, rules sort the transactions into categories, and a dashboard shows
+where the money went.
 
 Everything runs on your own computer: a Django + SQLite backend and a React frontend
 in an Electron window. There are no accounts and no cloud services. The only outside
@@ -29,12 +29,30 @@ used when transactions are in a currency other than your default one.
 
 Latest version: [release notes](https://github.com/boud96/Cashmoney/releases/latest)
 
+**Windows**
+
 - [Installer](https://github.com/boud96/Cashmoney/releases/latest/download/Cashmoney-Setup.exe)
 - [Portable app](https://github.com/boud96/Cashmoney/releases/latest/download/Cashmoney-Portable.exe)
-- [Checksums](https://github.com/boud96/Cashmoney/releases/latest/download/checksums.txt) (SHA-256)
 
 The app keeps its database and logs in Electron's user data folder under `%APPDATA%`,
-not in the installation folder. A new install starts with a small set of sample data,
+not in the installation folder.
+
+**Linux** (64-bit: Ubuntu 24.04, Debian 13, Fedora 40, Linux Mint 22 or newer)
+
+- [.deb package](https://github.com/boud96/Cashmoney/releases/latest/download/Cashmoney-amd64.deb)
+  for Ubuntu, Debian, Mint and similar: `sudo apt install ./Cashmoney-amd64.deb`, then
+  start Cashmoney from the app menu or run `cashmoney`.
+- [AppImage](https://github.com/boud96/Cashmoney/releases/latest/download/Cashmoney-x86_64.AppImage)
+  for other distributions: `chmod +x Cashmoney-x86_64.AppImage`, then run it. It needs
+  FUSE 3, which desktops include. On Ubuntu 24.04 and newer it has to run without
+  Chromium's sandbox, so the .deb is the better choice there.
+
+The app keeps its database and logs in `~/.config/cashmoney-desktop`, readable only by
+you. Removing the app leaves them in place.
+
+[Checksums](https://github.com/boud96/Cashmoney/releases/latest/download/checksums.txt)
+(SHA-256) cover every file; on Linux, `sha256sum -c checksums.txt --ignore-missing`
+checks the files you downloaded. A new install starts with a small set of sample data,
 which Maintenance can remove.
 
 ## Development
@@ -96,6 +114,32 @@ py -m venv ..\.venv
 The database is `backend\db.sqlite3` unless `CASHMONEY_DATA_DIR` points somewhere
 else.
 
+### On Linux
+
+The `.sh` scripts mirror the `.bat` ones. They need Python 3.12 with venv (on
+Debian/Ubuntu: `sudo apt install python3-venv`) and Node.js 24.
+
+```bash
+./setup_dev.sh                    # .venv, backend requirements, npm packages
+./run_app.sh                      # migrate, build the frontend, runserver :8000, open Electron
+./build_frontend.sh --skip-setup
+
+cd backend
+../.venv/bin/python manage.py test finance
+```
+
+`run_app.sh` leaves the dev server running after the app closes. Its log is
+`backend/runserver.log`, Electron's is `desktop/electron.log`, and
+`pkill -f 'manage.py runserver 127.0.0.1:8000'` stops it. Where Electron's sandbox can't
+start from `node_modules` (stock Ubuntu 24.04 and newer block the user namespaces it
+needs), `run_app.sh` opens the app in the browser instead. On a minimal system (WSL, a
+container), Electron also needs its desktop libraries; on Ubuntu 24.04:
+`sudo apt install libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 libxtst6 libnotify4 libsecret-1-0`.
+
+In WSL, clone the repository inside the Linux file system (not under `/mnt/c`) and
+install Node.js inside Linux: a Windows checkout's `.venv` and `node_modules` don't work
+there, and `setup_dev.sh` refuses a Windows `.venv` or npm.
+
 ## Django admin
 
 For fixes the app doesn't offer yet, Maintenance → Advanced → Open database admin
@@ -120,15 +164,32 @@ It runs the setup, builds the frontend, builds
 - `Cashmoney <version>.exe`: portable app
 - `win-unpacked\Cashmoney.exe`: unpacked app, for quick local testing
 
-The packaged backend runs on `127.0.0.1:8765` with waitress, `DEBUG` off, and a
-secret key generated per install.
+The Linux app builds on Linux (or WSL), since PyInstaller doesn't cross-compile:
+
+```bash
+./build_packaged_app.sh
+```
+
+It builds `backend/dist/cashmoney-backend/cashmoney-backend` and packages Electron into
+`desktop/dist/`:
+
+- `cashmoney_<version>_amd64.deb`: Debian/Ubuntu package
+- `Cashmoney-<version>.AppImage`: portable app
+- `linux-unpacked/cashmoney`: unpacked app, for quick local testing
+
+Both build scripts stop if a database file got into the backend bundle (PyInstaller
+would otherwise pick up a development database next to `manage.py`). The packaged
+backend runs on `127.0.0.1:8765` with waitress, `DEBUG` off, and a secret key generated
+per install.
 
 ## Releases
 
-GitHub Actions builds every pull request into `main` (and manual runs). Pushing a
-`vX.Y.Z` tag builds again and publishes `Cashmoney-Setup.exe`,
-`Cashmoney-Portable.exe` and `checksums.txt` to a GitHub release; the download links
-above depend on those names. The product version comes from `desktop/package.json`.
+GitHub Actions builds the Windows and Linux apps for every pull request into `main`
+(and manual runs); the Linux job also installs and starts both Linux packages. Pushing
+a `vX.Y.Z` tag builds again and publishes `Cashmoney-Setup.exe`,
+`Cashmoney-Portable.exe`, `Cashmoney-amd64.deb`, `Cashmoney-x86_64.AppImage` and
+`checksums.txt` to a GitHub release; the download links above depend on those names.
+The product version comes from `desktop/package.json`.
 
 An optional repository variable, `VITE_CASHMONEY_DONATION_URL`, adds a donation link
 (a public payment link) to Help → About. Without it, the panel is hidden.

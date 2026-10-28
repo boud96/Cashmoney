@@ -19,6 +19,18 @@ if errorlevel 1 (
   popd
   exit /b 1
 )
+rem PyInstaller's Django hook would bundle a database next to manage.py (CR-60).
+"..\.venv\Scripts\python.exe" check_bundle.py dist\cashmoney-backend
+if errorlevel 2 (
+  echo Could not check the backend bundle ^(see above^).
+  popd
+  exit /b 1
+)
+if errorlevel 1 (
+  echo The backend bundle contains a database file ^(listed above^).
+  popd
+  exit /b 1
+)
 popd
 
 pushd desktop

@@ -1,10 +1,13 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
+import { CloseIcon, FileIcon } from "./icons.jsx";
 import {
   addDays,
   addMonths,
   calendarWeeks,
+  formatBytes,
   formatDateInput,
+  normalizeHexColor,
   parseDateInput,
   tagToggleStyle,
   todayInputValue,
@@ -48,8 +51,19 @@ export function Spinner() {
   return <span aria-hidden="true" className="loading-spinner" />;
 }
 
-export function Metric({ label, tone = "", value }) {
-  return <div className="metric"><div className="metric-label">{label}</div><div className={`metric-value ${tone}`}>{value}</div></div>;
+// A category, subcategory or WNI value (also a keyword's subcategory in Definitions): its
+// colour as a dot before the name; muted, without a dot, for "Unassigned".
+export function DotLabel({ color, label, muted = false }) {
+  if (muted) {
+    return <span className="dot-cell is-muted"><span className="dot-cell-label">{label}</span></span>;
+  }
+  const dotColor = normalizeHexColor(color);
+  return (
+    <span className="dot-cell">
+      <span aria-hidden="true" className="cell-dot" style={dotColor ? { background: dotColor } : undefined} />
+      <span className="dot-cell-label">{label}</span>
+    </span>
+  );
 }
 
 export function HelpTooltip({ text }) {
@@ -98,9 +112,235 @@ export function TagToggleList({ disabled = false, emptyText = "No tags", label, 
 
 export function CloseButton({ className = "", label = "Close", ...props }) {
   return (
-    <button {...props} aria-label={label} className={`icon-button ${className}`.trim()} type="button">
-      x
+    <button {...props} aria-label={label} className={`icon-button ${className}`.trim()} title={label} type="button">
+      <CloseIcon />
     </button>
+  );
+}
+
+// Tabs that switch a view in place. Arrow keys, Home and End move between them and
+// select as they go; only the selected tab is in the Tab order. Pair each panel with
+// tabPanelProps(idPrefix, id).
+export function Tabs({ className = "", idPrefix, label, onChange, tabs, value }) {
+  const tabRefs = useRef(new Map());
+
+  function select(index) {
+    const tab = tabs[(index + tabs.length) % tabs.length];
+    onChange(tab.id);
+    tabRefs.current.get(tab.id)?.focus();
+  }
+
+  function moveOnKey(event, index) {
+    const targets = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: tabs.length - 1 };
+    if (event.key in targets) {
+      event.preventDefault();
+      select(targets[event.key]);
+    }
+  }
+
+  return (
+    <div aria-label={label} className={`tabs ${className}`.trim()} role="tablist">
+      {tabs.map((tab, index) => {
+        const selected = tab.id === value;
+        return (
+          <button
+            aria-controls={selected ? `${idPrefix}-panel-${tab.id}` : undefined}
+            aria-selected={selected}
+            className={`tab ${selected ? "is-active" : ""}`.trim()}
+            id={`${idPrefix}-tab-${tab.id}`}
+            key={tab.id}
+            onClick={() => onChange(tab.id)}
+            onKeyDown={(event) => moveOnKey(event, index)}
+            ref={(element) => {
+              if (element) {
+                tabRefs.current.set(tab.id, element);
+              } else {
+                tabRefs.current.delete(tab.id);
+              }
+            }}
+            role="tab"
+            tabIndex={selected ? 0 : -1}
+            type="button"
+          >
+            <span>{tab.label}</span>
+            {tab.badge !== undefined && tab.badge !== null && tab.badge !== "" ? <span className="tab-badge">{tab.badge}</span> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function tabPanelProps(idPrefix, id) {
+  return { "aria-labelledby": `${idPrefix}-tab-${id}`, id: `${idPrefix}-panel-${id}`, role: "tabpanel" };
+}
+
+// A button that opens a small panel under it (a filter list, a menu). A click or focus
+// outside closes it; Escape closes it and returns focus to the button. children can be
+// a function that receives close(). The panel flips to the button's right edge when it
+// would leave the window.
+export function PopoverButton({ active = false, buttonProps = {}, children, className = "", content, label, popoverClassName = "" }) {
+  const [open, setOpen] = useState(false);
+  const [alignEnd, setAlignEnd] = useState(false);
+  const anchorRef = useRef(null);
+  const buttonRef = useRef(null);
+  const popoverRef = useRef(null);
+  const popoverId = useId();
+
+  const close = useCallback((returnFocus = true) => {
+    setOpen(false);
+    if (returnFocus) {
+      buttonRef.current?.focus();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    function closeIfOutside(event) {
+      if (!anchorRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+    // Escape closes it from anywhere: focus can drop to the page while the panel is
+    // open (a button inside it gets disabled while it saves).
+    function closeOnEscape(event) {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        close(true);
+      }
+    }
+    document.addEventListener("pointerdown", closeIfOutside);
+    document.addEventListener("focusin", closeIfOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeIfOutside);
+      document.removeEventListener("focusin", closeIfOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [close, open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setAlignEnd(false);
+      return;
+    }
+    const rect = popoverRef.current?.getBoundingClientRect();
+    if (rect && rect.right > document.documentElement.clientWidth - 8) {
+      setAlignEnd(true);
+    }
+  }, [open]);
+
+  return (
+    <div className="popover-anchor" ref={anchorRef}>
+      <button
+        {...buttonProps}
+        aria-controls={open ? popoverId : undefined}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        className={["popover-button", className, active ? "is-active" : "", open ? "is-open" : ""].filter(Boolean).join(" ")}
+        onClick={() => setOpen((current) => !current)}
+        ref={buttonRef}
+        type="button"
+      >
+        {content}
+      </button>
+      {open ? (
+        <div
+          aria-label={label}
+          className={["popover", popoverClassName, alignEnd ? "is-align-end" : ""].filter(Boolean).join(" ")}
+          id={popoverId}
+          ref={popoverRef}
+          role="dialog"
+        >
+          {typeof children === "function" ? children(close) : children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Keeps an element as tall as the window below it (at least min), so a table fills the
+// screen instead of scrolling inside a fixed box. Follows window resizes and layout
+// changes above it (the filter bar wrapping, a warning appearing).
+export function useFillHeight(ref, { bottomGap = 24, min = 360 } = {}) {
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return undefined;
+    }
+    let frame = 0;
+    function update() {
+      // Hidden (the dashboard's table while the Overview shows): measure once it's shown.
+      if (!element.getClientRects().length) {
+        return;
+      }
+      const top = element.getBoundingClientRect().top + window.scrollY;
+      const height = `${Math.max(min, Math.floor(window.innerHeight - top - bottomGap))}px`;
+      if (element.style.height !== height) {
+        element.style.height = height;
+      }
+    }
+    function schedule() {
+      window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(update);
+    }
+    update();
+    window.addEventListener("resize", schedule);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    observer?.observe(element.closest(".main") || document.body);
+    // Fires when the element is shown again after being hidden.
+    observer?.observe(element);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", schedule);
+      observer?.disconnect();
+    };
+  }, [bottomGap, min, ref]);
+}
+
+// A file input in the app's style: the chosen file's name and size and a button; a file
+// can also be dropped on it. The native input stays in the Tab order (visually hidden),
+// so the keyboard still works.
+export function FilePicker({ accept, buttonLabel = "Choose…", disabled = false, emptyLabel = "No file chosen", file, inputRef, label, onChange }) {
+  const [dragging, setDragging] = useState(false);
+
+  function dragOver(event) {
+    event.preventDefault();
+    setDragging(!disabled);
+  }
+
+  function drop(event) {
+    event.preventDefault();
+    setDragging(false);
+    if (!disabled && event.dataTransfer.files?.length) {
+      onChange(event.dataTransfer.files[0]);
+    }
+  }
+
+  return (
+    <label
+      className={["file-picker", dragging && "is-dragging", disabled && "is-disabled"].filter(Boolean).join(" ")}
+      onDragEnter={dragOver}
+      onDragLeave={(event) => !event.currentTarget.contains(event.relatedTarget) && setDragging(false)}
+      onDragOver={dragOver}
+      onDrop={drop}
+    >
+      <input
+        accept={accept}
+        aria-label={label}
+        className="visually-hidden"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.files?.[0] || null)}
+        ref={inputRef}
+        type="file"
+      />
+      <FileIcon />
+      <span className={`file-picker-name ${file ? "" : "is-empty"}`.trim()}>{file ? file.name : emptyLabel}</span>
+      {file ? <span className="file-picker-size">{formatBytes(file.size)}</span> : null}
+      <span className="file-picker-button">{buttonLabel}</span>
+    </label>
   );
 }
 
@@ -270,7 +510,7 @@ export function ConfirmDialog({
   message,
   onCancel,
   onConfirm,
-  title = "Confirm Action",
+  title = "Confirm action",
 }) {
   const cancelButtonRef = useRef(null);
   const dialogRef = useRef(null);

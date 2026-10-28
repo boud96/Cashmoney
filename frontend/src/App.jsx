@@ -2,6 +2,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 
 import { apiDelete, apiGet, apiPatch, BACKEND_REACHABILITY_EVENT } from "./api.js";
 import { ConfirmDialog, ModalShell, Spinner } from "./components.jsx";
+import { CloseIcon, EyeIcon, EyeOffIcon, MoonIcon, SunIcon } from "./icons.jsx";
 import DashboardPage from "./pages/DashboardPage.jsx";
 import SidebarAsciiPlay from "./SidebarAsciiPlay.jsx";
 import {
@@ -9,6 +10,7 @@ import {
   applyAccent,
   applyTheme,
   buildFilterParams,
+  DASHBOARD_TAB_STORAGE_KEY,
   defaultAccentForTheme,
   defaultCategorizationFields,
   emptyFilters,
@@ -20,6 +22,8 @@ import {
   isChunkLoadError,
   normalizeHexColor,
   pages,
+  readStoredChoice,
+  storeChoice,
   syncChecklistFilters,
   toastDuration,
   todayInputValue,
@@ -33,12 +37,16 @@ const DASHBOARD_TRANSACTION_LOAD_DELAY_MS = 180;
 
 export default function App() {
   const [activePage, setActivePage] = useState("dashboard");
+  const [dashboardTab, setDashboardTab] = useState(
+    () => readStoredChoice(DASHBOARD_TAB_STORAGE_KEY, ["overview", "transactions"], "overview"),
+  );
   const [theme, setTheme] = useState(getStoredTheme);
   const [accent, setAccent] = useState(getStoredAccent);
   const [hideAmounts, setHideAmounts] = useState(getStoredHideAmounts);
   const [isAccentPickerOpen, setIsAccentPickerOpen] = useState(false);
   const [status, setStatus] = useState("Checking backend");
   const [toast, setToast] = useState("");
+  const [toastAction, setToastAction] = useState(null);
   const [refs, setRefs] = useState({
     accounts: [],
     mappings: [],
@@ -68,26 +76,35 @@ export default function App() {
   const confirmationResolver = useRef(null);
   const dashboardLoadSequence = useRef(0);
   const dashboardSummarySequence = useRef(0);
-  // The filter params of the last dashboard load, and whether another page changed
-  // data since (CR-27: no background reloads while the dashboard is hidden).
-  const loadedDashboardKey = useRef("");
-  const dashboardStale = useRef(false);
+  // The filter params of the last summary and transaction list loads, and whether data
+  // changed since (CR-27: no background reloads while the dashboard is hidden). The list
+  // loads only on the Transactions tab, so the two can be out of step.
+  const loadedSummaryKey = useRef("");
+  const summaryStale = useRef(false);
+  const loadedTransactionsKey = useRef("");
+  const transactionsStale = useRef(false);
 
   const toastTimer = useRef(null);
   const hideToastIn = useCallback((milliseconds) => {
     window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(""), milliseconds);
+    toastTimer.current = window.setTimeout(() => {
+      setToast("");
+      setToastAction(null);
+    }, milliseconds);
   }, []);
-  const notify = useCallback((message) => {
+  // action: an optional { label, onClick } button in the message, such as Undo.
+  const notify = useCallback((message, { action = null } = {}) => {
     setToast(message);
-    hideToastIn(toastDuration(message));
+    setToastAction(action);
+    hideToastIn(toastDuration(message, { withAction: Boolean(action) }));
   }, [hideToastIn]);
-  // Reading a toast (pointer over it, or keyboard focus on its close button) keeps it.
+  // Reading a toast (pointer over it, or keyboard focus on one of its buttons) keeps it.
   const holdToast = useCallback(() => window.clearTimeout(toastTimer.current), []);
   const releaseToast = useCallback(() => hideToastIn(1500), [hideToastIn]);
   const dismissToast = useCallback(() => {
     window.clearTimeout(toastTimer.current);
     setToast("");
+    setToastAction(null);
   }, []);
 
   // api.js reports when the backend stops (or starts) answering at all.
@@ -108,7 +125,7 @@ export default function App() {
         confirmLabel: options.confirmLabel || "Confirm",
         danger: Boolean(options.danger),
         message: options.message || "",
-        title: options.title || "Confirm Action",
+        title: options.title || "Confirm action",
       });
     });
   }, []);
@@ -177,51 +194,50 @@ export default function App() {
   const dashboardVisible = activePage === "dashboard";
   const dashboardBusy = loadingDashboardSummary || loadingDashboardTransactions;
 
-  const runDashboardLoad = useCallback(async (params, loadSequence, summarySequence) => {
+  const runSummaryLoad = useCallback(async (params, summarySequence) => {
+    if (summarySequence !== dashboardSummarySequence.current) {
+      return;
+    }
+    setLoadingDashboardSummary(true);
+    try {
+      const nextSummary = await apiGet("/dashboard/summary/", params);
+      if (summarySequence === dashboardSummarySequence.current) {
+        setSummary(nextSummary);
+      }
+    } catch (error) {
+      if (summarySequence === dashboardSummarySequence.current) {
+        notify(error.message);
+      }
+    } finally {
+      if (summarySequence === dashboardSummarySequence.current) {
+        setLoadingDashboardSummary(false);
+      }
+    }
+  }, [notify]);
+
+  const runTransactionsLoad = useCallback(async (params, loadSequence) => {
     if (loadSequence !== dashboardLoadSequence.current) {
       return;
     }
-    const summaryPromise = (async () => {
-      setLoadingDashboardSummary(true);
-      try {
-        const nextSummary = await apiGet("/dashboard/summary/", params);
-        if (summarySequence === dashboardSummarySequence.current) {
-          setSummary(nextSummary);
-        }
-      } catch (error) {
-        if (summarySequence === dashboardSummarySequence.current) {
-          notify(error.message);
-        }
-      } finally {
-        if (summarySequence === dashboardSummarySequence.current) {
-          setLoadingDashboardSummary(false);
-        }
+    setLoadingDashboardTransactions(true);
+    try {
+      await new Promise((resolve) => window.setTimeout(resolve, DASHBOARD_TRANSACTION_LOAD_DELAY_MS));
+      if (loadSequence !== dashboardLoadSequence.current) {
+        return;
       }
-    })();
-
-    const transactionsPromise = (async () => {
-      setLoadingDashboardTransactions(true);
-      try {
-        await new Promise((resolve) => window.setTimeout(resolve, DASHBOARD_TRANSACTION_LOAD_DELAY_MS));
-        if (loadSequence !== dashboardLoadSequence.current) {
-          return;
-        }
-        const nextTransactions = await apiGet("/transactions/", { ...params, limit: 10000 });
-        if (loadSequence === dashboardLoadSequence.current) {
-          setTransactionPage(nextTransactions);
-        }
-      } catch (error) {
-        if (loadSequence === dashboardLoadSequence.current) {
-          notify(error.message);
-        }
-      } finally {
-        if (loadSequence === dashboardLoadSequence.current) {
-          setLoadingDashboardTransactions(false);
-        }
+      const nextTransactions = await apiGet("/transactions/", { ...params, limit: 10000 });
+      if (loadSequence === dashboardLoadSequence.current) {
+        setTransactionPage(nextTransactions);
       }
-    })();
-
-    await Promise.allSettled([summaryPromise, transactionsPromise]);
+    } catch (error) {
+      if (loadSequence === dashboardLoadSequence.current) {
+        notify(error.message);
+      }
+    } finally {
+      if (loadSequence === dashboardLoadSequence.current) {
+        setLoadingDashboardTransactions(false);
+      }
+    }
   }, [notify]);
 
   const loadDashboardSummary = useCallback(async () => {
@@ -244,18 +260,31 @@ export default function App() {
     }
   }, [filterParams, notify]);
 
+  // Data changed (an action or another page): reload what's shown, mark the rest stale.
   const loadDashboard = useCallback(async (params = filterParams) => {
     if (!dashboardVisible) {
       // Another page changed data; load when the dashboard is shown again.
-      dashboardStale.current = true;
+      summaryStale.current = true;
+      transactionsStale.current = true;
       return;
     }
-    const loadSequence = dashboardLoadSequence.current + 1;
     const summarySequence = dashboardSummarySequence.current + 1;
-    dashboardLoadSequence.current = loadSequence;
     dashboardSummarySequence.current = summarySequence;
-    await runDashboardLoad(params, loadSequence, summarySequence);
-  }, [dashboardVisible, filterParams, runDashboardLoad]);
+    const loads = [runSummaryLoad(params, summarySequence)];
+    if (dashboardTab === "transactions") {
+      const loadSequence = dashboardLoadSequence.current + 1;
+      dashboardLoadSequence.current = loadSequence;
+      loads.push(runTransactionsLoad(params, loadSequence));
+    } else {
+      transactionsStale.current = true;
+    }
+    await Promise.allSettled(loads);
+  }, [dashboardTab, dashboardVisible, filterParams, runSummaryLoad, runTransactionsLoad]);
+
+  const changeDashboardTab = useCallback((tab) => {
+    setDashboardTab(tab);
+    storeChoice(DASHBOARD_TAB_STORAGE_KEY, tab);
+  }, []);
 
   const loadMaintenance = useCallback(async () => {
     try {
@@ -277,26 +306,63 @@ export default function App() {
     applyAccent(accent);
   }, [accent]);
 
+  // The summary loads when the filters changed since its last load, or when another page
+  // asked for fresh data while the dashboard was hidden; not on every page switch.
   useEffect(() => {
     if (!(filterDefaults.to || filterDefaults.from) || !dashboardVisible) {
       return undefined;
     }
-    // Load when the filters changed since the last load, or when another page asked
-    // for fresh data while the dashboard was hidden; not on every page switch.
-    if (!dashboardStale.current && loadedDashboardKey.current === filterParamsKey) {
+    if (!summaryStale.current && loadedSummaryKey.current === filterParamsKey) {
+      return undefined;
+    }
+    const summarySequence = dashboardSummarySequence.current + 1;
+    dashboardSummarySequence.current = summarySequence;
+    // Busy from the moment a load is due. A load cancelled before it starts clears the flag:
+    // the new sequence has nothing running, and an older request can't clear it any more.
+    setLoadingDashboardSummary(true);
+    let started = false;
+    const timeoutId = window.setTimeout(() => {
+      started = true;
+      summaryStale.current = false;
+      loadedSummaryKey.current = filterParamsKey;
+      runSummaryLoad(filterParams, summarySequence);
+    }, 250);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (!started) {
+        setLoadingDashboardSummary(false);
+      }
+    };
+  }, [dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runSummaryLoad]);
+
+  // The transaction list loads the same way, but only while the Transactions tab is
+  // shown: the Overview needs just the summary, and the list is the heavy request.
+  useEffect(() => {
+    if (!(filterDefaults.to || filterDefaults.from) || !dashboardVisible || dashboardTab !== "transactions") {
+      return undefined;
+    }
+    if (!transactionsStale.current && loadedTransactionsKey.current === filterParamsKey) {
       return undefined;
     }
     const loadSequence = dashboardLoadSequence.current + 1;
-    const summarySequence = dashboardSummarySequence.current + 1;
     dashboardLoadSequence.current = loadSequence;
-    dashboardSummarySequence.current = summarySequence;
+    // As for the summary: busy once due; a load cancelled before it starts (a newer change,
+    // or the Overview tab opened meanwhile) clears the flag.
+    setLoadingDashboardTransactions(true);
+    let started = false;
     const timeoutId = window.setTimeout(() => {
-      dashboardStale.current = false;
-      loadedDashboardKey.current = filterParamsKey;
-      runDashboardLoad(filterParams, loadSequence, summarySequence);
+      started = true;
+      transactionsStale.current = false;
+      loadedTransactionsKey.current = filterParamsKey;
+      runTransactionsLoad(filterParams, loadSequence);
     }, 250);
-    return () => window.clearTimeout(timeoutId);
-  }, [dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runDashboardLoad]);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (!started) {
+        setLoadingDashboardTransactions(false);
+      }
+    };
+  }, [dashboardTab, dashboardVisible, filterDefaults.from, filterDefaults.to, filterParams, filterParamsKey, runTransactionsLoad]);
 
   useEffect(() => {
     if (activePage === "maintenance") {
@@ -352,14 +418,14 @@ export default function App() {
     loadDashboardSummary();
   }, [loadDashboardSummary]);
 
-  const [title, kicker] = pages[activePage];
+  const title = pages[activePage];
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <SidebarAsciiPlay />
         <nav className="nav-tabs" aria-label="Primary">
-          {Object.entries(pages).map(([key, [label]]) => (
+          {Object.entries(pages).map(([key, label]) => (
             <button
               className={`nav-tab ${activePage === key ? "is-active" : ""}`}
               key={key}
@@ -405,10 +471,7 @@ export default function App() {
 
       <main className="main">
         <header className="topbar">
-          <div>
-            <h1>{title}</h1>
-            <p>{kicker}</p>
-          </div>
+          <h1>{title}</h1>
         </header>
         {status === "Backend offline" ? (
           <div className="backend-offline-banner" role="alert">
@@ -420,7 +483,9 @@ export default function App() {
         <PageErrorBoundary key={activePage}>
           {activePage === "dashboard" && (
             <DashboardPage
+              dashboardTab={dashboardTab}
               filterDefaults={filterDefaults}
+              onDashboardTabChange={changeDashboardTab}
               filters={filters}
               hideAmounts={hideAmounts}
               importBusy={dashboardBusy}
@@ -503,7 +568,19 @@ export default function App() {
         {toast ? (
           <>
             <span className="toast-message">{toast}</span>
-            <button aria-label="Dismiss message" className="toast-close" onClick={dismissToast} type="button">×</button>
+            {toastAction ? (
+              <button
+                className="toast-action"
+                onClick={() => {
+                  dismissToast();
+                  toastAction.onClick();
+                }}
+                type="button"
+              >
+                {toastAction.label}
+              </button>
+            ) : null}
+            <button aria-label="Dismiss message" className="toast-close" onClick={dismissToast} type="button"><CloseIcon size={16} /></button>
           </>
         ) : null}
       </div>
@@ -610,58 +687,6 @@ class PageErrorBoundary extends Component {
 
     return this.props.children;
   }
-}
-
-function IconSvg({ children }) {
-  return (
-    <svg aria-hidden="true" className="icon-svg" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18">
-      {children}
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <IconSvg>
-      <path d="M12 3a6.8 6.8 0 0 0 9 8.9A9 9 0 1 1 12 3Z" />
-    </IconSvg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <IconSvg>
-      <circle cx="12" cy="12" r="4" />
-      <path d="M12 2v2" />
-      <path d="M12 20v2" />
-      <path d="m4.93 4.93 1.41 1.41" />
-      <path d="m17.66 17.66 1.41 1.41" />
-      <path d="M2 12h2" />
-      <path d="M20 12h2" />
-      <path d="m6.34 17.66-1.41 1.41" />
-      <path d="m19.07 4.93-1.41 1.41" />
-    </IconSvg>
-  );
-}
-
-function EyeIcon() {
-  return (
-    <IconSvg>
-      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-    </IconSvg>
-  );
-}
-
-function EyeOffIcon() {
-  return (
-    <IconSvg>
-      <path d="m3 3 18 18" />
-      <path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" />
-      <path d="M9.9 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.2 17.2 0 0 1-2.2 3.2" />
-      <path d="M6.2 6.5C3.5 8.2 2 12 2 12s3.5 7 10 7a10.9 10.9 0 0 0 4.2-.8" />
-    </IconSvg>
-  );
 }
 
 function PageFallback() {

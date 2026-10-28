@@ -42,6 +42,24 @@ class DashboardAPITests(FinanceTestCase):
         self.assertEqual(default_scope["uncategorized_count"], 1)
         self.assertEqual(with_ignored["uncategorized_count"], 1)
 
+    def test_dashboard_summary_reports_filtered_and_total_counts(self):
+        for amount in [Decimal("-10.00"), Decimal("-20.00"), Decimal("30.00")]:
+            Transaction.objects.create(
+                bank_account=self.account,
+                transaction_date="2026-01-02",
+                description="Row",
+                amount=amount,
+            )
+        params = {"direction": "expense"}
+        summary = json_body(self.client.get("/api/dashboard/summary/", params))
+        listed = json_body(self.client.get("/api/transactions/", params))
+
+        self.assertEqual(summary["transaction_count"], 2)
+        self.assertEqual(summary["transaction_count"], listed["count"])
+        self.assertEqual(
+            summary["total_transaction_count"], Transaction.objects.count()
+        )
+
     def test_saved_filter_api_persists_updates_and_deletes_presets(self):
         created = self.post_json(
             "/api/saved-filters/",

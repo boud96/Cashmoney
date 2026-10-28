@@ -11,16 +11,18 @@ export const CHECKLIST_FILTER_KEYS = [
 ];
 export const OPTIONAL_CHECKLIST_FILTER_KEYS = ["tag"];
 export const pages = {
-  dashboard: ["Dashboard", "Monthly flow, category mix, and transaction review."],
-  import: ["Import", "Load bank statements (CSV or camt.053 XML) into the local transaction database."],
-  settings: ["Definitions", "Manage accounts, mappings, categories, tags, and keyword rules."],
-  maintenance: ["Maintenance", "Database snapshot and destructive cleanup tools."],
-  help: ["Help", "Usage guide for importing, categorizing, reviewing, and maintaining your finance data."],
+  dashboard: "Dashboard",
+  import: "Import",
+  settings: "Definitions",
+  maintenance: "Maintenance",
+  help: "Help",
 };
 export const THEME_STORAGE_KEY = "cashmoney-theme";
 export const ACCENT_STORAGE_KEY = "cashmoney-accent";
 export const HIDE_AMOUNTS_STORAGE_KEY = "cashmoney-hide-amounts";
 export const FILTER_PRESETS_STORAGE_KEY = "cashmoney-filter-presets";
+export const DASHBOARD_TAB_STORAGE_KEY = "cashmoney-dashboard-tab";
+export const DEFINITIONS_TAB_STORAGE_KEY = "cashmoney-definitions-tab";
 export const HIDDEN_AMOUNT = "----";
 export const accentPresets = [
   "#58a6ff",
@@ -47,20 +49,20 @@ export const definitionHelp = {
 };
 export const mappingFields = [
   ["original_id", "Original ID"],
-  ["transaction_date", "Transaction Date"],
-  ["posted_date", "Posted Date"],
+  ["transaction_date", "Transaction date"],
+  ["posted_date", "Posted date"],
   ["description", "Description"],
   ["amount", "Amount"],
   ["currency", "Currency"],
-  ["counterparty_name", "Counterparty Name"],
-  ["counterparty_account_number", "Counterparty Account"],
-  ["transaction_type", "Transaction Type"],
-  ["variable_symbol", "Variable Symbol"],
-  ["specific_symbol", "Specific Symbol"],
-  ["constant_symbol", "Constant Symbol"],
-  ["counterparty_note", "Counterparty Note"],
-  ["my_note", "My Note"],
-  ["other_note", "Other Note"],
+  ["counterparty_name", "Counterparty name"],
+  ["counterparty_account_number", "Counterparty account"],
+  ["transaction_type", "Transaction type"],
+  ["variable_symbol", "Variable symbol"],
+  ["specific_symbol", "Specific symbol"],
+  ["constant_symbol", "Constant symbol"],
+  ["counterparty_note", "Counterparty note"],
+  ["my_note", "My note"],
+  ["other_note", "Other note"],
 ];
 export const categorizationFieldOptions = mappingFields.filter(
   ([key]) => !["original_id", "transaction_date", "posted_date", "amount", "currency"].includes(key),
@@ -220,10 +222,11 @@ export function isChunkLoadError(error) {
 }
 
 // How long a toast stays: 2.6 s for a short note, longer for longer messages (errors
-// usually are), at most 12 s.
-export function toastDuration(message) {
+// usually are), at most 12 s. One with a button (Undo) stays at least 8 s.
+export function toastDuration(message, { withAction = false } = {}) {
   const length = String(message || "").length;
-  return Math.min(12000, Math.max(2600, 1200 + length * 60));
+  const duration = Math.min(12000, Math.max(2600, 1200 + length * 60));
+  return withAction ? Math.max(8000, duration) : duration;
 }
 
 // The subcategories the filter offers: selecting categories narrows them.
@@ -294,6 +297,12 @@ export function countActiveFilters(filters, refs, dateDefaults) {
   return count;
 }
 
+// Clear filters has something to reset: a filter that narrows the rows, or the View's
+// owner split turned off (it changes amounts, so it isn't counted above).
+export function canClearFilters(filters, refs, dateDefaults) {
+  return countActiveFilters(filters, refs, dateDefaults) > 0 || filters.split_by_owners === false;
+}
+
 export function getStoredFilterPresets() {
   if (typeof window === "undefined") {
     return [];
@@ -311,6 +320,64 @@ export function storeFilterPresets(presets) {
     return;
   }
   window.localStorage.setItem(FILTER_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+}
+
+// A remembered choice, such as the open tab. Storage can be missing or throw (a private
+// window, blocked site data); then the fallback applies and nothing is remembered.
+export function readStoredChoice(key, allowed, fallback) {
+  try {
+    const value = window.localStorage.getItem(key);
+    return allowed.includes(value) ? value : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function storeChoice(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage is optional; the choice still holds while the app runs.
+  }
+}
+
+// A checklist filter's state for its button: "All", "None", the one chosen item, or
+// "2 of 3". The optional tag list reads "Any" when empty. Values that aren't offered
+// (deleted items) don't count.
+export function checklistSummary(selected, options, { optional = false } = {}) {
+  const chosen = options.filter(([value]) => (selected || []).includes(value));
+  if (optional) {
+    if (!chosen.length) {
+      return "Any";
+    }
+    return chosen.length === 1 ? chosen[0][1] : `${chosen.length} selected`;
+  }
+  if (!options.length) {
+    // Nothing to choose from (no accounts yet): nothing is left out.
+    return "All";
+  }
+  if (!chosen.length) {
+    return "None";
+  }
+  if (chosen.length === options.length) {
+    return "All";
+  }
+  return chosen.length === 1 ? chosen[0][1] : `${chosen.length} of ${options.length}`;
+}
+
+// Whether a checklist leaves out something it offers, as countActiveFilters counts it.
+export function checklistNarrows(selected, options) {
+  const chosen = new Set(selected || []);
+  return options.some(([value]) => !chosen.has(value));
+}
+
+// The View button's text: how amounts are shown and which rows are included.
+export function viewSummary(filters) {
+  return [
+    filters.split_by_owners ? "Split by owners" : "Full amounts",
+    filters.include_ignored ? "+ ignored" : "",
+    filters.include_locked === false ? "no locked" : "",
+  ].filter(Boolean).join(", ");
 }
 
 
@@ -342,23 +409,100 @@ export function buildFilterParams(filters) {
   return params;
 }
 
-export function buildMetrics(summary, transactionPage, hideAmounts = false, defaultCurrency = "") {
-  const monthly = summary?.monthly || [];
-  const currency = defaultCurrency || summary?.default_currency || "";
-  // Months without transactions still count, so sparse periods don't inflate the averages.
+const NO_VALUE = "–";
+
+// The dashboard's row of totals, from the summary alone (it doesn't wait for the
+// transaction list). Averages divide by every month in the range, empty ones too.
+export function buildTotals(summary, hideAmounts = false, currency = "") {
+  if (!summary) {
+    return [
+      ["income", "Income"],
+      ["expenses", "Expenses"],
+      ["net", "Net"],
+      ["transactions", "Transactions"],
+      ["uncategorized", "Uncategorized"],
+    ].map(([key, label]) => ({ key, label, value: NO_VALUE, tone: "", detail: "" }));
+  }
+  const unit = currency || summary.default_currency || "";
+  const monthly = summary.monthly || [];
   const monthCount = completeMonthlyRows(monthly).length || 1;
   const income = monthly.reduce((acc, row) => acc + Number(row.income || 0), 0);
   const expense = monthly.reduce((acc, row) => acc + Number(row.expense || 0), 0);
   const net = income - expense;
-  const uncategorized = summary?.uncategorized_count
-    ?? (transactionPage.results || []).filter((row) => !row.category && !row.is_ignored).length;
+  const amount = (value) => formatMoneyWithCurrency(value, unit, hideAmounts);
+  const average = (value) => `avg ${amount(value / monthCount)} / month`;
   return [
-    ["Incomes", formatMoneyWithCurrency(income, currency, hideAmounts), "positive", { value: formatMoneyWithCurrency(income / monthCount, currency, hideAmounts), tone: "positive" }],
-    ["Expenses", formatMoneyWithCurrency(expense, currency, hideAmounts), "negative", { value: formatMoneyWithCurrency(expense / monthCount, currency, hideAmounts), tone: "negative" }],
-    ["Net", formatMoneyWithCurrency(net, currency, hideAmounts), "metric-blue", { value: formatMoneyWithCurrency(net / monthCount, currency, hideAmounts), tone: "metric-blue" }],
-    ["Transactions", `${formatCount(transactionPage.count)} / ${formatCount(transactionPage.total_count ?? transactionPage.count)}`, ""],
-    ["Uncategorized", formatCount(uncategorized), ""],
+    { key: "income", label: "Income", value: amount(income), tone: "positive", detail: average(income) },
+    { key: "expenses", label: "Expenses", value: amount(expense), tone: "negative", detail: average(expense) },
+    { key: "net", label: "Net", value: amount(net), tone: "metric-blue", detail: average(net) },
+    {
+      key: "transactions",
+      label: "Transactions",
+      value: formatCount(summary.transaction_count),
+      tone: "",
+      detail: `of ${formatCount(summary.total_transaction_count)} in total`,
+    },
+    { key: "uncategorized", label: "Uncategorized", value: formatCount(summary.uncategorized_count), tone: "", detail: "" },
   ];
+}
+
+// A side of the dashboard's category breakdown (the summary's category tree), largest
+// first, with each amount's share of the side's total. Subcategories without a colour
+// take their category's.
+export function rankCategories(tree) {
+  const categories = (tree || [])
+    .map((category) => ({
+      name: category.name,
+      color: normalizeHexColor(category.color),
+      amount: Number(category.amount || 0),
+      children: (category.children || []).map((child) => ({
+        name: child.name,
+        color: normalizeHexColor(child.color) || normalizeHexColor(category.color),
+        amount: Number(child.amount || 0),
+      })),
+    }))
+    .filter((category) => category.amount > 0);
+  const total = categories.reduce((acc, category) => acc + category.amount, 0);
+  const share = (amount) => (total > 0 ? amount / total : 0);
+  const byAmount = (left, right) => right.amount - left.amount;
+  const rows = categories.sort(byAmount).map((category) => ({
+    ...category,
+    share: share(category.amount),
+    children: category.children
+      .filter((child) => child.amount > 0)
+      .sort(byAmount)
+      .map((child) => ({ ...child, share: share(child.amount) })),
+  }));
+  return { total, rows };
+}
+
+// Categories that start open: one that makes up more than half of its side.
+export function autoOpenCategories(rows) {
+  return rows.filter((row) => row.share > 0.5).map((row) => row.name);
+}
+
+// Want / Need / Investment as parts of one bar, largest first, unassigned last.
+export function wniSplit(rows) {
+  const parts = (rows || [])
+    .map((row) => ({ name: String(row.name || "uncategorized").toLowerCase(), amount: Number(row.amount || 0) }))
+    .filter((part) => part.amount > 0);
+  const total = parts.reduce((acc, part) => acc + part.amount, 0);
+  return parts
+    .sort((left, right) => (
+      Number(left.name === "uncategorized") - Number(right.name === "uncategorized") || right.amount - left.amount
+    ))
+    .map((part) => ({ ...part, share: total > 0 ? part.amount / total : 0 }));
+}
+
+// Months between the Monthly flow chart's labels, so long ranges stay readable.
+export function monthlyTickStep(monthCount) {
+  if (monthCount <= 14) {
+    return "M1";
+  }
+  if (monthCount <= 36) {
+    return "M3";
+  }
+  return monthCount <= 72 ? "M6" : "M12";
 }
 
 export function baseLayout(extra = {}) {
@@ -415,42 +559,6 @@ export function wniColor(value) {
     want: cssVar("--wni-want", "#a371f7"),
   };
   return colors[String(value || "uncategorized").toLowerCase()] || colors.uncategorized;
-}
-
-export function sunburstData(rows) {
-  const colors = [];
-  const ids = [];
-  const labels = [];
-  const parents = [];
-  const values = [];
-  rows.forEach((category) => {
-    const categoryId = `category:${category.name}`;
-    ids.push(categoryId);
-    labels.push(category.name);
-    parents.push("");
-    values.push(Number(category.amount || 0));
-    colors.push(normalizeHexColor(category.color) || cssVar("--muted", "#667481"));
-    (category.children || []).forEach((child) => {
-      ids.push(`${categoryId}:${child.name}`);
-      labels.push(child.name);
-      parents.push(categoryId);
-      values.push(Number(child.amount || 0));
-      colors.push(normalizeHexColor(child.color) || normalizeHexColor(category.color) || cssVar("--surface-2", "#eef3f6"));
-    });
-  });
-  return { colors, ids, labels, parents, values };
-}
-
-export function topExpenseSubcategories(rows) {
-  return rows
-    .flatMap((category) => (category.children || []).map((child) => ({
-      amount: Number(child.amount || 0),
-      label: `${category.name} / ${child.name}`,
-    })))
-    .filter((row) => row.amount > 0)
-    .sort((left, right) => right.amount - left.amount)
-    .slice(0, 8)
-    .reverse();
 }
 
 export function completeMonthlyRows(rows) {
@@ -522,7 +630,7 @@ export function validateRequiredFields(form, names, notify) {
 
 export function validateRequiredColumnMap(columnMap, notify) {
   const requiredFields = [
-    ["transaction_date", "Transaction Date"],
+    ["transaction_date", "Transaction date"],
     ["amount", "Amount"],
   ];
   for (const [key, label] of requiredFields) {
@@ -638,7 +746,7 @@ export function money(value) {
 }
 
 export function amountNumber(value) {
-  return formatNumber(value, { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+  return formatNumber(value, { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 }
 
 // The API sends money as decimal strings ("-12.50"), which would sort as text.
@@ -695,6 +803,7 @@ export function fileTooLargeMessage(file, maxBytes) {
   return `The file is too large (${formatBytes(file.size)}). The limit is ${Math.round(maxBytes / (1024 * 1024))} MB.`;
 }
 
+// Local time as YYYY-MM-DD HH:MM, like the dates elsewhere in the app.
 export function formatDateTime(value, fallback = "") {
   if (!value) {
     return fallback;
@@ -703,7 +812,12 @@ export function formatDateTime(value, fallback = "") {
   if (Number.isNaN(date.getTime())) {
     return String(value);
   }
-  return date.toLocaleString();
+  const time = [date.getHours(), date.getMinutes()].map((part) => String(part).padStart(2, "0")).join(":");
+  return `${formatDateInput(date)} ${time}`;
+}
+
+export function pluralize(count, singular, plural = `${singular}s`) {
+  return `${formatCount(count)} ${Number(count) === 1 ? singular : plural}`;
 }
 
 export function formatNumber(value, options = {}) {
@@ -837,9 +951,42 @@ export function calendarWeeks(year, month) {
   ));
 }
 
-export function subtractRelativeDate(date, amount, unit) {
-  if (unit === "months") {
-    return addMonths(date, -amount);
+export const QUICK_RANGES = [
+  ["this-month", "This month"],
+  ["last-month", "Last month"],
+  ["3-months", "3 months"],
+  ["12-months", "12 months"],
+  ["this-year", "This year"],
+  ["all", "All"],
+];
+
+// The dates a quick pick sets. Month ranges are whole calendar months up to today
+// ("12 months" is this month and the 11 before it), so the monthly chart shows whole
+// months. "All" starts at the oldest transaction.
+export function quickDateRange(id, today, oldest) {
+  const end = parseDateInput(today) || new Date();
+  const to = formatDateInput(end);
+  const monthStart = (monthsBack) => formatDateInput(new Date(end.getFullYear(), end.getMonth() - monthsBack, 1));
+  switch (id) {
+    case "this-month":
+      return { from: monthStart(0), to };
+    case "last-month":
+      return { from: monthStart(1), to: formatDateInput(new Date(end.getFullYear(), end.getMonth(), 0)) };
+    case "3-months":
+      return { from: monthStart(2), to };
+    case "12-months":
+      return { from: monthStart(11), to };
+    case "this-year":
+      return { from: formatDateInput(new Date(end.getFullYear(), 0, 1)), to };
+    default:
+      return { from: oldest || "", to };
   }
-  return addDays(date, unit === "weeks" ? -amount * 7 : -amount);
+}
+
+// Every pick whose range equals the dates: in January, This month and This year are the same.
+export function activeQuickRanges(dateFrom, dateTo, today, oldest) {
+  return QUICK_RANGES.map(([id]) => id).filter((id) => {
+    const range = quickDateRange(id, today, oldest);
+    return range.from === dateFrom && range.to === dateTo;
+  });
 }
