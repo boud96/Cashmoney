@@ -678,7 +678,6 @@ export default function DashboardPage({
           onSave: saveCurrentFilterPreset,
         }}
         refs={refs}
-        setFilters={setFilters}
         subcategoryOptions={subcategoryFilterOptions}
       />
 
@@ -727,7 +726,7 @@ export default function DashboardPage({
       ) : null}
       {tableMounted ? (
         <div className="dashboard-tab-panel" hidden={dashboardTab !== "transactions"} {...tabPanelProps("dashboard", "transactions")}>
-          {recategorizeResult && <RecategorizeStats result={recategorizeResult} />}
+          {recategorizeResult && <RecategorizeStats hideAmounts={hideAmounts} result={recategorizeResult} />}
           {transactionsAreCapped ? (
             <div className="transaction-cap-warning">
               Showing the newest {formatCount(loadedTransactionCount)} of {formatCount(filteredTransactionCount)} filtered transactions.

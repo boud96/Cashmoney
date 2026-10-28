@@ -8,7 +8,8 @@ import {
   ANY_TAG,
   QUICK_RANGES,
   UNASSIGNED,
-  activeQuickRange,
+  activeQuickRanges,
+  canClearFilters,
   checklistNarrows,
   checklistSummary,
   normalizeName,
@@ -29,11 +30,11 @@ export function FilterBar({
   onFilterChange,
   presets,
   refs,
-  setFilters,
   subcategoryOptions,
 }) {
   const today = filterDefaults.to || todayInputValue();
-  const activeRange = activeQuickRange(filters.date_from, filters.date_to, today, filterDefaults.from);
+  const activeRanges = activeQuickRanges(filters.date_from, filters.date_to, today, filterDefaults.from);
+  const canClear = canClearFilters(filters, refs, filterDefaults);
   const checklists = [
     ["Accounts", "bank_account", refs.accounts.map((item) => [item.id, item.name])],
     ["Categories", "category", [[UNASSIGNED, "Unassigned category"], ...refs.categories.map((item) => [item.id, item.name])]],
@@ -43,9 +44,11 @@ export function FilterBar({
   ];
   const tagOptions = [[UNASSIGNED, "Untagged"], [ANY_TAG, "Tagged"], ...refs.tags.map((item) => [item.id, item.name])];
 
+  // Through onFilterChange like every other filter, so an old Recategorize result goes too.
   function applyRange(id) {
     const range = quickDateRange(id, today, filterDefaults.from);
-    setFilters((current) => ({ ...current, date_from: range.from, date_to: range.to }));
+    onFilterChange("date_from", range.from);
+    onFilterChange("date_to", range.to);
   }
 
   return (
@@ -70,8 +73,8 @@ export function FilterBar({
         <div aria-label="Quick date ranges" className="quick-ranges" role="group">
           {QUICK_RANGES.map(([id, label]) => (
             <button
-              aria-pressed={activeRange === id}
-              className={`quick-range ${activeRange === id ? "is-active" : ""}`.trim()}
+              aria-pressed={activeRanges.includes(id)}
+              className={`quick-range ${activeRanges.includes(id) ? "is-active" : ""}`.trim()}
               key={id}
               onClick={() => applyRange(id)}
               type="button"
@@ -82,7 +85,7 @@ export function FilterBar({
         </div>
         <label className="filter-search">
           <span className="visually-hidden">Search</span>
-          <input onChange={(event) => onFilterChange("q", event.target.value)} placeholder="Description, note, counterparty" type="search" value={filters.q} />
+          <input onChange={(event) => onFilterChange("q", event.target.value)} placeholder="Search text" title="Searches the description, notes and counterparty" type="search" value={filters.q} />
         </label>
         <SavedFiltersMenu {...presets} dateDefaults={filterDefaults} refs={refs} />
       </div>
@@ -112,7 +115,7 @@ export function FilterBar({
           <CheckboxFilterPanel label="Tag" name="tag" onChange={onFilterChange} optional options={tagOptions} tags={refs.tags} value={filters.tag} />
         </FilterChip>
         <FilterChip
-          active={Boolean(filters.include_ignored) || filters.include_locked === false}
+          active={Boolean(filters.include_ignored) || filters.include_locked === false || filters.split_by_owners === false}
           label="View"
           summary={viewSummary(filters)}
         >
@@ -120,7 +123,7 @@ export function FilterBar({
         </FilterChip>
         <span className="filter-bar-end">
           {activeFilterCount ? <span className="filter-active-count">{activeFilterCount} active</span> : null}
-          <button className="text-button" disabled={!activeFilterCount} onClick={onClearFilters} type="button">Clear filters</button>
+          <button className="text-button" disabled={!canClear} onClick={onClearFilters} type="button">Clear filters</button>
         </span>
       </div>
     </section>

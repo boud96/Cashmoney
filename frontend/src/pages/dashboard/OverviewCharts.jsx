@@ -131,7 +131,8 @@ function formatShare(share) {
 }
 
 // One side of the breakdown: categories largest first, each a button that opens its
-// subcategories. A category over half of its side starts open.
+// subcategories. A category over half of its side starts open. Every bar, a category's or a
+// subcategory's, uses the side's largest category as its scale.
 function CategoryRanking({ children, currency, hideAmounts, ready, side, title, tree }) {
   const { rows, total } = useMemo(() => rankCategories(tree || []), [tree]);
   const autoOpen = useMemo(() => new Set(autoOpenCategories(rows)), [rows]);
@@ -153,20 +154,21 @@ function CategoryRanking({ children, currency, hideAmounts, ready, side, title, 
       </div>
       {!ready ? <div className="chart-empty">Loading chart…</div> : !rows.length ? <EmptyChart /> : (
         <ul className="category-ranking-list">
-          {rows.map((row) => {
+          {rows.map((row, index) => {
             const open = isOpen(row.name);
+            const childrenId = `ranking-${side}-${index}`;
             return (
               <li key={row.name}>
-                <button aria-expanded={open} className="category-ranking-row" onClick={() => toggle(row.name)} type="button">
+                <button aria-controls={open && row.children.length ? childrenId : undefined} aria-expanded={open} className="category-ranking-row" onClick={() => toggle(row.name)} type="button">
                   <RankingCells amount={row.amount} color={row.color} hideAmounts={hideAmounts} name={row.name} scale={largest} share={row.share}>
                     <ChevronIcon open={open} size={14} />
                   </RankingCells>
                 </button>
                 {open && row.children.length ? (
-                  <ul className="category-ranking-children">
+                  <ul className="category-ranking-children" id={childrenId}>
                     {row.children.map((child) => (
                       <li className="category-ranking-row is-child" key={child.name}>
-                        <RankingCells amount={child.amount} color={child.color} hideAmounts={hideAmounts} name={child.name} scale={row.amount} share={child.share} />
+                        <RankingCells amount={child.amount} color={child.color} hideAmounts={hideAmounts} name={child.name} scale={largest} share={child.share} />
                       </li>
                     ))}
                   </ul>

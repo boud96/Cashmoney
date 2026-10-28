@@ -4,7 +4,7 @@ import {
   ANY_TAG,
   NO_SELECTION,
   UNASSIGNED,
-  activeQuickRange,
+  activeQuickRanges,
   addDays,
   addMonths,
   autoOpenCategories,
@@ -15,6 +15,7 @@ import {
   checklistSummary,
   compareAmounts,
   completeMonthlyRows,
+  canClearFilters,
   countActiveFilters,
   emptyFilters,
   fileTooLargeMessage,
@@ -189,6 +190,12 @@ describe("filters", () => {
       expect(countActiveFilters(filters, refs, dates)).toBe(5);
     });
 
+    it("can clear the filters when only the owner split is off", () => {
+      expect(canClearFilters(startup(), refs, dates)).toBe(false);
+      expect(canClearFilters({ ...startup(), split_by_owners: false }, refs, dates)).toBe(true);
+      expect(canClearFilters({ ...startup(), q: "kava" }, refs, dates)).toBe(true);
+    });
+
     it("doesn't count the subcategories a category choice hides", () => {
       expect(countActiveFilters({ ...startup(), category: ["c1"], subcategory: ["s1"] }, refs, dates)).toBe(1);
     });
@@ -251,9 +258,11 @@ describe("quick date ranges", () => {
     expect(quickDateRange("3-months", "2026-02-10", oldest)).toEqual({ from: "2025-12-01", to: "2026-02-10" });
   });
 
-  it("finds the pick that matches the dates", () => {
-    expect(activeQuickRange("2025-11-01", "2026-10-27", today, oldest)).toBe("12-months");
-    expect(activeQuickRange("2025-11-02", "2026-10-27", today, oldest)).toBe("");
+  it("marks every pick whose range equals the dates", () => {
+    expect(activeQuickRanges("2025-11-01", "2026-10-27", today, oldest)).toEqual(["12-months"]);
+    expect(activeQuickRanges("2025-11-02", "2026-10-27", today, oldest)).toEqual([]);
+    // In January, This month and This year are the same range: both are pressed.
+    expect(activeQuickRanges("2026-01-01", "2026-01-20", "2026-01-20", oldest)).toEqual(["this-month", "this-year"]);
   });
 });
 
@@ -287,6 +296,8 @@ describe("filter chips", () => {
   it("summarizes a checklist", () => {
     expect(checklistSummary(["a", "b", "c"], accounts)).toBe("All");
     expect(checklistSummary([], accounts)).toBe("None");
+    // Nothing to choose from (no accounts yet) narrows nothing.
+    expect(checklistSummary([], [])).toBe("All");
     expect(checklistSummary(["b"], accounts)).toBe("Cash");
     expect(checklistSummary(["a", "c"], accounts)).toBe("2 of 3");
     expect(checklistSummary(["a", "gone"], accounts)).toBe("Airbank");

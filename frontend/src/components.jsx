@@ -128,7 +128,7 @@ export function Tabs({ className = "", idPrefix, label, onChange, tabs, value })
         const selected = tab.id === value;
         return (
           <button
-            aria-controls={`${idPrefix}-panel-${tab.id}`}
+            aria-controls={selected ? `${idPrefix}-panel-${tab.id}` : undefined}
             aria-selected={selected}
             className={`tab ${selected ? "is-active" : ""}`.trim()}
             id={`${idPrefix}-tab-${tab.id}`}
