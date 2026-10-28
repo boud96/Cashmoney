@@ -6,6 +6,7 @@ import {
   CellStyleModule,
   ClientSideRowModelModule,
   CustomEditorModule,
+  LocaleModule,
   ModuleRegistry,
   SelectEditorModule,
   themeQuartz,
@@ -38,7 +39,11 @@ ModuleRegistry.registerModules([
   TooltipModule,  // tooltipValueGetter
   CustomEditorModule,  // the subcategory editor
   SelectEditorModule,  // agSelectCellEditor for Want/Need/Investment
+  LocaleModule,  // localeText: the empty and loading messages
 ]);
+
+// The grid's own messages, in the app's words.
+const transactionGridText = { loadingOoo: "Loading…", noRowsToShow: "No transactions match the filters" };
 
 // One-line rows in a smaller font, so about 20 rows fit and every column fits at 1440 px.
 const transactionGridTheme = themeQuartz
@@ -82,7 +87,7 @@ const transactionGridTheme = themeQuartz
 
 const FILTER_RETAINED_TOOLTIP = "Saved value no longer matches the current filters, so this row is kept visible temporarily.";
 
-export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filterParams, hideAmounts, notify, refs, rows, updateTransaction }) {
+export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, deleteTransaction, filterParams, hideAmounts, loading = false, notify, refs, rows, updateTransaction }) {
   const [rawDataPopover, setRawDataPopover] = useState(null);
   const gridRef = useRef(null);
   useFillHeight(gridRef, { min: 360 });
@@ -453,6 +458,8 @@ export function TransactionGrid({ confirmAction, conflictIds, defaultCurrency, d
         getRowId={(params) => params.data.id}
         onCellValueChanged={onCellValueChanged}
         headerHeight={34}
+        loading={loading}
+        localeText={transactionGridText}
         rowData={rowData}
         rowHeight={30}
         stopEditingWhenCellsLoseFocus

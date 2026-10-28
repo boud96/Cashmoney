@@ -3129,6 +3129,19 @@ button.category-ranking-row:focus-visible {
   overflow: hidden;
 }
 
+/* The dot columns keep the cell's overflow for their editors; the value inside is clipped,
+   so a long name ends in an ellipsis instead of running into the next column. */
+.transaction-grid .ag-cell[col-id="category"] .ag-cell-wrapper,
+.transaction-grid .ag-cell[col-id="subcategory_id"] .ag-cell-wrapper,
+.transaction-grid .ag-cell[col-id="want_need_investment"] .ag-cell-wrapper,
+.transaction-grid .ag-cell[col-id="category"] > .ag-cell-value,
+.transaction-grid .ag-cell[col-id="subcategory_id"] > .ag-cell-value,
+.transaction-grid .ag-cell[col-id="want_need_investment"] > .ag-cell-value {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
 .transaction-grid .ag-cell[col-id="transaction_date"] .ag-cell-value,
 .transaction-grid .ag-cell[col-id="description"] .ag-cell-value,
 .transaction-grid .ag-cell[col-id="account_id"] .ag-cell-value {
@@ -4087,8 +4100,18 @@ td {
   padding: 4px 7px;
 }
 
+.definition-section-tools {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .definition-search {
-  width: min(240px, 100%);
+  flex: 0 1 240px;
+  width: 240px;
+  min-width: 140px;
 }
 
 .definition-grid-list {

@@ -4,9 +4,11 @@ import {
   CellStyleModule,
   ClientSideRowModelModule,
   DateFilterModule,
+  LocaleModule,
   ModuleRegistry,
   NumberFilterModule,
   QuickFilterModule,
+  RowApiModule,
   TextFilterModule,
   themeQuartz,
   TooltipModule,
@@ -57,6 +59,8 @@ ModuleRegistry.registerModules([
   CellStyleModule,  // cellClass
   TooltipModule,  // tooltipField
   QuickFilterModule,  // quickFilterText: each tab's search box
+  LocaleModule,  // localeText: "No matches"
+  RowApiModule,  // getDisplayedRowCount, to show "No matches"
   TextFilterModule,  // filter: true picks the filter by data type
   NumberFilterModule,
   DateFilterModule,
@@ -410,16 +414,19 @@ function DefinitionSection({ children, confirmAction, endpoint, helpText, items,
           <h2>{title} <span className="definition-section-count">{formatCount(items.length)}</span></h2>
           {subtitle ? <p>{subtitle}</p> : null}
         </div>
-        <input
-          aria-label={`Search ${title.toLowerCase()}`}
-          className="definition-search"
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder={`Search ${title.toLowerCase()}`}
-          type="search"
-          value={search}
-        />
-        {children}
-        {helpText && <HelpTooltip text={helpText} />}
+        {/* One group, so a narrow window wraps it under the title as a whole. */}
+        <div className="definition-section-tools">
+          <input
+            aria-label={`Search ${title.toLowerCase()}`}
+            className="definition-search"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={`Search ${title.toLowerCase()}`}
+            type="search"
+            value={search}
+          />
+          {children}
+          {helpText && <HelpTooltip text={helpText} />}
+        </div>
       </div>
       <ListRenderer confirmAction={confirmAction} endpoint={endpoint} items={items} notify={notify} onDeleted={onDeleted} onEdit={onEdit} quickFilterText={search} refs={refs} reloadAll={reloadAll} />
     </section>
@@ -478,6 +485,17 @@ function DefinitionAgGridList({ className = "", columnDefs, items, quickFilterTe
   return <DefinitionGrid className={className} columnDefs={columnDefs} quickFilterText={quickFilterText} rowData={rowData} />;
 }
 
+const definitionGridText = { noRowsToShow: "No matches" };
+
+// The grid shows its no-rows message only for empty data; the search can hide every row too.
+function showNoMatches(event) {
+  if (event.api.getDisplayedRowCount()) {
+    event.api.hideOverlay();
+  } else {
+    event.api.showNoRowsOverlay();
+  }
+}
+
 // A component of its own so useFillHeight measures the grid when it mounts, also when a
 // tab that started empty gets its first record.
 function DefinitionGrid({ className, columnDefs, quickFilterText, rowData }) {
@@ -491,6 +509,8 @@ function DefinitionGrid({ className, columnDefs, quickFilterText, rowData }) {
         enableCellTextSelection
         ensureDomOrder
         headerHeight={34}
+        localeText={definitionGridText}
+        onModelUpdated={showNoMatches}
         quickFilterText={quickFilterText}
         rowData={rowData}
         rowHeight={34}
