@@ -128,9 +128,17 @@ cd backend
 ../.venv/bin/python manage.py test finance
 ```
 
-Where Electron's sandbox can't start from `node_modules` (stock Ubuntu 24.04 and newer
-block the user namespaces it needs), `run_app.sh` opens the app in the browser instead.
-In WSL, install Node.js inside Linux: `setup_dev.sh` refuses a Windows npm.
+`run_app.sh` leaves the dev server running after the app closes. Its log is
+`backend/runserver.log`, Electron's is `desktop/electron.log`, and
+`pkill -f 'manage.py runserver 127.0.0.1:8000'` stops it. Where Electron's sandbox can't
+start from `node_modules` (stock Ubuntu 24.04 and newer block the user namespaces it
+needs), `run_app.sh` opens the app in the browser instead. On a minimal system (WSL, a
+container), Electron also needs its desktop libraries; on Ubuntu 24.04:
+`sudo apt install libgtk-3-0t64 libnss3 libasound2t64 libgbm1 libxss1 libxtst6 libnotify4 libsecret-1-0`.
+
+In WSL, clone the repository inside the Linux file system (not under `/mnt/c`) and
+install Node.js inside Linux: a Windows checkout's `.venv` and `node_modules` don't work
+there, and `setup_dev.sh` refuses a Windows `.venv` or npm.
 
 ## Django admin
 

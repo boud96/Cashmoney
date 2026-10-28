@@ -9,11 +9,23 @@ FRONTEND="$ROOT/frontend"
 DESKTOP="$ROOT/desktop"
 PY="$ROOT/.venv/bin/python"
 
+# A Windows checkout opened from WSL has a Windows .venv; creating a Linux one in its
+# place would break it for Windows.
+if [ -e "$ROOT/.venv/Scripts/python.exe" ]; then
+    echo ".venv is a Windows virtual environment. Use a clone inside Linux (not under /mnt/), or remove .venv first." >&2
+    exit 1
+fi
+
 if [ ! -x "$PY" ]; then
+    venv_existed=0
+    [ -e "$ROOT/.venv" ] && venv_existed=1
     echo "Creating Python virtual environment..."
     if ! python3 -m venv "$ROOT/.venv"; then
-        # A failed venv (no ensurepip) leaves a python without pip behind.
-        rm -rf "$ROOT/.venv"
+        # A failed venv (no ensurepip) leaves a python without pip behind. Remove it only
+        # if this run created the folder.
+        if [ "$venv_existed" -eq 0 ]; then
+            rm -rf "$ROOT/.venv"
+        fi
         echo "Could not create .venv. On Debian/Ubuntu: sudo apt install python3-venv" >&2
         exit 1
     fi

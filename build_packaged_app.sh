@@ -15,8 +15,13 @@ PY="$ROOT/.venv/bin/python"
 cd "$ROOT/backend"
 "$PY" -m PyInstaller cashmoney-backend.spec --noconfirm --clean
 # PyInstaller's Django hook would bundle a database next to manage.py (CR-60).
-if ! "$PY" check_bundle.py dist/cashmoney-backend; then
+check=0
+"$PY" check_bundle.py dist/cashmoney-backend || check=$?
+if [ "$check" -eq 1 ]; then
     echo "The backend bundle contains a database file (listed above)." >&2
+    exit 1
+elif [ "$check" -ne 0 ]; then
+    echo "Could not check the backend bundle (see above)." >&2
     exit 1
 fi
 
