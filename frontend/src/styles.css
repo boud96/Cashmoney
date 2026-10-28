@@ -2546,8 +2546,12 @@ select option {
   font-weight: 700;
 }
 
+/* minmax(0, 1fr), not the implicit auto column: an auto column can't get narrower than the
+   Monthly flow chart's drawn width, so after the window shrank the chart kept its old width
+   and the page scrolled sideways. */
 .overview-charts {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
 }
 
