@@ -152,7 +152,7 @@ export default function HelpPage() {
             <li><strong>Totals:</strong> Income, Expenses, and Net with their monthly averages, Transactions (and how many there are in all), and Uncategorized, in the app default currency. Review under Uncategorized opens Review uncategorized.</li>
             <li><strong>Monthly flow:</strong> income up and expenses down for each month, with net as a line; hover a month for its numbers.</li>
             <li><strong>Expenses and income by category:</strong> categories as bars, largest first, with amount and share. Click a category to show its subcategories; one that makes up more than half of its side starts open. The Want / Need / Investment bar sits under the expenses.</li>
-            <li><strong>Exchange rates:</strong> original imported amounts stay unchanged; converted totals use cached rates that sync after imports and default currency changes. In the table, a payment in another currency shows its original amount under the converted one, with the rate on hover.</li>
+            <li><strong>Exchange rates:</strong> original imported amounts stay unchanged; converted totals use cached rates that sync after imports and default currency changes. In the table, a payment in another currency shows its original amount in smaller text before the converted one, with the rate on hover.</li>
             <li><strong>Hide amounts:</strong> the eye button hides amount values on the dashboard and in imports; shares stay visible.</li>
             <li><strong>Accent and theme:</strong> use the sidebar footer controls for accent color and light/dark mode.</li>
           </ul>
@@ -160,7 +160,8 @@ export default function HelpPage() {
 
         <HelpCard title="Editing transactions">
           <p>
-            The table on the Transactions tab is editable where a small pencil appears in the header.
+            The table on the Transactions tab is editable: Subcategory, WNI, and Tags have a small pencil in their
+            header, and Ignored and Locked switch with a click.
             Changes are saved immediately and the edited row updates in place. Category,
             subcategory, and WNI show a coloured dot, and a long description shows in full on hover.
           </p>
