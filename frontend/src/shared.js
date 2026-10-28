@@ -982,7 +982,6 @@ export function quickDateRange(id, today, oldest) {
   }
 }
 
-// The quick pick whose range the dates are exactly, or "".
 // Every pick whose range equals the dates: in January, This month and This year are the same.
 export function activeQuickRanges(dateFrom, dateTo, today, oldest) {
   return QUICK_RANGES.map(([id]) => id).filter((id) => {

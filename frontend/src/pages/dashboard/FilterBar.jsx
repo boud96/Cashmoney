@@ -110,7 +110,7 @@ export function FilterBar({
         <FilterChip
           active={normalizeTagSelection(filters.tag, refs.tags).length > 0}
           label="Tags"
-          summary={checklistSummary(filters.tag, tagOptions, { optional: true })}
+          summary={checklistSummary(normalizeTagSelection(filters.tag, refs.tags), tagOptions, { optional: true })}
         >
           <CheckboxFilterPanel label="Tag" name="tag" onChange={onFilterChange} optional options={tagOptions} tags={refs.tags} value={filters.tag} />
         </FilterChip>

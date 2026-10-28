@@ -272,6 +272,10 @@ export function useFillHeight(ref, { bottomGap = 24, min = 360 } = {}) {
     }
     let frame = 0;
     function update() {
+      // Hidden (the dashboard's table while the Overview shows): measure once it's shown.
+      if (!element.getClientRects().length) {
+        return;
+      }
       const top = element.getBoundingClientRect().top + window.scrollY;
       const height = `${Math.max(min, Math.floor(window.innerHeight - top - bottomGap))}px`;
       if (element.style.height !== height) {
@@ -286,6 +290,8 @@ export function useFillHeight(ref, { bottomGap = 24, min = 360 } = {}) {
     window.addEventListener("resize", schedule);
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
     observer?.observe(element.closest(".main") || document.body);
+    // Fires when the element is shown again after being hidden.
+    observer?.observe(element);
     return () => {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", schedule);
