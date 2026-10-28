@@ -46,6 +46,7 @@ export default function App() {
   const [isAccentPickerOpen, setIsAccentPickerOpen] = useState(false);
   const [status, setStatus] = useState("Checking backend");
   const [toast, setToast] = useState("");
+  const [toastAction, setToastAction] = useState(null);
   const [refs, setRefs] = useState({
     accounts: [],
     mappings: [],
@@ -86,18 +87,24 @@ export default function App() {
   const toastTimer = useRef(null);
   const hideToastIn = useCallback((milliseconds) => {
     window.clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(""), milliseconds);
+    toastTimer.current = window.setTimeout(() => {
+      setToast("");
+      setToastAction(null);
+    }, milliseconds);
   }, []);
-  const notify = useCallback((message) => {
+  // action: an optional { label, onClick } button in the message, such as Undo.
+  const notify = useCallback((message, { action = null } = {}) => {
     setToast(message);
-    hideToastIn(toastDuration(message));
+    setToastAction(action);
+    hideToastIn(toastDuration(message, { withAction: Boolean(action) }));
   }, [hideToastIn]);
-  // Reading a toast (pointer over it, or keyboard focus on its close button) keeps it.
+  // Reading a toast (pointer over it, or keyboard focus on one of its buttons) keeps it.
   const holdToast = useCallback(() => window.clearTimeout(toastTimer.current), []);
   const releaseToast = useCallback(() => hideToastIn(1500), [hideToastIn]);
   const dismissToast = useCallback(() => {
     window.clearTimeout(toastTimer.current);
     setToast("");
+    setToastAction(null);
   }, []);
 
   // api.js reports when the backend stops (or starts) answering at all.
@@ -561,6 +568,18 @@ export default function App() {
         {toast ? (
           <>
             <span className="toast-message">{toast}</span>
+            {toastAction ? (
+              <button
+                className="toast-action"
+                onClick={() => {
+                  dismissToast();
+                  toastAction.onClick();
+                }}
+                type="button"
+              >
+                {toastAction.label}
+              </button>
+            ) : null}
             <button aria-label="Dismiss message" className="toast-close" onClick={dismissToast} type="button"><CloseIcon size={16} /></button>
           </>
         ) : null}

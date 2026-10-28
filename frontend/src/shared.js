@@ -222,10 +222,11 @@ export function isChunkLoadError(error) {
 }
 
 // How long a toast stays: 2.6 s for a short note, longer for longer messages (errors
-// usually are), at most 12 s.
-export function toastDuration(message) {
+// usually are), at most 12 s. One with a button (Undo) stays at least 8 s.
+export function toastDuration(message, { withAction = false } = {}) {
   const length = String(message || "").length;
-  return Math.min(12000, Math.max(2600, 1200 + length * 60));
+  const duration = Math.min(12000, Math.max(2600, 1200 + length * 60));
+  return withAction ? Math.max(8000, duration) : duration;
 }
 
 // The subcategories the filter offers: selecting categories narrows them.

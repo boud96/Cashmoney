@@ -4284,25 +4284,6 @@ td {
   font-variant-numeric: tabular-nums;
 }
 
-.maintenance-backups > .panel-header {
-  flex-wrap: wrap;
-}
-
-.maintenance-backups-heading {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-}
-
-.maintenance-backups-heading h2 {
-  margin: 0;
-}
-
-.maintenance-backups-heading span {
-  color: var(--muted);
-  font-size: 12.5px;
-}
-
 .maintenance-backups-empty {
   margin: 0;
   font-size: 13.5px;
@@ -4377,6 +4358,20 @@ td {
 .maintenance-section-heading {
   margin: 0;
   font-size: inherit;
+}
+
+/* A section with actions beside its toggle (Backups): the toggle takes the free width, and
+   the actions wrap under it when the row is narrow. */
+.maintenance-section-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.maintenance-section-header .maintenance-section-heading {
+  flex: 1 1 280px;
+  min-width: 0;
 }
 
 .maintenance-section-toggle {
@@ -4729,6 +4724,28 @@ td {
   min-width: 0;
   overflow-y: auto;
   max-height: calc(min(40vh, 240px) - 22px);
+}
+
+.toast-action {
+  flex: none;
+  margin: -3px 0;
+  padding: 3px 9px;
+  border: 1px solid color-mix(in srgb, var(--toast-text) 35%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--toast-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.toast-action:hover,
+.toast-action:focus-visible {
+  background: color-mix(in srgb, var(--toast-text) 14%, transparent);
+}
+
+.toast-action:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--toast-text) 70%, transparent);
+  outline-offset: 1px;
 }
 
 .toast-close {

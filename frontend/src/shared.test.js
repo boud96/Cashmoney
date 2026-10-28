@@ -159,6 +159,11 @@ describe("filters", () => {
     expect(toastDuration("x".repeat(1000))).toBe(12000);
   });
 
+  it("keeps a toast with a button (Undo) up long enough to use it", () => {
+    expect(toastDuration('Deleted "Cash"', { withAction: true })).toBe(8000);
+    expect(toastDuration("x".repeat(1000), { withAction: true })).toBe(12000);
+  });
+
   describe("active filter count", () => {
     const refs = {
       accounts: [{ id: "a" }, { id: "b" }],
