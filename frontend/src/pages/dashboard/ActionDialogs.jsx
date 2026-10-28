@@ -612,7 +612,7 @@ export function UncategorizedReviewPanel({
   );
 }
 
-export function RecategorizeStats({ result }) {
+export function RecategorizeStats({ hideAmounts = false, result }) {
   const conflictDetails = result.conflict_details || [];
   const metrics = [
     {
@@ -638,7 +638,7 @@ export function RecategorizeStats({ result }) {
       value: result.uncategorized,
     },
     {
-      details: <ConflictDetailList details={conflictDetails} total={result.conflicts} />,
+      details: <ConflictDetailList details={conflictDetails} hideAmounts={hideAmounts} total={result.conflicts} />,
       detailCount: conflictDetails.length,
       label: "Conflicts",
       value: result.conflicts,
@@ -659,13 +659,13 @@ export function RecategorizeStats({ result }) {
   return (
     <div className="recategorize-stats">
       {metrics.map((metric) => (
-        <RecategorizeMetric key={metric.label} metric={metric} />
+        <RecategorizeMetric hideAmounts={hideAmounts} key={metric.label} metric={metric} />
       ))}
     </div>
   );
 }
 
-function RecategorizeMetric({ metric }) {
+function RecategorizeMetric({ hideAmounts, metric }) {
   const count = Number(metric.value || 0);
   const ids = metric.ids || [];
   const transactions = metric.transactions || [];
@@ -677,8 +677,8 @@ function RecategorizeMetric({ metric }) {
       <div className="metric-value">{formatCount(count)}</div>
       {hasDetails ? (
         <details className="metric-details">
-          <summary>{formatCount(count)} details</summary>
-          {metric.details || (transactions.length ? <TransactionSummaryList total={count} transactions={transactions} /> : <TransactionIdList ids={ids} total={count} />)}
+          <summary>{pluralize(count, "detail")}</summary>
+          {metric.details || (transactions.length ? <TransactionSummaryList hideAmounts={hideAmounts} total={count} transactions={transactions} /> : <TransactionIdList ids={ids} total={count} />)}
         </details>
       ) : (
         <div className="metric-empty-detail">No details</div>
@@ -698,7 +698,7 @@ function TransactionIdList({ ids, total = ids.length }) {
   );
 }
 
-function TransactionSummaryList({ total = 0, transactions }) {
+function TransactionSummaryList({ hideAmounts, total = 0, transactions }) {
   const visibleTransactions = transactions.slice(0, 40);
   const hidden = Math.max(total, transactions.length) - visibleTransactions.length;
   return (
@@ -707,7 +707,7 @@ function TransactionSummaryList({ total = 0, transactions }) {
         <div className="metric-transaction" key={transaction.id}>
           <div className="metric-transaction-main">
             <strong>{transaction.transaction_date}</strong>
-            <span>{formatAmountValue(transaction.amount, false)}</span>
+            <span>{formatAmountValue(transaction.amount, hideAmounts)}</span>
           </div>
           <div className="metric-transaction-description">
             {transaction.description || "No description"}
@@ -722,7 +722,7 @@ function TransactionSummaryList({ total = 0, transactions }) {
   );
 }
 
-function ConflictDetailList({ details, total = 0 }) {
+function ConflictDetailList({ details, hideAmounts, total = 0 }) {
   if (!details.length) {
     return null;
   }
@@ -735,7 +735,7 @@ function ConflictDetailList({ details, total = 0 }) {
           <div className="conflict-detail-title">
             <strong>{detail.transaction.transaction_date}</strong>
             <span>{detail.transaction.description}</span>
-            <span>{formatAmountValue(detail.transaction.amount, false)}</span>
+            <span>{formatAmountValue(detail.transaction.amount, hideAmounts)}</span>
           </div>
           <div className="conflict-detail-reason">
             {detail.categorization.conflict_reason || "Top-priority keyword results differ."}

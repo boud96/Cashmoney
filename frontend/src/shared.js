@@ -296,6 +296,12 @@ export function countActiveFilters(filters, refs, dateDefaults) {
   return count;
 }
 
+// Clear filters has something to reset: a filter that narrows the rows, or the View's
+// owner split turned off (it changes amounts, so it isn't counted above).
+export function canClearFilters(filters, refs, dateDefaults) {
+  return countActiveFilters(filters, refs, dateDefaults) > 0 || filters.split_by_owners === false;
+}
+
 export function getStoredFilterPresets() {
   if (typeof window === "undefined") {
     return [];
@@ -344,6 +350,10 @@ export function checklistSummary(selected, options, { optional = false } = {}) {
       return "Any";
     }
     return chosen.length === 1 ? chosen[0][1] : `${chosen.length} selected`;
+  }
+  if (!options.length) {
+    // Nothing to choose from (no accounts yet): nothing is left out.
+    return "All";
   }
   if (!chosen.length) {
     return "None";
@@ -973,10 +983,10 @@ export function quickDateRange(id, today, oldest) {
 }
 
 // The quick pick whose range the dates are exactly, or "".
-export function activeQuickRange(dateFrom, dateTo, today, oldest) {
-  const match = QUICK_RANGES.find(([id]) => {
+// Every pick whose range equals the dates: in January, This month and This year are the same.
+export function activeQuickRanges(dateFrom, dateTo, today, oldest) {
+  return QUICK_RANGES.map(([id]) => id).filter((id) => {
     const range = quickDateRange(id, today, oldest);
     return range.from === dateFrom && range.to === dateTo;
   });
-  return match ? match[0] : "";
 }

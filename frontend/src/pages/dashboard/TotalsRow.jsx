@@ -7,7 +7,7 @@ export function TotalsRow({ busy = false, onReview, reviewDisabled = false, tota
           <div className="total-label">{total.label}</div>
           <div className={`total-value ${total.tone}`.trim()}>{total.value}</div>
           {total.key === "uncategorized" ? (
-            <button className="text-button total-detail" disabled={reviewDisabled} onClick={onReview} type="button">
+            <button aria-label="Review uncategorized" className="text-button total-detail" disabled={reviewDisabled} onClick={onReview} type="button">
               Review →
             </button>
           ) : (

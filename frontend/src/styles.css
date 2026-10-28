@@ -1853,13 +1853,18 @@ select option {
   cursor: default;
 }
 
+/* One line: when space runs out the toolbar wraps inside itself, so the tabs always sit on
+   the row's border. */
 .dashboard-tab-row {
   display: flex;
   align-items: flex-end;
-  flex-wrap: wrap;
   gap: 6px 16px;
   margin-top: 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.dashboard-tab-row > .tabs {
+  flex: 0 0 auto;
 }
 
 .dashboard-tab-panel {
@@ -1868,9 +1873,12 @@ select option {
 
 .transaction-toolbar {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
+  justify-content: flex-end;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
   margin-left: auto;
   padding-bottom: 6px;
 }

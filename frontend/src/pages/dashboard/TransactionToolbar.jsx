@@ -17,7 +17,7 @@ export function TransactionToolbar({
   reviewDisabled = false,
 }) {
   return (
-    <div aria-label="Actions on the filtered transactions" className="transaction-toolbar" role="toolbar">
+    <div aria-label="Actions on the filtered transactions" className="transaction-toolbar" role="group">
       <span className="transaction-toolbar-status">
         {busy ? <Spinner /> : null}
         <span className="transaction-toolbar-count">{countLabel}</span>
