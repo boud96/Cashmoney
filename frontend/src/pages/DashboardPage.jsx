@@ -31,7 +31,7 @@ import {
   textLines,
 } from "./dashboard/ActionDialogs.jsx";
 import { FilterBar } from "./dashboard/FilterBar.jsx";
-import { ChartPanel, MonthlyChart, SunburstChart, TopExpenseChart, WniChart } from "./dashboard/OverviewCharts.jsx";
+import { OverviewCharts } from "./dashboard/OverviewCharts.jsx";
 import { TotalsRow } from "./dashboard/TotalsRow.jsx";
 import { TransactionGrid } from "./dashboard/TransactionGrid.jsx";
 import { TransactionToolbar } from "./dashboard/TransactionToolbar.jsx";
@@ -712,13 +712,7 @@ export default function DashboardPage({
 
       {dashboardTab === "overview" ? (
         <div className="dashboard-tab-panel" {...tabPanelProps("dashboard", "overview")}>
-          <div className="dashboard-charts">
-            <ChartPanel className="chart-panel-wide" ready={Boolean(summary)} title="Monthly Flow"><MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} /></ChartPanel>
-            <ChartPanel ready={Boolean(summary)} title="Income Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.income_categories || []} /></ChartPanel>
-            <ChartPanel ready={Boolean(summary)} title="Expense Categories"><SunburstChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
-            <ChartPanel ready={Boolean(summary)} title="Want / Need / Investment"><WniChart hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} /></ChartPanel>
-            <ChartPanel ready={Boolean(summary)} title="Top Expense Subcategories"><TopExpenseChart hideAmounts={hideAmounts} rows={summary?.expense_categories || []} /></ChartPanel>
-          </div>
+          <OverviewCharts currency={defaultCurrency} hideAmounts={hideAmounts} summary={summary} />
         </div>
       ) : (
         <div className="dashboard-tab-panel" {...tabPanelProps("dashboard", "transactions")}>

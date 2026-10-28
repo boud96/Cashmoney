@@ -1,21 +1,47 @@
-// The dashboard's charts.
-import { lazy, Suspense } from "react";
+// The dashboard's Overview tab: the monthly flow chart, and income and expenses by
+// category as ranked bars with the Want / Need / Investment split.
+import { lazy, Suspense, useMemo, useState } from "react";
 
+import { ChevronIcon } from "../../icons.jsx";
 import {
+  autoOpenCategories,
   baseLayout,
   completeMonthlyRows,
   cssVar,
   formatMoneyValue,
-  sunburstData,
+  formatMoneyWithCurrency,
+  monthlyTickStep,
+  rankCategories,
   titleCase,
-  topExpenseSubcategories,
   wniColor,
+  wniSplit,
 } from "../../shared.js";
 
 // Plotly loads as its own chunk (see PlotlyChart.jsx); ChartPanel shows a placeholder meanwhile.
 const Plot = lazy(() => import("../../PlotlyChart.jsx"));
 
-export function ChartPanel({ children, className = "", ready = true, title }) {
+// Which categories the user opened or closed, per side, by name. Kept while the app
+// runs (the dashboard unmounts on other pages), not stored.
+const openedCategories = { expense: new Map(), income: new Map() };
+
+export function OverviewCharts({ currency, hideAmounts, summary }) {
+  const ready = Boolean(summary);
+  return (
+    <div className="overview-charts">
+      <ChartPanel className="chart-panel-wide" ready={ready} title="Monthly flow">
+        <MonthlyChart hideAmounts={hideAmounts} rows={summary?.monthly || []} />
+      </ChartPanel>
+      <div className="overview-rankings">
+        <CategoryRanking currency={currency} hideAmounts={hideAmounts} ready={ready} side="expense" title="Expenses by category" tree={summary?.expense_categories}>
+          <WniSplitBar hideAmounts={hideAmounts} rows={summary?.want_need_investment || []} />
+        </CategoryRanking>
+        <CategoryRanking currency={currency} hideAmounts={hideAmounts} ready={ready} side="income" title="Income by category" tree={summary?.income_categories} />
+      </div>
+    </div>
+  );
+}
+
+function ChartPanel({ children, className = "", ready = true, title }) {
   const loading = <div className="chart-empty">Loading chart…</div>;
   return (
     <section className={`panel chart-panel ${className}`}>
@@ -25,63 +51,66 @@ export function ChartPanel({ children, className = "", ready = true, title }) {
   );
 }
 
-export function MonthlyChart({ hideAmounts, rows }) {
+// Income up and expenses down from the same spot for each month, net as a line. The
+// x-axis is a date axis, so long ranges label every 3rd, 6th or 12th month and never
+// rotate the labels.
+function MonthlyChart({ hideAmounts, rows }) {
   const monthlyRows = completeMonthlyRows(rows);
   if (!monthlyRows.length) return <EmptyChart />;
-  const months = monthlyRows.map((row) => row.month);
-  const incomes = monthlyRows.map((row) => row.income);
-  const expenses = monthlyRows.map((row) => -row.expense);
-  const net = monthlyRows.map((row) => row.net);
-  const monthlyHoverData = monthlyRows.map((row) => [
+  const months = monthlyRows.map((row) => `${row.month}-01`);
+  const amounts = monthlyRows.map((row) => [
     formatMoneyValue(row.income, hideAmounts),
     formatMoneyValue(row.expense, hideAmounts),
     formatMoneyValue(row.net, hideAmounts),
   ]);
-  const barWidth = monthlyRows.map(() => 0.78);
-  const netColors = monthlyRows.map(() => cssVar("--net-overlay", "rgba(230, 237, 243, 0.26)"));
+  const shared = { customdata: amounts, x: months, xhoverformat: "%B %Y", xperiod: "M1", xperiodalignment: "middle" };
+  // From the first month's start to the last month's end, without Plotly's padding.
+  const [lastYear, lastMonth] = monthlyRows[monthlyRows.length - 1].month.split("-").map(Number);
+  const rangeEnd = `${lastMonth === 12 ? lastYear + 1 : lastYear}-${String((lastMonth % 12) + 1).padStart(2, "0")}-01`;
   return (
     <Plot
       config={{ displaylogo: false, responsive: true }}
       data={[
         {
-          customdata: monthlyHoverData,
-          hovertemplate: "Incomes: %{customdata[0]}<extra></extra>",
+          ...shared,
+          hovertemplate: "Income: %{customdata[0]}<extra></extra>",
           marker: { color: cssVar("--green", "#2f8f65") },
-          name: "Incomes",
+          name: "Income",
           type: "bar",
-          width: barWidth,
-          x: months,
-          y: incomes,
+          y: monthlyRows.map((row) => row.income),
         },
         {
-          customdata: monthlyHoverData,
+          ...shared,
           hovertemplate: "Expenses: %{customdata[1]}<extra></extra>",
           marker: { color: cssVar("--red", "#dc2626") },
           name: "Expenses",
           type: "bar",
-          width: barWidth,
-          x: months,
-          y: expenses,
+          y: monthlyRows.map((row) => -row.expense),
         },
         {
-          customdata: monthlyHoverData,
+          ...shared,
           hovertemplate: "Net: %{customdata[2]}<extra></extra>",
-          marker: {
-            color: netColors,
-            line: { width: 0 },
-          },
+          line: { color: cssVar("--text", "#e6edf3"), width: 2 },
+          marker: { color: cssVar("--text", "#e6edf3"), size: 5 },
+          mode: "lines+markers",
           name: "Net",
-          type: "bar",
-          width: barWidth,
-          x: months,
-          y: net,
+          type: "scatter",
+          y: monthlyRows.map((row) => row.net),
         },
       ]}
       layout={baseLayout({
-        bargap: 0.24,
-        barmode: "overlay",
+        bargap: 0.3,
+        barmode: "relative",
         hovermode: "x unified",
-        xaxis: { type: "category" },
+        legend: { orientation: "h", x: 0, xanchor: "left", y: 1.12 },
+        margin: { t: 30, r: 16, b: 40, l: 54 },
+        xaxis: {
+          dtick: monthlyTickStep(monthlyRows.length),
+          range: [months[0], rangeEnd],
+          tickangle: 0,
+          ticklabelmode: "period",
+          type: "date",
+        },
         yaxis: {
           showticklabels: !hideAmounts,
           zeroline: true,
@@ -94,78 +123,106 @@ export function MonthlyChart({ hideAmounts, rows }) {
   );
 }
 
-export function SunburstChart({ hideAmounts, rows }) {
-  if (!rows.length) return <EmptyChart />;
-  const { colors, ids, labels, parents, values } = sunburstData(rows);
+function formatShare(share) {
+  if (share > 0 && share < 0.005) {
+    return "<1%";
+  }
+  return `${Math.round(share * 100)}%`;
+}
+
+// One side of the breakdown: categories largest first, each a button that opens its
+// subcategories. A category over half of its side starts open.
+function CategoryRanking({ children, currency, hideAmounts, ready, side, title, tree }) {
+  const { rows, total } = useMemo(() => rankCategories(tree || []), [tree]);
+  const autoOpen = useMemo(() => new Set(autoOpenCategories(rows)), [rows]);
+  const [, setVersion] = useState(0);
+  const remembered = openedCategories[side];
+  const isOpen = (name) => (remembered.has(name) ? remembered.get(name) : autoOpen.has(name));
+
+  function toggle(name) {
+    remembered.set(name, !isOpen(name));
+    setVersion((version) => version + 1);
+  }
+
+  const largest = rows[0]?.amount || 1;
   return (
-    <Plot
-      config={{ displaylogo: false, responsive: true }}
-      data={[{
-        branchvalues: "total",
-        hovertemplate: hideAmounts ? "%{label}<extra></extra>" : undefined,
-        ids,
-        labels,
-        marker: { colors },
-        parents,
-        textinfo: hideAmounts ? "label" : undefined,
-        type: "sunburst",
-        values,
-      }]}
-      layout={baseLayout({ extendsunburstcolors: false, margin: { t: 8, r: 8, b: 8, l: 8 }, title: undefined })}
-      useResizeHandler
-    />
+    <section className="panel chart-panel category-ranking" data-side={side}>
+      <div className="panel-header">
+        <h2>{title}</h2>
+        {ready && rows.length ? <span className="category-ranking-total">{formatMoneyWithCurrency(total, currency, hideAmounts)}</span> : null}
+      </div>
+      {!ready ? <div className="chart-empty">Loading chart…</div> : !rows.length ? <EmptyChart /> : (
+        <ul className="category-ranking-list">
+          {rows.map((row) => {
+            const open = isOpen(row.name);
+            return (
+              <li key={row.name}>
+                <button aria-expanded={open} className="category-ranking-row" onClick={() => toggle(row.name)} type="button">
+                  <RankingCells amount={row.amount} color={row.color} hideAmounts={hideAmounts} name={row.name} scale={largest} share={row.share}>
+                    <ChevronIcon open={open} size={14} />
+                  </RankingCells>
+                </button>
+                {open && row.children.length ? (
+                  <ul className="category-ranking-children">
+                    {row.children.map((child) => (
+                      <li className="category-ranking-row is-child" key={child.name}>
+                        <RankingCells amount={child.amount} color={child.color} hideAmounts={hideAmounts} name={child.name} scale={row.amount} share={child.share} />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {ready ? children : null}
+    </section>
   );
 }
 
-export function WniChart({ hideAmounts, rows }) {
-  const cleanRows = rows
-    .map((row) => ({ ...row, amount: Number(row.amount || 0) }))
-    .filter((row) => row.amount > 0);
-  if (!cleanRows.length) return <EmptyChart />;
+function RankingCells({ amount, children, color, hideAmounts, name, scale, share }) {
+  const fill = color || cssVar("--muted", "#8b949e");
   return (
-    <Plot
-      config={{ displaylogo: false, responsive: true }}
-      data={[{
-        hole: 0.48,
-        labels: cleanRows.map((row) => titleCase(row.name)),
-        hovertemplate: hideAmounts ? "%{label}<extra></extra>" : undefined,
-        marker: { colors: cleanRows.map((row) => wniColor(row.name)) },
-        textinfo: hideAmounts ? "label" : undefined,
-        type: "pie",
-        values: cleanRows.map((row) => row.amount),
-      }]}
-      layout={baseLayout({ margin: { t: 8, r: 8, b: 8, l: 8 }, showlegend: true })}
-      useResizeHandler
-    />
+    <>
+      <span className="ranking-caret">{children}</span>
+      <span className="ranking-label">
+        <span aria-hidden="true" className="cell-dot" style={{ background: fill }} />
+        <span className="ranking-name">{name}</span>
+      </span>
+      <span aria-hidden="true" className="ranking-bar"><span style={{ background: fill, width: `${Math.max(1, (amount / scale) * 100)}%` }} /></span>
+      <span className="ranking-amount">{formatMoneyValue(amount, hideAmounts)}</span>
+      <span className="ranking-share">{formatShare(share)}</span>
+    </>
   );
 }
 
-export function TopExpenseChart({ hideAmounts, rows }) {
-  const topRows = topExpenseSubcategories(rows);
-  if (!topRows.length) return <EmptyChart />;
-  const topExpenseHoverData = topRows.map((row) => formatMoneyValue(row.amount, hideAmounts));
+function wniLabel(name) {
+  return name === "uncategorized" ? "Unassigned" : titleCase(name);
+}
+
+function WniSplitBar({ hideAmounts, rows }) {
+  const parts = wniSplit(rows);
+  if (!parts.length) {
+    return null;
+  }
   return (
-    <Plot
-      config={{ displaylogo: false, responsive: true }}
-      data={[{
-        customdata: topExpenseHoverData,
-        marker: { color: cssVar("--blue", "#58a6ff") },
-        orientation: "h",
-        hovertemplate: hideAmounts ? "%{y}<extra></extra>" : "%{y}<br>Amount: %{customdata}<extra></extra>",
-        text: topRows.map((row) => formatMoneyValue(row.amount, hideAmounts)),
-        textposition: "auto",
-        type: "bar",
-        x: topRows.map((row) => row.amount),
-        y: topRows.map((row) => row.label),
-      }]}
-      layout={baseLayout({
-        height: 285,
-        margin: { t: 8, r: 18, b: 36, l: 150 },
-        xaxis: { showticklabels: !hideAmounts },
-        yaxis: { automargin: true },
-      })}
-      useResizeHandler
-    />
+    <div className="wni-split">
+      <h3 className="wni-split-title">Want / Need / Investment</h3>
+      <div aria-label={parts.map((part) => `${wniLabel(part.name)} ${formatShare(part.share)}`).join(", ")} className="wni-split-bar" role="img">
+        {parts.map((part) => (
+          <span key={part.name} style={{ background: wniColor(part.name), width: `${part.share * 100}%` }} title={`${wniLabel(part.name)} ${formatShare(part.share)}`} />
+        ))}
+      </div>
+      <ul className="wni-split-legend">
+        {parts.map((part) => (
+          <li key={part.name}>
+            <span aria-hidden="true" className="cell-dot" style={{ background: wniColor(part.name) }} />
+            {wniLabel(part.name)} {formatMoneyValue(part.amount, hideAmounts)} · {formatShare(part.share)}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
