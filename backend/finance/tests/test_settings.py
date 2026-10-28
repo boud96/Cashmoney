@@ -71,28 +71,16 @@ class PackagedBackendTests(SimpleTestCase):
             self.assertEqual(log.read_bytes(), b"small")
 
     def test_the_backend_log_rotates(self):
-        root = logging.getLogger()
-        handlers = list(root.handlers)
-        self.addCleanup(root.setLevel, root.level)
-        with tempfile.TemporaryDirectory() as temp_dir:
-            try:
-                for handler in handlers:
-                    root.removeHandler(handler)
-                with patch.dict(os.environ, {"CASHMONEY_DATA_DIR": temp_dir}):
-                    configure_environment()
-                rotating = [
-                    handler
-                    for handler in root.handlers
-                    if isinstance(handler, RotatingFileHandler)
-                ]
-                self.assertEqual(len(rotating), 1)
-                self.assertEqual(rotating[0].maxBytes, 1_000_000)
-            finally:
-                for handler in list(root.handlers):
-                    root.removeHandler(handler)
-                    handler.close()
-                for handler in handlers:
-                    root.addHandler(handler)
+        with tempfile.TemporaryDirectory() as temp_dir, fresh_root_logging():
+            with patch.dict(os.environ, {"CASHMONEY_DATA_DIR": temp_dir}):
+                configure_environment()
+            rotating = [
+                handler
+                for handler in logging.getLogger().handlers
+                if isinstance(handler, RotatingFileHandler)
+            ]
+            self.assertEqual(len(rotating), 1)
+            self.assertEqual(rotating[0].maxBytes, 1_000_000)
 
     def test_the_data_dir_follows_electron_on_linux(self):
         # Electron's userData on Linux, where the desktop app keeps the database. Electron
