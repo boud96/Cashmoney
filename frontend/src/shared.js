@@ -1016,10 +1016,3 @@ export function activeQuickRange(dateFrom, dateTo, today, oldest) {
   });
   return match ? match[0] : "";
 }
-
-export function subtractRelativeDate(date, amount, unit) {
-  if (unit === "months") {
-    return addMonths(date, -amount);
-  }
-  return addDays(date, unit === "weeks" ? -amount * 7 : -amount);
-}

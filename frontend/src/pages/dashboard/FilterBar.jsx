@@ -1,62 +1,239 @@
-// The dashboard's filter controls.
-import { useMemo, useState } from "react";
+// The dashboard's filter bar: dates with quick picks, search and saved filters on the
+// first line; a button per checklist and the View options on the second.
+import { useMemo, useRef, useState } from "react";
 
-import { TagToggleList } from "../../components.jsx";
-import { formatCount, formatDateInput, normalizeName, presetFilterCount, subtractRelativeDate } from "../../shared.js";
+import { DateField, HelpTooltip, PopoverButton, TagToggleList } from "../../components.jsx";
+import { ChevronIcon, CloseIcon } from "../../icons.jsx";
+import {
+  ANY_TAG,
+  QUICK_RANGES,
+  UNASSIGNED,
+  activeQuickRange,
+  checklistNarrows,
+  checklistSummary,
+  normalizeName,
+  normalizeTagSelection,
+  pluralize,
+  presetFilterCount,
+  quickDateRange,
+  todayInputValue,
+  viewSummary,
+  wniOptions,
+} from "../../shared.js";
 
-export function RelativeRangeForm({ setFilters }) {
-  const [count, setCount] = useState("");
-  const [unit, setUnit] = useState("months");
-  function submit(event) {
-    event.preventDefault();
-    const to = new Date();
-    const from = subtractRelativeDate(to, Math.max(1, Number(count || 1)), unit);
-    setFilters((current) => ({
-      ...current,
-      date_from: formatDateInput(from),
-      date_to: formatDateInput(to),
-    }));
+export function FilterBar({
+  activeFilterCount,
+  filterDefaults,
+  filters,
+  onClearFilters,
+  onFilterChange,
+  presets,
+  refs,
+  setFilters,
+  subcategoryOptions,
+}) {
+  const today = filterDefaults.to || todayInputValue();
+  const activeRange = activeQuickRange(filters.date_from, filters.date_to, today, filterDefaults.from);
+  const checklists = [
+    ["Accounts", "bank_account", refs.accounts.map((item) => [item.id, item.name])],
+    ["Categories", "category", [[UNASSIGNED, "Unassigned category"], ...refs.categories.map((item) => [item.id, item.name])]],
+    ["Subcategories", "subcategory", subcategoryOptions],
+    ["WNI", "want_need_investment", [...wniOptions, [UNASSIGNED, "Unassigned"]]],
+    ["Direction", "direction", [["income", "Incomes"], ["expense", "Expenses"]], { searchable: false }],
+  ];
+  const tagOptions = [[UNASSIGNED, "Untagged"], [ANY_TAG, "Tagged"], ...refs.tags.map((item) => [item.id, item.name])];
+
+  function applyRange(id) {
+    const range = quickDateRange(id, today, filterDefaults.from);
+    setFilters((current) => ({ ...current, date_from: range.from, date_to: range.to }));
   }
+
   return (
-    <form className="relative-range-form" onSubmit={submit}>
-      <div className="relative-range-title">Set date range to last</div>
-      <label><span>Amount</span><input min="1" onChange={(event) => setCount(event.target.value)} step="1" type="number" value={count} /></label>
-      <label><span>Unit</span><select onChange={(event) => setUnit(event.target.value)} value={unit}><option value="days">Days</option><option value="weeks">Weeks</option><option value="months">Months</option></select></label>
-      <button className="link-button" type="submit">Apply date range</button>
-    </form>
+    <section aria-label="Filters" className="filter-bar">
+      <div className="filter-bar-row">
+        <div aria-label="Date range" className="filter-dates" role="group">
+          {[["From", "date_from"], ["To", "date_to"]].map(([label, name], index) => (
+            <div className="filter-date" key={name}>
+              {index ? <span aria-hidden="true" className="filter-dates-arrow">→</span> : null}
+              <DateField
+                firstYear={Number(filterDefaults.from.slice(0, 4)) || undefined}
+                label={label}
+                name={name}
+                onChange={onFilterChange}
+                rangeFrom={filters.date_from}
+                rangeTo={filters.date_to}
+                value={filters[name]}
+              />
+            </div>
+          ))}
+        </div>
+        <div aria-label="Quick date ranges" className="quick-ranges" role="group">
+          {QUICK_RANGES.map(([id, label]) => (
+            <button
+              aria-pressed={activeRange === id}
+              className={`quick-range ${activeRange === id ? "is-active" : ""}`.trim()}
+              key={id}
+              onClick={() => applyRange(id)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <label className="filter-search">
+          <span className="visually-hidden">Search</span>
+          <input onChange={(event) => onFilterChange("q", event.target.value)} placeholder="Description, note, counterparty" type="search" value={filters.q} />
+        </label>
+        <SavedFiltersMenu {...presets} dateDefaults={filterDefaults} refs={refs} />
+      </div>
+      <div className="filter-bar-row">
+        {checklists.map(([label, name, options, settings = {}]) => (
+          <FilterChip
+            active={checklistNarrows(filters[name], options)}
+            key={name}
+            label={label}
+            summary={checklistSummary(filters[name], options)}
+          >
+            <CheckboxFilterPanel
+              label={label}
+              name={name}
+              onChange={onFilterChange}
+              options={options}
+              searchable={settings.searchable ?? true}
+              value={filters[name]}
+            />
+          </FilterChip>
+        ))}
+        <FilterChip
+          active={normalizeTagSelection(filters.tag, refs.tags).length > 0}
+          label="Tags"
+          summary={checklistSummary(filters.tag, tagOptions, { optional: true })}
+        >
+          <CheckboxFilterPanel label="Tag" name="tag" onChange={onFilterChange} optional options={tagOptions} tags={refs.tags} value={filters.tag} />
+        </FilterChip>
+        <FilterChip
+          active={Boolean(filters.include_ignored) || filters.include_locked === false}
+          label="View"
+          summary={viewSummary(filters)}
+        >
+          <ViewOptions filters={filters} onFilterChange={onFilterChange} />
+        </FilterChip>
+        <span className="filter-bar-end">
+          {activeFilterCount ? <span className="filter-active-count">{activeFilterCount} active</span> : null}
+          <button className="text-button" disabled={!activeFilterCount} onClick={onClearFilters} type="button">Clear filters</button>
+        </span>
+      </div>
+    </section>
   );
 }
 
-export function SavedFiltersPanel({ busy, dateDefaults, name, onDelete, onLoad, onNameChange, onSave, presets, refs }) {
+function FilterChip({ active, children, label, summary }) {
   return (
-    <div className="filter-card saved-filters-card">
-      <div className="filter-card-header">
-        <span className="filter-label">Saved filters</span>
-        <span className="muted">{busy ? "Syncing" : ""}</span>
-      </div>
-      <form className="saved-filter-form" onSubmit={onSave}>
-        <label>
-          <span>Preset name</span>
-          <input
-            onChange={(event) => onNameChange(event.target.value)}
-            placeholder="Example: Cash withdrawals"
-            value={name}
-          />
-        </label>
-        <button className="link-button" disabled={busy} type="submit">Save current filters</button>
-      </form>
-      <div className="saved-filter-list">
-        {presets.length ? presets.map((preset) => (
-          <div className="saved-filter-row" key={preset.id}>
-            <button className="saved-filter-load-button" disabled={busy} onClick={() => onLoad(preset)} type="button">
-              <span>{preset.name}</span>
-              <small>{formatCount(presetFilterCount(preset.filters, refs, dateDefaults))} filters</small>
-            </button>
-            <button aria-label={`Delete ${preset.name}`} className="icon-button" disabled={busy} onClick={() => onDelete(preset.id)} type="button">x</button>
-          </div>
-        )) : <div className="saved-filter-empty">No saved filters yet</div>}
-      </div>
+    <PopoverButton
+      active={active}
+      buttonProps={{ "data-filter-chip": label }}
+      className="filter-chip"
+      content={(
+        <>
+          <span className="filter-chip-label">{label}</span>
+          <span className="filter-chip-value">{summary}</span>
+          <ChevronIcon open size={14} />
+        </>
+      )}
+      label={`${label} filter`}
+      popoverClassName="filter-popover"
+    >
+      {children}
+    </PopoverButton>
+  );
+}
+
+function ViewOptions({ filters, onFilterChange }) {
+  const options = [
+    ["split_by_owners", "Divide by account owner count", "Divides account amounts by that account's owner count for dashboard totals and displayed transaction amounts."],
+    ["include_ignored", "Include ignored transactions", "Includes transactions marked as ignored in the dashboard, charts, and transaction table."],
+    ["include_locked", "Include locked transactions", "Includes transactions whose categorization is locked and protected from automatic recategorization."],
+  ];
+  return (
+    <div className="view-options">
+      {options.map(([name, label, help]) => (
+        <div className="check-row" key={name}>
+          <label className="check-row-label">
+            <input checked={Boolean(filters[name])} onChange={(event) => onFilterChange(name, event.target.checked)} type="checkbox" />
+            <span>{label}</span>
+          </label>
+          <HelpTooltip text={help} />
+        </div>
+      ))}
     </div>
+  );
+}
+
+function SavedFiltersMenu({ busy, dateDefaults, items, name, onDelete, onLoad, onNameChange, onSave, refs }) {
+  const nameRef = useRef(null);
+
+  // The Save button is disabled while it saves, which drops focus: put it back in the
+  // (now empty) name field.
+  async function save(event) {
+    await onSave(event);
+    nameRef.current?.focus();
+  }
+
+  return (
+    <PopoverButton
+      buttonProps={{ "data-filter-menu": "saved" }}
+      className="filter-menu-button"
+      content={<>Saved filters <ChevronIcon open size={14} /></>}
+      label="Saved filters"
+      popoverClassName="saved-filters-popover"
+    >
+      {(close) => (
+        <div className="saved-filters-menu">
+          {items.length ? (
+            <ul className="saved-filter-items">
+              {items.map((preset) => (
+                <li className="saved-filter-item" key={preset.id}>
+                  <button
+                    className="saved-filter-load"
+                    disabled={busy}
+                    onClick={() => {
+                      onLoad(preset);
+                      close();
+                    }}
+                    type="button"
+                  >
+                    <span>{preset.name}</span>
+                    <small>{pluralize(presetFilterCount(preset.filters, refs, dateDefaults), "filter")}</small>
+                  </button>
+                  <button
+                    aria-label={`Delete ${preset.name}`}
+                    className="icon-button saved-filter-delete"
+                    disabled={busy}
+                    onClick={() => onDelete(preset.id)}
+                    title={`Delete ${preset.name}`}
+                    type="button"
+                  >
+                    <CloseIcon size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="saved-filter-empty">No saved filters yet.</p>
+          )}
+          <form className="saved-filter-save" onSubmit={save}>
+            <input
+              aria-label="Name for the current filters"
+              onChange={(event) => onNameChange(event.target.value)}
+              placeholder="Name, e.g. Cash withdrawals"
+              ref={nameRef}
+              value={name}
+            />
+            <button className="link-button" disabled={busy} type="submit">Save current filters</button>
+          </form>
+        </div>
+      )}
+    </PopoverButton>
   );
 }
 

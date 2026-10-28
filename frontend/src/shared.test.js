@@ -33,7 +33,6 @@ import {
   presetFilterCount,
   quickDateRange,
   rankCategories,
-  subtractRelativeDate,
   tagToggleStyle,
   sunburstData,
   syncChecklistFilters,
@@ -82,22 +81,6 @@ describe("money from the API (decimal strings)", () => {
       { name: "A", children: [{ name: "x", amount: "9.00" }, { name: "y", amount: "10.00" }] },
     ]);
     expect(rows.map((row) => row.amount)).toEqual([9, 10]);
-  });
-});
-
-describe("relative date ranges", () => {
-  const monthsBack = (date, amount) => formatDateInput(subtractRelativeDate(date, amount, "months"));
-
-  it("clamps to the end of a shorter month", () => {
-    expect(monthsBack(new Date(2026, 2, 31), 1)).toBe("2026-02-28");
-    expect(monthsBack(new Date(2024, 2, 31), 1)).toBe("2024-02-29");
-    expect(monthsBack(new Date(2026, 4, 31), 1)).toBe("2026-04-30");
-  });
-
-  it("crosses year boundaries", () => {
-    expect(monthsBack(new Date(2026, 0, 15), 2)).toBe("2025-11-15");
-    expect(formatDateInput(subtractRelativeDate(new Date(2026, 0, 3), 1, "weeks"))).toBe("2025-12-27");
-    expect(formatDateInput(subtractRelativeDate(new Date(2026, 2, 1), 1, "days"))).toBe("2026-02-28");
   });
 });
 
