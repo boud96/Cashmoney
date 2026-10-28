@@ -720,7 +720,7 @@ export default function DashboardPage({
       </div>
 
       {dashboardTab === "overview" ? (
-        <div className="dashboard-tab-panel" {...tabPanelProps("dashboard", "overview")}>
+        <div className="dashboard-tab-panel" tabIndex={0} {...tabPanelProps("dashboard", "overview")}>
           <OverviewCharts currency={defaultCurrency} hideAmounts={hideAmounts} summary={summary} />
         </div>
       ) : null}
